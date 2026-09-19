@@ -2175,35 +2175,107 @@ el("addBulk").onclick=()=>{
   lines.forEach(n=>C().workers.push(newWorker({name:n,sectionId:sid})));
   el("bulk").value=""; queueSave(); refresh(); renderPeople(); renderVariables();
 };
+/* ---- حذف العامل ----
+   العامل الذي له سجل ما ينحذف بضغطة: حذفه يمحو أيام جرد ووصولات
+   واستقطاعات دخلت كشوف رواتب موقّعة. الافتراضي المنع مع اقتراح
+   «تغيير الحالة»، والحذف القسري يبقى متاحاً برابط منفصل بتأكيد بالاسم. */
+function workerRecordCounts(w){
+  const c=C(), id=w.id;
+  const days=Object.keys(c.days).filter(k=>c.days[k] && c.days[k].states && c.days[k].states[id]).length;
+  const lv=(c.leaves||[]).filter(l=>l.workerId===id).length;
+  const pn=(c.penalties||[]).filter(l=>l.workerId===id).length;
+  const ac=(c.achievements||[]).filter(l=>l.workerId===id).length;
+  const aj=(c.adjustments||[]).filter(l=>l.workerId===id).length;
+  const iss=(c.issues||[]).filter(l=>l.workerId===id).length;
+  return { days:days, lv:lv, pn:pn, ac:ac, aj:aj, iss:iss,
+    total:days+lv+pn+ac+aj+iss };
+}
+function purgeWorker(w){
+  const c=C(), id=w.id;
+  c.workers=c.workers.filter(x=>x.id!==id);
+  // لا نترك وصولاً ولا استقطاعات تشير لعامل ما عاد موجوداً
+  c.leaves=(c.leaves||[]).filter(l=>l.workerId!==id);
+  c.penalties=(c.penalties||[]).filter(l=>l.workerId!==id);
+  c.achievements=(c.achievements||[]).filter(l=>l.workerId!==id);
+  c.issues=(c.issues||[]).filter(l=>l.workerId!==id);
+  c.adjustments=(c.adjustments||[]).filter(l=>l.workerId!==id);
+  Object.keys(c.days).forEach(k=>{ if(c.days[k]&&c.days[k].states) delete c.days[k].states[id]; });
+  queueSave(); refresh(); renderPeople(); renderVariables(); renderDirectory();
+  renderSalTable(); if(RP) runReport();
+}
+let delTargetId=null;
+function closeDelModal(){ delTargetId=null; el("delBack").classList.add("hidden"); }
+function delRows(n){
+  const rows=[];
+  if(n.days) rows.push(fmtNum(n.days)+" يوم مؤشّر بالجرد");
+  if(n.lv)   rows.push(fmtNum(n.lv)+" وصل إجازة");
+  if(n.pn)   rows.push(fmtNum(n.pn)+" إشعار عقوبة");
+  if(n.ac)   rows.push(fmtNum(n.ac)+" إشعار مكافأة");
+  if(n.aj)   rows.push(fmtNum(n.aj)+" استقطاع أو إضافة خاصة");
+  if(n.iss)  rows.push(fmtNum(n.iss)+" وصل صرف مواد");
+  return rows;
+}
+function openDeleteModal(id, force){
+  const w=C().workers.find(x=>x.id===id);
+  if(!w) return;
+  delTargetId=id;
+  const n=workerRecordCounts(w);
+  const body=el("delBody"), foot=el("delFoot");
+  if(n.total===0){
+    body.innerHTML='<p style="margin-top:0">يتحذف <b>'+esc(w.name)+'</b> نهائياً؟</p>'+
+      '<p class="hint">ماكو أي سجل مرتبط بيه — ولا يوم جرد ولا وصل ولا استقطاع.</p>';
+    foot.innerHTML='<button class="btn danger" id="delGo">حذف نهائي</button>'+
+      '<button class="btn ghost" id="delCancel">إلغاء</button>';
+  }else if(!force){
+    body.innerHTML='<div class="errbox" style="margin-top:0"><b>ما يصير يتحذف «'+esc(w.name)+'».</b><br>'+
+      'عنده '+fmtNum(n.total)+' سجل مرتبط، وحذفه يمحيها كلها من كشوف سابقة.</div>'+
+      '<ul style="margin:12px 0;padding-inline-start:20px">'+
+      delRows(n).map(t=>'<li>'+esc(t)+'</li>').join("")+'</ul>'+
+      '<p class="hint">إذا العامل ترك العمل أو انتقل، الصحيح هو <b>تغيير الحالة</b>: '+
+      'يختفي من الجرد الجديد ويبقى كل سجله ورواتبه محفوظة.</p>';
+    foot.innerHTML='<button class="btn primary" id="delToStatus">تغيير الحالة</button>'+
+      '<button class="btn ghost" id="delCancel">إلغاء</button>'+
+      '<button class="linklike" id="delForce">حذف نهائي رغم ذلك</button>';
+  }else{
+    body.innerHTML='<div class="errbox" style="margin-top:0"><b>حذف نهائي لا رجعة فيه.</b><br>'+
+      'راح تنمحي هذه السجلات كلها مع العامل:</div>'+
+      '<ul style="margin:12px 0;padding-inline-start:20px">'+
+      delRows(n).map(t=>'<li>'+esc(t)+'</li>').join("")+'</ul>'+
+      '<label class="field"><span>للتأكيد اكتب اسم العامل كاملاً: <b>'+esc(w.name)+'</b></span>'+
+      '<input type="text" id="delName" placeholder="'+esc(w.name)+'"></label>'+
+      '<div id="delErr"></div>';
+    foot.innerHTML='<button class="btn danger" id="delGo">حذف '+fmtNum(n.total)+' سجل والعامل</button>'+
+      '<button class="btn ghost" id="delCancel">إلغاء</button>';
+  }
+  el("delBack").classList.remove("hidden");
+  const nm=document.getElementById("delName"); if(nm && nm.focus) nm.focus();
+}
+el("delBack").addEventListener("click",ev=>{
+  if(ev.target===el("delBack")){ closeDelModal(); return; }
+  if(!ev.target.closest) return;
+  const id=delTargetId;
+  if(ev.target.closest("#delCancel")){ closeDelModal(); return; }
+  if(ev.target.closest("#delToStatus")){ closeDelModal(); openStatusModal(id); return; }
+  if(ev.target.closest("#delForce")){ openDeleteModal(id,true); return; }
+  if(ev.target.closest("#delGo")){
+    const w=C().workers.find(x=>x.id===id); if(!w){ closeDelModal(); return; }
+    const n=workerRecordCounts(w);
+    if(n.total>0){
+      const box=document.getElementById("delName");
+      const typed=box?normName(box.value):"";
+      if(typed!==normName(w.name)){
+        const err=document.getElementById("delErr");
+        if(err) err.innerHTML='<div class="errbox">الاسم ما يطابق. اكتبه كامل مثل ما هو مكتوب فوق.</div>';
+        return;
+      }
+    }
+    closeDelModal();
+    purgeWorker(w);
+  }
+});
 el("wTable").addEventListener("click",e=>{
   const d=e.target.closest("[data-wdel]"); if(!d)return;
-  const c=C(), w=c.workers.find(x=>x.id===d.dataset.wdel);
-  const days=Object.keys(c.days).filter(k=>c.days[k].states&&c.days[k].states[w.id]).length;
-  const lv=(c.leaves||[]).filter(l=>l.workerId===w.id).length;
-  const pn=(c.penalties||[]).filter(l=>l.workerId===w.id).length+
-           (c.achievements||[]).filter(l=>l.workerId===w.id).length;
-  const iss=(c.issues||[]).filter(l=>l.workerId===w.id).length;
-  const aj=(c.adjustments||[]).filter(l=>l.workerId===w.id).length;
-  let msg="يتحذف «"+w.name+"» نهائياً من الكشف؟";
-  if(days||lv||pn||aj||iss){
-    msg+="\n\nراح يختفي من:";
-    if(days) msg+="\n· "+fmtNum(days)+" يوم مؤشّر بالجرد";
-    if(lv)   msg+="\n· "+fmtNum(lv)+" وصل إجازة";
-    if(pn)   msg+="\n· "+fmtNum(pn)+" إشعار عقوبة أو مكافأة";
-    if(aj)   msg+="\n· "+fmtNum(aj)+" استقطاع أو إضافة خاصة";
-    if(iss)  msg+="\n· "+fmtNum(iss)+" وصل صرف مواد";
-    msg+="\n\nإذا الغرض تصحيح الاسم فقط، استعمل «تعديل الاسم» — يحافظ على كل سجله.";
-  }
-  if(confirm(msg)){
-    c.workers=c.workers.filter(x=>x.id!==w.id);
-    // لا نترك وصولاً ولا استقطاعات تشير لعامل ما عاد موجوداً
-    c.leaves=(c.leaves||[]).filter(l=>l.workerId!==w.id);
-    c.penalties=(c.penalties||[]).filter(l=>l.workerId!==w.id);
-    c.achievements=(c.achievements||[]).filter(l=>l.workerId!==w.id);
-    c.issues=(c.issues||[]).filter(l=>l.workerId!==w.id);
-    c.adjustments=(c.adjustments||[]).filter(l=>l.workerId!==w.id);
-    Object.keys(c.days).forEach(k=>{ if(c.days[k]&&c.days[k].states) delete c.days[k].states[w.id]; });
-    queueSave(); refresh(); renderPeople(); renderVariables(); if(RP) runReport(); }
+  openDeleteModal(d.dataset.wdel,false);
 });
 el("wTable").addEventListener("change",e=>{
   const s=e.target.closest("[data-wsec]");
