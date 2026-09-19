@@ -234,7 +234,21 @@ tr.rowout td{background:#FBF7F8;opacity:.85}
 .wst.s-end{background:var(--misc-bg);color:var(--misc)}
 .wst.s-cut{background:var(--ground);color:var(--brand-deep);box-shadow:inset 0 0 0 1px var(--line)}
 .wst.s-fire{background:var(--absent-bg);color:var(--absent)}
+.wst.s-move{background:#E2EEF5;color:#14586F;box-shadow:inset 0 0 0 1px #A9CBDC}
 .wsel{min-width:132px}
+
+/* ---- نوافذ داخل الصفحة (بدل prompt) ---- */
+.mback{position:fixed;inset:0;background:rgba(20,12,32,.45);display:flex;align-items:center;
+  justify-content:center;padding:18px;z-index:60}
+.mbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;width:100%;max-width:540px;
+  box-shadow:0 18px 50px rgba(20,12,32,.32);max-height:90vh;overflow:auto}
+.mboxhead{padding:11px 15px;border-bottom:2px solid var(--gold);background:#F8F4FC}
+.mboxhead h3{margin:0;font-size:15px;font-weight:700;color:var(--brand-deep)}
+.mboxbody{padding:14px}
+.mboxfoot{padding:12px 15px;border-top:1px solid var(--line);background:#FBF9FD;
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.linklike{background:none;border:none;color:var(--absent);text-decoration:underline;
+  font-weight:600;font-size:13px;padding:0;margin-inline-start:auto}
 tr.rowvar td{background:#FCFAFE}
 .varbar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
 .varbar label.field{margin:0}
@@ -1020,6 +1034,37 @@ tr.rowvar td{background:#FCFAFE}
 
 </div>
 
+<!-- ===== نافذة تغيير حالة العمل — المكان الوحيد لتغيير الحالة ===== -->
+<div class="mback hidden" id="stBack">
+  <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="stTitle">
+    <div class="mboxhead"><h3 id="stTitle">تغيير حالة العمل</h3></div>
+    <div class="mboxbody">
+      <p class="hint" id="stWho" style="margin-top:0"></p>
+      <div class="row2">
+        <label class="field"><span>حالة العمل</span><select id="stSelect" class="wsel"></select></label>
+        <label class="field"><span id="stDateLbl">تاريخ السريان — آخر يوم عمل</span>
+          <input type="date" id="stDate"></label>
+      </div>
+      <label class="field"><span>ملاحظة</span>
+        <textarea id="stNote" rows="2" placeholder="سبب التغيير…"></textarea></label>
+      <div id="stHint" class="polhint"></div>
+    </div>
+    <div class="mboxfoot">
+      <button class="btn primary" id="stSave">حفظ الحالة</button>
+      <button class="btn ghost" id="stCancel">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== نافذة حذف عامل ===== -->
+<div class="mback hidden" id="delBack">
+  <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+    <div class="mboxhead"><h3 id="delTitle">حذف عامل</h3></div>
+    <div class="mboxbody" id="delBody"></div>
+    <div class="mboxfoot" id="delFoot"></div>
+  </div>
+</div>
+
 <script>
 "use strict";
 
@@ -1152,13 +1197,15 @@ const ZONE_COLORS=["#4B2E83","#B8912E","#2C6E49","#9B1C31","#1D6A8C","#7A3E9D","
 /* ==================== حالات العمل ====================
    مصدر واحد للحقيقة: أي نص حالة بالبرنامج يخرج من هنا، فلا تتكرّر
    السلاسل النصية بعشرة أماكن وتنحرف إحداها بحرف فينكسر الفلتر. */
-const WS_ACTIVE="مستمر", WS_END="إنهاء خدمات", WS_CUT="انقطاع عن العمل", WS_FIRE="مفصول";
-const WSTATUSES=[WS_ACTIVE,WS_END,WS_CUT,WS_FIRE];
-/* العمال غير المستمرين — هم من يظهرون بتبويب المتغيرات */
-const WS_VARIABLE=[WS_END,WS_CUT,WS_FIRE];
+const WS_ACTIVE="مستمر", WS_END="إنهاء خدمات", WS_CUT="انقطاع عن العمل",
+      WS_FIRE="مفصول", WS_MOVED="منقول";
+const WSTATUSES=[WS_ACTIVE,WS_END,WS_CUT,WS_FIRE,WS_MOVED];
+/* العمال غير المستمرين — هم من يظهرون بتبويب الحالات */
+const WS_VARIABLE=[WS_END,WS_CUT,WS_FIRE,WS_MOVED];
 const WS_CLASS={};
 WS_CLASS[WS_ACTIVE]="s-on"; WS_CLASS[WS_END]="s-end";
 WS_CLASS[WS_CUT]="s-cut";   WS_CLASS[WS_FIRE]="s-fire";
+WS_CLASS[WS_MOVED]="s-move";
 /* أي قيمة غير معروفة أو فارغة أو null ترجع «مستمر» — لا تُحفظ حالة خارج القائمة */
 function normStatus(v){
   const t=String(v==null?"":v).trim();
@@ -1166,9 +1213,19 @@ function normStatus(v){
 }
 function getWorkerStatus(w){ return normStatus(w && w.status); }
 function isActiveWorker(w){ return getWorkerStatus(w)===WS_ACTIVE; }
+/* يوم/شهر مختصر — للشارات الضيّقة */
+function dateShort(iso){
+  const p=String(iso||"").split("-");
+  if(p.length<3) return String(iso||"");
+  return fmtNum(+p[2])+"/"+fmtNum(+p[1]);
+}
+/* الحالة المستقبلية: العامل لسا بالجرد، والشارة تقول متى يسري القرار */
 function statusBadge(w){
   const st=getWorkerStatus(w);
-  return '<span class="wst '+WS_CLASS[st]+'">'+esc(st)+'</span>';
+  const d=(w && w.statusChangedAt) || "";
+  const soon = st!==WS_ACTIVE && d && d>todayISO();
+  return '<span class="wst '+WS_CLASS[st]+'">'+esc(st)+
+    (soon?' — يسري من '+dateShort(d):'')+'</span>';
 }
 /* نص حر: التولد قد يكون سنة فقط أو تاريخاً كاملاً — لا نفرض صيغة */
 function normDob(v){ return String(v==null?"":v).trim().replace(/\s+/g," "); }
@@ -1191,10 +1248,8 @@ function normalizeWorker(w){
   w.status=normStatus(w.status);
   if(w.statusChangedAt==null) w.statusChangedAt="";
   if(w.statusNote==null) w.statusNote="";
-  /* عامل غير مستمر بلا تاريخ تغيير: نُسند له تاريخ انتهاء خدمته إن وُجد،
-     لأنه التاريخ الحقيقي الوحيد المتاح. وإن لم يوجد يبقى فارغاً ويتكفّل
-     inService باستبعاده من اليوم فصاعداً دون المساس بماضيه. */
-  if(w.status!==WS_ACTIVE && !w.statusChangedAt && w.endDate) w.statusChangedAt=w.endDate;
+  if(!Array.isArray(w.statusHistory)) w.statusHistory=[];
+  /* «مستمر» لا يحمل تاريخ نهاية خدمة — مصدر الحقيقة واحد لا يتناقض مع نفسه */
   if(w.status===WS_ACTIVE && w.statusChangedAt) w.statusChangedAt="";
   return w;
 }
@@ -1205,23 +1260,27 @@ function newWorker(o){
     createdAt:o.createdAt||todayISO(),
     phone:normPhone(o.phone), phone2:normPhone(o.phone2), address:String(o.address||"").trim(),
     motherName:normName(o.motherName), dob:normDob(o.dob), status:normStatus(o.status),
-    statusChangedAt:"", statusNote:"" });
+    statusChangedAt:"", statusNote:"", statusHistory:[] });
 }
-/* تغيير الحالة بمسار واحد: يضبط التاريخ والملاحظة ولا يمسّ أي سجل تاريخي */
+/* تغيير الحالة بمسار واحد — تعديل خالص بلا واجهة، يستعمله كل شيء:
+   النافذة الموحّدة، قرار إنهاء الخدمة، وحذفه. لا يمسّ أي سجل تاريخي،
+   ويسجّل كل تغيير في w.statusHistory. */
 function setWorkerStatus(w, next, opts){
   if(!w) return false;
   opts=opts||{};
-  const nx=normStatus(next);
-  w.status=nx;
-  if(nx===WS_ACTIVE){
-    w.statusChangedAt="";
-    w.statusNote = opts.note!==undefined ? String(opts.note||"") : "";
-    /* الرجوع للخدمة يرفع قيد الإيقاف، وإلا بقي خارج الجرد رغم أنه «مستمر» */
-    if(opts.clearEnd && w.endDate) w.endDate="";
-  }else{
-    w.statusChangedAt = opts.date || w.statusChangedAt || todayISO();
-    if(opts.note!==undefined) w.statusNote=String(opts.note||"");
-  }
+  const from=getWorkerStatus(w);
+  const to=normStatus(next);
+  const when=opts.date||todayISO();
+  const note = opts.note!==undefined ? String(opts.note||"") : (w.statusNote||"");
+  /* statusChangedAt = آخر يوم عمل (شامل). «مستمر» بلا تاريخ نهاية. */
+  const nextDate = (to===WS_ACTIVE) ? "" : when;
+  if(from===to && (w.statusChangedAt||"")===nextDate && (w.statusNote||"")===note) return false;
+  w.status=to;
+  w.statusChangedAt=nextDate;
+  w.statusNote=note;
+  if(!Array.isArray(w.statusHistory)) w.statusHistory=[];
+  w.statusHistory.push({ from:from, to:to, date:when, note:note,
+    at:Date.now(), ref:opts.ref||"" });
   return true;
 }
 
@@ -1242,7 +1301,7 @@ function blankCompany(name){
             {id:z2,name:"الأقسام الخارجية",short:"خارجي",color:"#B8912E"} ],
     sections:[], workers:[], days:{}, leaves:[], leaveSeq:0, adjustments:[],
     penalties:[], penSeq:0, achievements:[], achSeq:0,
-    materials:defaultMaterials(), issues:[], issueSeq:0, matSeeded:true, payV3:true
+    materials:defaultMaterials(), issues:[], issueSeq:0, matSeeded:true, payV3:true, payV4:true
   };
 }
 function defaultState(){ const c=blankCompany("شركتي"); return { v:2, companies:[c], active:c.id }; }
@@ -1306,6 +1365,37 @@ function ensureFields(st){
        إلى «مستمر». التنفيذ متكرر بلا أثر: ما موجود وصالح لا يُلمس. */
     if(!Array.isArray(c.workers)) c.workers=[];
     c.workers=c.workers.filter(w=>w && typeof w==="object");
+    /* ترحيل ٤: مصدر حقيقة واحد لنهاية الخدمة.
+       كان عندنا مصدران غير مربوطين: w.endDate (زر «نقل / إنهاء» وخانة
+       جدول الرواتب) و w.status+statusChangedAt (قائمة حالة العمل)، فيظهر
+       عامل «منتهي» وحالته «مستمر». من هنا فصاعداً الحالة وحدها هي المرجع،
+       و statusChangedAt = آخر يوم عمل (شامل). يُنفَّذ مرة واحدة،
+       ولا يحذف أي سجل — فقط يوحّد الحقلين ويرفع endDate. */
+    if(!c.payV4){
+      const mToday=todayISO();
+      c.workers.forEach(w=>{
+        if(!w) return;
+        const ed = w.endDate ? String(w.endDate) : "";
+        const st = normStatus(w.status);
+        if(ed){
+          if(st===WS_ACTIVE){
+            w.status=WS_END;
+            w.statusChangedAt=ed;
+            if(!w.statusNote) w.statusNote="مرحَّل من تاريخ الانتهاء القديم";
+          }else if((w.statusChangedAt||"")!==ed){
+            /* endDate هو الفائز: هو الذي كان فعّالاً في serviceEnd قبل الترحيل */
+            w.statusChangedAt=ed;
+          }
+        }else if(st!==WS_ACTIVE && !w.statusChangedAt){
+          /* كان inService يستبعده «من اليوم فصاعداً» فتتغيّر تقاريره القديمة
+             مع مرور الأيام. نثبّت له تاريخاً مرة واحدة ونخزّنه. */
+          w.statusChangedAt=mToday;
+          if(!w.statusNote) w.statusNote="تاريخ مثبّت عند الترحيل";
+        }
+        delete w.endDate;
+      });
+      c.payV4=true;
+    }
     c.workers.forEach(normalizeWorker);
   });
   return st;
@@ -2006,7 +2096,7 @@ function renderPeople(){
       '</select></td>'+
       '<td><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">'+
         statusBadge(w)+
-        '<select class="wsel" data-wstat="'+w.id+'">'+statusOptions(getWorkerStatus(w))+'</select>'+
+        '<button class="btn sm ghost" data-wstatus="'+w.id+'">تغيير الحالة</button>'+
       '</div></td>'+
       '<td style="text-align:left;white-space:nowrap">'+btns+'</td></tr>';
   }).join("")||'<tr><td colspan="6" style="color:var(--ink-2)">ماكو عمال بعد.</td></tr>';
@@ -2069,7 +2159,7 @@ el("addW").onclick=()=>{
     phone:el("wPhone").value, phone2:el("wPhone2").value, address:el("wAddr").value,
     motherName:el("wMother").value, dob:el("wDob").value, status:st });
   /* عامل يُسجَّل أصلاً بحالة غير مستمرة: تاريخ التغيير هو تاريخ تسجيله */
-  if(st!==WS_ACTIVE) setWorkerStatus(w,st,{date:todayISO()});
+  if(st!==WS_ACTIVE) setWorkerStatus(w,st,{date:todayISO(),note:"حالة عند التسجيل"});
   C().workers.push(w);
   ["wName","wPhone","wPhone2","wAddr","wMother","wDob"].forEach(id=>{ el(id).value=""; });
   el("wStatus").value=WS_ACTIVE;
@@ -2117,10 +2207,7 @@ el("wTable").addEventListener("change",e=>{
   if(s){
     const w=C().workers.find(x=>x.id===s.dataset.wsec);
     if(w){ w.sectionId=s.value; queueSave(); refresh(); renderPeople(); }
-    return;
   }
-  const st=e.target.closest("[data-wstat]");
-  if(st) changeWorkerStatus(st.dataset.wstat, st.value);
 });
 
 /* ==================== تغيير حالة العامل ====================
@@ -2132,32 +2219,76 @@ function statusOptions(sel, allLabel){
   return head+WSTATUSES.map(t=>
     '<option value="'+esc(t)+'"'+(t===sel?" selected":"")+'>'+esc(t)+'</option>').join("");
 }
-function changeWorkerStatus(id,next,opts){
+/* تطبيق التغيير على الحالة ثم تحديث كل الواجهات المعنية */
+function applyWorkerStatus(id,next,opts){
   opts=opts||{};
   const c=C(), w=c.workers.find(x=>x.id===id);
-  if(!w){ renderPeople(); renderVariables(); return false; }
-  const cur=getWorkerStatus(w), nx=normStatus(next);
-  if(cur===nx){ renderPeople(); renderVariables(); return false; }
-  const back=(nx===WS_ACTIVE);
-  const when=opts.date||todayISO();
-  if(!opts.silent){
-    const msg = back
-      ? "ترجع حالة «"+w.name+"» إلى «"+WS_ACTIVE+"»؟\n\n"+
-        "· يرجع للجرد اليومي والحضور والغياب\n"+
-        "· أيامه ورواتبه وإجازاته وعقوباته السابقة تبقى محفوظة كما هي"
-      : "تتغيّر حالة «"+w.name+"» إلى «"+nx+"»؟\n\n"+
-        "· ما يظهر بالجرد اليومي الجديد بعد "+dateTextOf(when)+"\n"+
-        "· راتبه ينحسب لغاية ذلك اليوم\n"+
-        "· كل سجله السابق يبقى محفوظاً بلا أي تغيير";
-    if(!confirm(msg)){ renderPeople(); renderVariables(); return false; }
-  }
-  setWorkerStatus(w,nx,{date:when, note:opts.note, clearEnd:back});
+  if(!w) return false;
+  if(!setWorkerStatus(w,next,opts)){ renderPeople(); renderVariables(); return false; }
   queueSave(); refresh(); renderPeople(); renderVariables(); renderDirectory();
+  renderSalTable();
   if(RP) runReport();
-  el("savedNote").textContent="انتغيّرت الحالة إلى «"+nx+"» ✓";
+  el("savedNote").textContent="انتغيّرت الحالة إلى «"+getWorkerStatus(w)+"» ✓";
   setTimeout(()=>el("savedNote").textContent="",2400);
   return true;
 }
+
+/* ---- النافذة الموحّدة: المكان الوحيد لتغيير حالة العمل ----
+   تُفتح من جدول العمال، دليل العمال، تبويب الحالات، وجدول الرواتب،
+   عبر أي زر يحمل data-wstatus. */
+let stTargetId=null, stOpts=null;
+function stIsActivePick(){ return normStatus(el("stSelect").value)===WS_ACTIVE; }
+function stSync(){
+  const back=stIsActivePick();
+  const lb=el("stDateLbl");
+  if(lb && lb.textContent!==undefined)
+    lb.textContent = back ? "تاريخ الرجوع للعمل" : "تاريخ السريان — آخر يوم عمل";
+  const h=el("stHint");
+  if(!h || h.innerHTML===undefined) return;
+  const d=el("stDate").value||todayISO();
+  h.innerHTML = back
+    ? "يرجع للجرد اليومي والحضور والغياب، وكل سجله السابق يبقى كما هو."
+    : "آخر يوم عمل <b>"+esc(dateTextOf(d))+"</b> — يبقى بالجرد لغايته ويختفي بعده، "+
+      "وراتبه ينحسب لغاية ذلك اليوم."+
+      (d>todayISO()?'<br><span class="mini">تاريخ لاحق: يبقى بالجرد لحد ذلك اليوم.</span>':"")+
+      (d<todayISO()?'<br><span class="mini">تاريخ سابق: التقارير القديمة تنحسب من جديد لغايته.</span>':"");
+}
+function openStatusModal(id,opts){
+  opts=opts||{};
+  const w=C().workers.find(x=>x.id===id);
+  if(!w){ alert("العامل غير موجود."); return; }
+  stTargetId=id; stOpts=opts;
+  el("stWho").innerHTML="العامل: <b>"+esc(w.name)+"</b> &nbsp;·&nbsp; الحالة الحالية: "+statusBadge(w);
+  el("stSelect").innerHTML=statusOptions(normStatus(opts.status||getWorkerStatus(w)));
+  el("stDate").value=opts.date||w.statusChangedAt||todayISO();
+  el("stNote").value = opts.note!==undefined ? String(opts.note||"") : (w.statusNote||"");
+  stSync();
+  el("stBack").classList.remove("hidden");
+  const sel=el("stSelect"); if(sel.focus) sel.focus();
+}
+function closeStatusModal(){
+  stTargetId=null; stOpts=null;
+  el("stBack").classList.add("hidden");
+}
+el("stSelect").addEventListener("change",stSync);
+el("stDate").addEventListener("change",stSync);
+el("stCancel").onclick=closeStatusModal;
+el("stBack").addEventListener("click",ev=>{ if(ev.target===el("stBack")) closeStatusModal(); });
+el("stSave").onclick=()=>{
+  const id=stTargetId; if(!id){ closeStatusModal(); return; }
+  const next=normStatus(el("stSelect").value);
+  const date=el("stDate").value||todayISO();
+  const note=el("stNote").value;
+  const o=Object.assign({},stOpts||{},{date:date,note:note});
+  closeStatusModal();
+  applyWorkerStatus(id,next,o);
+};
+/* زر واحد بكل الجداول */
+document.addEventListener("click",ev=>{
+  if(!ev.target || !ev.target.closest) return;
+  const b=ev.target.closest("[data-wstatus]");
+  if(b) openStatusModal(b.dataset.wstatus);
+});
 
 /* ==================== الإعدادات ==================== */
 const setMap={ setCompany:"company", setTitle:"title", setAddress:"address", setSigner:"signer",
@@ -2874,12 +3005,13 @@ el("pnSave").onclick=()=>{
   const term=isTerminationType(type);
   if(!term && !warnIfEnded(w,date,"\u0627\u0644\u0639\u0642\u0648\u0628\u0629")) return;
   if(term){
-    const already = w.endDate && w.endDate!==date;
+    const prevEndDate = serviceEnd(w);
+    const already = prevEndDate && prevEndDate!==date;
     if(!confirm("راح تنتهي خدمة «"+w.name+"» بتاريخ "+dateTextOf(date)+".\n\n"+
       "· ما يظهر بالجرد بعد هذا اليوم\n"+
       "· راتبه ينحسب لغاية هذا اليوم فقط\n"+
-      "· حالته تصير «"+WS_END+"» ويظهر بتبويب المتغيرات"+
-      (already?"\n· موجود عنده إنهاء سابق بتاريخ "+dateTextOf(w.endDate)+" وراح ينستبدل":"")+
+      "· حالته تصير «"+WS_END+"» ويظهر بتبويب الحالات"+
+      (already?"\n· موجود عنده إنهاء سابق بتاريخ "+dateTextOf(prevEndDate)+" وراح ينستبدل":"")+
       "\n\nتكمل؟")) return;
   }
   let no=el("pnNo").value;
@@ -2887,16 +3019,17 @@ el("pnSave").onclick=()=>{
   c.penalties.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
     section:el("pnSection").value, type:type,
     kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:dayDeductFor(w),
-    date:date, terminates:term, prevEnd:term?(w.endDate||""):undefined,
+    date:date, terminates:term,
+    /* الحالة السابقة كاملة — حذف القرار يرجّعها كما كانت بالضبط */
+    prevStatus:term?getWorkerStatus(w):undefined,
+    prevChangedAt:term?(w.statusChangedAt||""):undefined,
+    prevNote:term?(w.statusNote||""):undefined,
     reason:el("pnReason").value,
     admin:el("pnAdmin").value, issued:todayISO() });
   c.penSeq=(c.penSeq||0)+1;
-  /* قرار إنهاء الخدمة يوحّد المسارين: تاريخ نهاية الخدمة وحالة العمل معاً،
+  /* قرار إنهاء الخدمة يمرّ من نفس دالة تغيير الحالة الموحّدة،
      فلا يبقى عامل منتهي الخدمة ظاهراً بحالة «مستمر». */
-  if(term){
-    w.endDate=date;
-    setWorkerStatus(w,WS_END,{date:date,note:"قرار إنهاء خدمة رقم "+no});
-  }
+  if(term) setWorkerStatus(w,WS_END,{date:date,note:"قرار إنهاء خدمة رقم "+no,ref:no});
   queueSave(); el("pnNo").value=nextPenaltyNo(); renderPenalties();
   if(term){ refresh(); renderPeople(); renderVariables(); }
   if(RP) runReport();
@@ -2934,13 +3067,18 @@ el("penaltiesList").addEventListener("click",e=>{
     pnSyncKind(); drawPenalty(); pnHintRender(); }
   if(d){ const l=(c.penalties||[]).find(x=>x.id===d.dataset.pdel); if(!l) return;
     const w=c.workers.find(x=>x.id===l.workerId);
-    const undoTerm = l.terminates && w && w.endDate===l.date;
+    /* نرجّع الحالة فقط إذا كان هذا القرار هو صاحب الحالة الحالية فعلاً */
+    const undoTerm = !!(l.terminates && w && !isActiveWorker(w) && (w.statusChangedAt||"")===l.date);
+    /* قرارات قديمة بلا prevStatus: الرجوع إلى «مستمر» */
+    const back = l.prevStatus ? normStatus(l.prevStatus) : WS_ACTIVE;
     if(confirm("يتحذف إشعار "+l.no+"؟"+
-      (undoTerm?"\n\nهذا هو قرار إنهاء خدمة «"+w.name+"» — بحذفه ترجع خدمته مفتوحة.":""))){
+      (undoTerm?"\n\nهذا هو قرار إنهاء خدمة «"+w.name+"» — بحذفه ترجع حالته «"+back+"»"+
+        (back===WS_ACTIVE?" ويرجع للجرد والراتب.":" بتاريخ "+(l.prevChangedAt?dateTextOf(l.prevChangedAt):"—")+"."):""))){
       c.penalties=c.penalties.filter(x=>x.id!==l.id);
-      if(undoTerm) w.endDate=l.prevEnd||"";
+      if(undoTerm) setWorkerStatus(w,back,{ date:l.prevChangedAt||todayISO(),
+        note:l.prevNote||"", ref:l.no });
       queueSave(); renderPenalties();
-      if(undoTerm){ refresh(); renderPeople(); }
+      if(undoTerm){ refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable(); }
       if(RP) runReport(); } }
 });
 
@@ -3779,7 +3917,7 @@ function renderDirectory(){
         '<td><input type="text" id="dirAddr" value="'+esc(w.address||"")+'" placeholder="محلة ، زقاق ، دار"></td>'+
         '<td class="mini">'+esc(hireText(w))+'</td>'+
         '<td class="mini">'+esc(workerStatusText(w))+'</td>'+
-        '<td><select id="dirStatus" class="wsel">'+statusOptions(getWorkerStatus(w))+'</select></td>'+
+        '<td>'+statusBadge(w)+'</td>'+
         '<td style="text-align:left;white-space:nowrap">'+
         '<button class="btn sm primary" data-dsave="'+w.id+'">حفظ</button> '+
         '<button class="btn sm ghost" data-dcancel="1">إلغاء</button></td></tr>';
@@ -3799,7 +3937,8 @@ function renderDirectory(){
       '<td class="mini">'+esc(workerStatusText(w))+'</td>'+
       '<td>'+statusBadge(w)+'</td>'+
       '<td style="text-align:left;white-space:nowrap">'+
-      '<button class="btn sm" data-dedit="'+w.id+'">تعديل</button></td></tr>';
+      '<button class="btn sm" data-dedit="'+w.id+'">تعديل</button> '+
+      '<button class="btn sm ghost" data-wstatus="'+w.id+'">تغيير الحالة</button></td></tr>';
   });
   box.innerHTML=h+'</tbody></table>';
   if(editDirId){
@@ -3821,9 +3960,6 @@ function dirSave(id){
   const name=normName(g("dirName"));
   if(!name){ alert("اسم العامل ما يصير فارغ."); return; }
   const secNode=document.getElementById("dirSec");
-  const stNode=document.getElementById("dirStatus");
-  const nextSt=stNode?normStatus(stNode.value):getWorkerStatus(w);
-  const stChanged=(nextSt!==getWorkerStatus(w));
   w.phone=normPhone(g("dirPhone"));
   w.phone2=normPhone(g("dirPhone2"));
   w.address=g("dirAddr");
@@ -3837,8 +3973,7 @@ function dirSave(id){
   }else{
     queueSave(); refresh(); renderPeople(); if(RP) runReport();
   }
-  /* الحالة آخر ما يُطبّق: لها تأكيدها الخاص، وبقية الحقول محفوظة قبلها */
-  if(stChanged) changeWorkerStatus(id,nextSt);
+  /* الحالة لا تتغيّر من هنا — لها نافذتها الموحّدة وحدها */
   renderDirectory(); renderVariables();
   el("dirNote").textContent="انحفظت المعلومات ✓";
   setTimeout(()=>el("dirNote").textContent="",2200);
@@ -3974,7 +4109,8 @@ function renderVariables(){
     '<div class="card hero"><div class="k">إجمالي المتغيرات</div><div class="v">'+fmtNum(all.length)+'</div></div>'+
     '<div class="card warn"><div class="k">'+esc(WS_END)+'</div><div class="v">'+fmtNum(cnt[WS_END])+'</div></div>'+
     '<div class="card cut"><div class="k">'+esc(WS_CUT)+'</div><div class="v">'+fmtNum(cnt[WS_CUT])+'</div></div>'+
-    '<div class="card bad"><div class="k">'+esc(WS_FIRE)+'</div><div class="v">'+fmtNum(cnt[WS_FIRE])+'</div></div>';
+    '<div class="card bad"><div class="k">'+esc(WS_FIRE)+'</div><div class="v">'+fmtNum(cnt[WS_FIRE])+'</div></div>'+
+    '<div class="card"><div class="k">'+esc(WS_MOVED)+'</div><div class="v">'+fmtNum(cnt[WS_MOVED])+'</div></div>';
   el("varCount").textContent = all.length
     ? fmtNum(list.length)+" من "+fmtNum(all.length)+" عامل" : "";
 
@@ -4003,7 +4139,7 @@ function renderVariables(){
       '<td class="mini">'+(w.statusChangedAt?esc(dateTextOf(w.statusChangedAt)):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
       '<td class="mini">'+(w.statusNote?esc(w.statusNote):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
       '<td style="text-align:left;white-space:nowrap">'+
-        '<button class="btn sm primary" data-vrestore="'+w.id+'">استعادة إلى '+esc(WS_ACTIVE)+'</button> '+
+        '<button class="btn sm primary" data-wstatus="'+w.id+'">تغيير الحالة</button> '+
         '<button class="btn sm" data-vedit="'+w.id+'">تعديل البيانات</button></td></tr>';
   });
   box.innerHTML=h+'</tbody></table>';
@@ -4018,8 +4154,7 @@ function openWorkerEditor(id){
   if(box && box.scrollIntoView) { try{ box.scrollIntoView({behavior:"smooth",block:"center"}); }catch(e){} }
 }
 el("variablesTable").addEventListener("click",e=>{
-  const r=e.target.closest("[data-vrestore]"), ed=e.target.closest("[data-vedit]");
-  if(r){ changeWorkerStatus(r.dataset.vrestore, WS_ACTIVE); return; }
+  const ed=e.target.closest("[data-vedit]");
   if(ed){ openWorkerEditor(ed.dataset.vedit); }
 });
 el("varFilter").addEventListener("change",renderVariables);
@@ -4230,23 +4365,19 @@ function policyOfLeave(l, w){
    المرجع: تاريخ المباشرة إن حُدّد، وإلا تاريخ إضافته للنظام.
    هذا يمنع ظهور عامل جديد في جرود سابقة لتاريخ التحاقه. */
 function serviceStart(w){ return (w && (w.startDate || w.createdAt)) || ""; }
-/* نهاية الخدمة: التاريخ اليدوي أولاً، وإلا تاريخ تغيير الحالة لعامل غير مستمر.
-   بهذا يمشي استبعاد المتغيّرين على نفس محرّك التواريخ القائم: الجرد يستبعدهم
-   بعد يوم التغيير فقط، والراتب ينحسب لأيام خدمتهم الفعلية — بلا حذف أي سجل. */
+/* نهاية الخدمة — مصدر حقيقة واحد: حالة العمل وتاريخ سريانها.
+   statusChangedAt هو آخر يوم عمل (شامل)، والعامل «المستمر» بلا نهاية. */
 function serviceEnd(w){
   if(!w) return "";
-  if(w.endDate) return w.endDate;
-  if(!isActiveWorker(w) && w.statusChangedAt) return w.statusChangedAt;
-  return "";
+  return isActiveWorker(w) ? "" : (w.statusChangedAt||"");
 }
-/* هل العامل ضمن الخدمة في هذا اليوم؟ */
+/* هل العامل ضمن الخدمة في هذا اليوم؟
+   لا قاعدة تعتمد على تاريخ اليوم هنا: بعد الترحيل كل عامل غير مستمر يحمل
+   تاريخاً مخزّناً، فالتقارير القديمة لا تتغيّر مع مرور الأيام. */
 function inService(w, iso){
   const s=serviceStart(w), e=serviceEnd(w);
   if(s && iso < s) return false;
   if(e && iso > e) return false;
-  /* حالة غير مستمرة بلا أي تاريخ (بيانات قديمة أو مستوردة): لا نُلغي ماضيه،
-     نستبعده من اليوم فصاعداً فقط حتى لا ينكسر أي تقرير تاريخي. */
-  if(!e && !isActiveWorker(w) && iso >= todayISO()) return false;
   return true;
 }
 
@@ -4457,7 +4588,7 @@ function buildReport(from,to){
       status:getWorkerStatus(w), statusChangedAt:w.statusChangedAt||"",
       eligible, totalDays, paidDays, svcDays, present, misc, absent, leave, off, leaveBy,
       excused, excusedDed, leavePolicy:pol, dailyRate, fullService,
-      startDate:svcS, endDate:svcE, ended: !!(svcE && svcE < to),
+      startDate:svcS, svcEnd:svcE, ended: !!(svcE && svcE < to),
       deductDays, fullSalary:fullSal, salary:gross, partial, dayDed:ded,
       absDeduction, extraDed, extraAdd, adjs, penDed, penDays, penCount, pens,
       achAdd, achCount, achs, deduction,
@@ -4643,29 +4774,23 @@ function renderSalTable(){
   const c=C(), st=S();
   const defName=policyName(st.leavePolicy||"none");
   const today=todayISO();
-  let h='<thead><tr><th>العامل</th><th>الحالة</th><th>القسم</th><th>الراتب الشهري</th><th>استقطاع اليوم</th>'+
-        '<th>المباشرة</th><th>انتهاء الخدمة</th><th>استقطاع المتفرقة والإجازات</th></tr></thead><tbody>';
+  let h='<thead><tr><th>العامل</th><th>حالة العمل</th><th>القسم</th><th>الراتب الشهري</th><th>استقطاع اليوم</th>'+
+        '<th>المباشرة</th><th>استقطاع المتفرقة والإجازات</th></tr></thead><tbody>';
   c.workers.forEach(w=>{
     const sec=sectionOf(w.sectionId);
     const p=w.leavePolicy||"";
-    /* نهاية الخدمة قد تأتي من تاريخ يدوي أو من تغيير حالة العمل — نقرأ الاثنين */
+    /* نهاية الخدمة مصدرها الوحيد حالة العمل وتاريخ سريانها */
     const eDate = serviceEnd(w);
     const gone = eDate && eDate < today;
-    const status = gone
-      ? '<span class="stag out">منقول / منتهي</span>'
-      : (eDate ? '<span class="stag soon">ينتهي '+dateNumeric(eDate)+'</span>'
-               : '<span class="stag in">نشط</span>');
     h+='<tr'+(gone?' class="rowout"':'')+'><td>'+esc(w.name)+'</td>'+
-      '<td>'+status+' '+statusBadge(w)+
-        '<div><button class="btn sm ghost" data-xfer="'+w.id+'">'+
-        (gone?"إلغاء النقل":"نقل / إنهاء")+'</button></div></td>'+
+      '<td>'+statusBadge(w)+
+        '<div><button class="btn sm ghost" data-wstatus="'+w.id+'">تغيير الحالة</button></div></td>'+
       '<td class="mini">'+esc(sec?sec.name:"—")+'</td>'+
       '<td><input class="salin" type="number" min="0" step="1000" data-sal="'+w.id+'" value="'+
         (w.salary!=null&&w.salary!==""?w.salary:"")+'" placeholder="'+st.salary+'"></td>'+
       '<td><input class="salin" type="number" min="0" data-ded="'+w.id+'" value="'+
         (w.deduct!=null&&w.deduct!==""?w.deduct:"")+'" placeholder="'+Math.round(dayDeductFor({}))+'"></td>'+
       '<td><input class="salin" type="date" data-start="'+w.id+'" value="'+(w.startDate||"")+'"></td>'+
-      '<td><input class="salin" type="date" data-end="'+w.id+'" value="'+(w.endDate||"")+'"></td>'+
       '<td><select class="salin" data-lpol="'+w.id+'">'+
         '<option value=""'+(p===""?" selected":"")+'>حسب الشركة ('+esc(defName)+')</option>'+
         '<option value="none"'+(p==="none"?" selected":"")+'>بلا استقطاع</option>'+
@@ -4675,38 +4800,17 @@ function renderSalTable(){
   });
   el("salTable").innerHTML=h+'</tbody>';
 }
-/* نقل العامل: يوقف احتسابه من تاريخ معيّن مع بقاء اسمه وأيامه السابقة محفوظة */
-el("salTable").addEventListener("click",e=>{
-  const b=e.target.closest("[data-xfer]"); if(!b)return;
-  const w=C().workers.find(x=>x.id===b.dataset.xfer); if(!w)return;
-  const eDate=serviceEnd(w);
-  if(eDate && eDate < todayISO()){
-    if(!confirm("إلغاء النقل وإرجاع "+w.name+" للخدمة؟"+
-      (isActiveWorker(w)?"":"\n\nحالته ترجع «"+WS_ACTIVE+"» ويختفي من تبويب المتغيرات.\n"+
-        "كل أيامه ورواتبه السابقة تبقى محفوظة."))) return;
-    w.endDate="";
-    if(!isActiveWorker(w)) setWorkerStatus(w,WS_ACTIVE,{clearEnd:true});
-  }else{
-    const d=prompt("تاريخ آخر يوم عمل لـ "+w.name+" (بصيغة YYYY-MM-DD).\n"+
-      "اسمه وأيامه السابقة تبقى محفوظة، ويتوقف احتسابه بعد هذا التاريخ:", w.endDate||todayISO());
-    if(d===null) return;
-    const v=String(d).trim();
-    if(v && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ alert("صيغة التاريخ غير صحيحة. استعمل YYYY-MM-DD."); return; }
-    w.endDate=v;
-  }
-  queueSave(); renderSalTable(); renderVariables(); if(RP) runReport(); refresh();
-});
+/* نهاية الخدمة تُدار من نافذة «تغيير الحالة» وحدها — ما عاد أكو خانة تاريخ هنا */
 el("salTable").addEventListener("change",e=>{
   const c=C();
   const s=e.target.closest("[data-sal]"), d=e.target.closest("[data-ded]"), t=e.target.closest("[data-start]"),
-        p=e.target.closest("[data-lpol]"), en=e.target.closest("[data-end]");
+        p=e.target.closest("[data-lpol]");
   const find=id=>c.workers.find(w=>w.id===id);
   if(s){ const w=find(s.dataset.sal); if(w) w.salary=s.value===""?null:Number(s.value); }
   if(d){ const w=find(d.dataset.ded); if(w) w.deduct=d.value===""?null:Number(d.value); }
   if(t){ const w=find(t.dataset.start); if(w) w.startDate=t.value||""; }
-  if(en){ const w=find(en.dataset.end); if(w) w.endDate=en.value||""; }
   if(p){ const w=find(p.dataset.lpol); if(w) w.leavePolicy=p.value||null; }
-  if(s||d||t||p||en){ queueSave(); if(RP) runReport(); }
+  if(s||d||t||p){ queueSave(); if(RP) runReport(); refresh(); }
 });
 el("applyAllSalary").onclick=()=>{
   if(!confirm("تطبيق الإعداد الافتراضي على كل العمال وإلغاء أي راتب أو استقطاع أو سياسة خاصة؟"))return;
