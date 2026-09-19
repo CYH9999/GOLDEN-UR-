@@ -58,7 +58,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand);outline:none;b
 
 .wrap{padding:18px;max-width:1500px;margin:0 auto}
 .split{display:grid;grid-template-columns:1fr 460px;gap:18px;align-items:start}
-@media(max-width:1080px){.split{grid-template-columns:1fr}}
+.split>*{min-width:0}
+@media(max-width:1080px){.split{grid-template-columns:1fr !important}}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:18px}
 .panel-head{padding:11px 15px;border-bottom:2px solid var(--gold);background:#F8F4FC;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .panel-head h2{margin:0;font-size:15px;font-weight:700;color:var(--brand-deep)}
@@ -204,6 +205,7 @@ tr.rowout td{background:#FBF7F8;opacity:.85}
 .mitem .mn{font-weight:600;font-size:14px}
 .tblwrap{overflow-x:auto}
 .tblwrap table{min-width:760px}
+.tblwrap.tight table{min-width:600px}
 .tblwrap input,.tblwrap select{width:100%;padding:5px 8px;font-size:13px}
 .ltr{direction:ltr;text-align:right;unicode-bidi:embed}
 .logoprev{max-height:70px;max-width:200px;border:1px solid var(--line);border-radius:6px;
@@ -224,6 +226,22 @@ tr.rowout td{background:#FBF7F8;opacity:.85}
 .zrow{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--line);border-radius:5px;margin-bottom:8px;background:#fff}
 .zrow .zn{flex:1;font-weight:700;color:var(--brand-deep)}
 .zrow .zs{font-size:12px;color:var(--ink-2)}
+
+/* ---- شارات حالة العمل ---- */
+.wst{font-size:11px;font-weight:700;padding:2px 9px;border-radius:12px;white-space:nowrap;
+  display:inline-block;line-height:1.55}
+.wst.s-on{background:var(--present-bg);color:var(--present)}
+.wst.s-end{background:var(--misc-bg);color:var(--misc)}
+.wst.s-cut{background:var(--ground);color:var(--brand-deep);box-shadow:inset 0 0 0 1px var(--line)}
+.wst.s-fire{background:var(--absent-bg);color:var(--absent)}
+.wsel{min-width:132px}
+tr.rowvar td{background:#FCFAFE}
+.varbar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.varbar label.field{margin:0}
+.varbar .grow{flex:1;min-width:180px}
+.card.warn .v{color:var(--misc)}
+.card.cut .v{color:var(--brand-deep)}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.topbar,.tabs,.tally,.reminder,.actions{display:none!important}}
 </style>
@@ -254,6 +272,7 @@ tr.rowout td{background:#FBF7F8;opacity:.85}
   <button role="tab" aria-selected="false" data-view="materials">المواد</button>
   <button role="tab" aria-selected="false" data-view="history">السجل</button>
   <button role="tab" aria-selected="false" data-view="people">العمال والأقسام</button>
+  <button role="tab" aria-selected="false" data-view="variables">المتغيرات</button>
   <button role="tab" aria-selected="false" data-view="report">التقارير والرواتب</button>
   <button role="tab" aria-selected="false" data-view="settings">الإعدادات</button>
 </nav>
@@ -620,16 +639,23 @@ tr.rowout td{background:#FBF7F8;opacity:.85}
           <label class="field"><span>رقم للطوارئ (قريب)</span><input type="tel" id="wPhone2" class="ltr" placeholder="اختياري"></label>
           <label class="field"><span>العنوان / محل السكن</span><input type="text" id="wAddr" placeholder="محلة ، زقاق ، دار"></label>
         </div>
+        <div class="row3">
+          <label class="field"><span>اسم الأم</span><input type="text" id="wMother" placeholder="اسم الأم الثلاثي"></label>
+          <label class="field"><span>التولد / سنة الميلاد</span><input type="text" id="wDob" placeholder="مثال: ١٩٨٥ أو 1985-03-02"></label>
+          <label class="field"><span>حالة العمل</span><select id="wStatus"></select></label>
+        </div>
         <button class="btn primary" id="addW">إضافة عامل</button>
         <label class="field" style="margin-top:20px">
           <span>إضافة دفعة أسماء — اسم بكل سطر</span>
           <textarea id="bulk" rows="5" placeholder="أحمد كاظم جاسم&#10;علي عبد الحسين"></textarea>
         </label>
         <button class="btn" id="addBulk">إضافة الأسماء للقسم المختار</button>
-        <table style="margin-top:16px">
-          <thead><tr><th>الاسم</th><th>القسم</th><th></th></tr></thead>
-          <tbody id="wTable"></tbody>
-        </table>
+        <div class="tblwrap tight" style="margin-top:16px">
+          <table>
+            <thead><tr><th>الاسم</th><th>اسم الأم</th><th>التولد</th><th>القسم</th><th>حالة العمل</th><th></th></tr></thead>
+            <tbody id="wTable"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -648,6 +674,34 @@ tr.rowout td{background:#FBF7F8;opacity:.85}
         <span class="saved" id="dirNote"></span>
       </div>
       <div id="dirTable" class="tblwrap"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== المتغيرات ===== -->
+<section id="view-variables" class="hidden">
+  <div class="panel">
+    <div class="panel-head">
+      <h2>المتغيرات — العمال غير المستمرين</h2>
+      <span class="saved" id="varCount"></span>
+    </div>
+    <div class="panel-body">
+      <p class="hint" style="margin-top:0">هنا كل عامل تغيّرت حالته عن «مستمر»: إنهاء خدمات، انقطاع عن العمل، أو مفصول.
+        هؤلاء ما يظهرون بالجرد اليومي الجديد، وسجلهم القديم وأيامه ورواتبه تبقى محفوظة كما هي.</p>
+      <div class="varbar">
+        <label class="field"><span>حالة العمل</span>
+          <select id="varFilter" class="wsel"></select></label>
+        <label class="field grow"><span>بحث</span>
+          <input type="text" id="varSearch" placeholder="اسم العامل أو اسم الأم أو القسم أو الهاتف أو العنوان…"></label>
+      </div>
+      <div id="varCards" class="cards" style="margin-bottom:14px"></div>
+      <div class="actions" style="margin-top:0;margin-bottom:12px">
+        <button class="btn primary" id="varWord">تصدير Word</button>
+        <button class="btn" id="varXls">تصدير Excel</button>
+        <button class="btn" id="varPrint">طباعة / PDF</button>
+        <span class="saved" id="varNote"></span>
+      </div>
+      <div id="variablesTable" class="tblwrap"></div>
     </div>
   </div>
 </section>
@@ -1094,6 +1148,83 @@ async function writeFile(){ if(!fileHandle)return false; try{
 
 /* ==================== نموذج البيانات ==================== */
 const ZONE_COLORS=["#4B2E83","#B8912E","#2C6E49","#9B1C31","#1D6A8C","#7A3E9D","#B5651D","#3E5C76"];
+
+/* ==================== حالات العمل ====================
+   مصدر واحد للحقيقة: أي نص حالة بالبرنامج يخرج من هنا، فلا تتكرّر
+   السلاسل النصية بعشرة أماكن وتنحرف إحداها بحرف فينكسر الفلتر. */
+const WS_ACTIVE="مستمر", WS_END="إنهاء خدمات", WS_CUT="انقطاع عن العمل", WS_FIRE="مفصول";
+const WSTATUSES=[WS_ACTIVE,WS_END,WS_CUT,WS_FIRE];
+/* العمال غير المستمرين — هم من يظهرون بتبويب المتغيرات */
+const WS_VARIABLE=[WS_END,WS_CUT,WS_FIRE];
+const WS_CLASS={};
+WS_CLASS[WS_ACTIVE]="s-on"; WS_CLASS[WS_END]="s-end";
+WS_CLASS[WS_CUT]="s-cut";   WS_CLASS[WS_FIRE]="s-fire";
+/* أي قيمة غير معروفة أو فارغة أو null ترجع «مستمر» — لا تُحفظ حالة خارج القائمة */
+function normStatus(v){
+  const t=String(v==null?"":v).trim();
+  return WSTATUSES.indexOf(t)>=0 ? t : WS_ACTIVE;
+}
+function getWorkerStatus(w){ return normStatus(w && w.status); }
+function isActiveWorker(w){ return getWorkerStatus(w)===WS_ACTIVE; }
+function statusBadge(w){
+  const st=getWorkerStatus(w);
+  return '<span class="wst '+WS_CLASS[st]+'">'+esc(st)+'</span>';
+}
+/* نص حر: التولد قد يكون سنة فقط أو تاريخاً كاملاً — لا نفرض صيغة */
+function normDob(v){ return String(v==null?"":v).trim().replace(/\s+/g," "); }
+/* اسم العامل داخل أي قائمة منسدلة: الحالة تظهر معه حتى لا يُصدَر
+   وصل باسم عامل منتهي الخدمة سهواً. */
+function workerOptionLabel(w){
+  return isActiveWorker(w) ? String(w.name||"") : String(w.name||"")+" — "+getWorkerStatus(w);
+}
+function normName(v){ return String(v==null?"":v).trim().replace(/\s+/g," "); }
+function dobText(w){ return (w && w.dob) ? String(w.dob) : "—"; }
+function motherText(w){ return (w && w.motherName) ? String(w.motherName) : "—"; }
+
+/* ---- تطبيع كائن العامل ----
+   يُستدعى عند الإنشاء وعند كل ترحيل واستعادة. قابل للتنفيذ مراراً بلا ضرر:
+   لا يلمس قيمة موجودة صالحة، ولا يمسح شيئاً، فقط يملأ الناقص. */
+function normalizeWorker(w){
+  if(!w || typeof w!=="object") return w;
+  if(w.dob==null) w.dob=""; else w.dob=normDob(w.dob);
+  if(w.motherName==null) w.motherName=""; else w.motherName=normName(w.motherName);
+  w.status=normStatus(w.status);
+  if(w.statusChangedAt==null) w.statusChangedAt="";
+  if(w.statusNote==null) w.statusNote="";
+  /* عامل غير مستمر بلا تاريخ تغيير: نُسند له تاريخ انتهاء خدمته إن وُجد،
+     لأنه التاريخ الحقيقي الوحيد المتاح. وإن لم يوجد يبقى فارغاً ويتكفّل
+     inService باستبعاده من اليوم فصاعداً دون المساس بماضيه. */
+  if(w.status!==WS_ACTIVE && !w.statusChangedAt && w.endDate) w.statusChangedAt=w.endDate;
+  if(w.status===WS_ACTIVE && w.statusChangedAt) w.statusChangedAt="";
+  return w;
+}
+/* عامل جديد بكل الحقول المعتمدة */
+function newWorker(o){
+  o=o||{};
+  return normalizeWorker({ id:uid(), name:normName(o.name), sectionId:o.sectionId||"",
+    createdAt:o.createdAt||todayISO(),
+    phone:normPhone(o.phone), phone2:normPhone(o.phone2), address:String(o.address||"").trim(),
+    motherName:normName(o.motherName), dob:normDob(o.dob), status:normStatus(o.status),
+    statusChangedAt:"", statusNote:"" });
+}
+/* تغيير الحالة بمسار واحد: يضبط التاريخ والملاحظة ولا يمسّ أي سجل تاريخي */
+function setWorkerStatus(w, next, opts){
+  if(!w) return false;
+  opts=opts||{};
+  const nx=normStatus(next);
+  w.status=nx;
+  if(nx===WS_ACTIVE){
+    w.statusChangedAt="";
+    w.statusNote = opts.note!==undefined ? String(opts.note||"") : "";
+    /* الرجوع للخدمة يرفع قيد الإيقاف، وإلا بقي خارج الجرد رغم أنه «مستمر» */
+    if(opts.clearEnd && w.endDate) w.endDate="";
+  }else{
+    w.statusChangedAt = opts.date || w.statusChangedAt || todayISO();
+    if(opts.note!==undefined) w.statusNote=String(opts.note||"");
+  }
+  return true;
+}
+
 function blankCompany(name){
   const z1=uid(), z2=uid();
   return {
@@ -1170,6 +1301,12 @@ function ensureFields(st){
       c.payV3=true;
     }
     (c.zones||[]).forEach((z,i)=>{ if(!z.color) z.color=ZONE_COLORS[i%ZONE_COLORS.length]; });
+    /* ترحيل ٤: التولد واسم الأم وحالة العمل.
+       كل عامل قديم يحصل على القيم الافتراضية، وأي status غير رسمي يُصحَّح
+       إلى «مستمر». التنفيذ متكرر بلا أثر: ما موجود وصالح لا يُلمس. */
+    if(!Array.isArray(c.workers)) c.workers=[];
+    c.workers=c.workers.filter(w=>w && typeof w==="object");
+    c.workers.forEach(normalizeWorker);
   });
   return st;
 }
@@ -1846,6 +1983,11 @@ function renderPeople(){
   }).join("");
   if(keep) sel.value=keep;
 
+  const wsSel=el("wStatus");
+  if(wsSel && wsSel.innerHTML!==undefined){
+    const keepSt=normStatus(wsSel.value||WS_ACTIVE);
+    wsSel.innerHTML=statusOptions(keepSt);
+  }
   el("wTable").innerHTML=c.workers.map(w=>{
     const nameCell = (editWorkerId===w.id)
       ? '<td><input class="renameBox" id="wRenameBox" type="text" value="'+esc(w.name)+'"></td>'
@@ -1855,11 +1997,19 @@ function renderPeople(){
         '<button class="btn sm ghost" data-wcancel="1">إلغاء</button>'
       : '<button class="btn sm" data-wedit="'+w.id+'">تعديل الاسم</button> '+
         '<button class="btn sm danger" data-wdel="'+w.id+'">حذف</button>';
-    return '<tr>'+nameCell+'<td><select data-wsec="'+w.id+'"><option value="">بدون قسم</option>'+
+    return '<tr'+(isActiveWorker(w)?"":' class="rowvar"')+'>'+nameCell+
+      '<td class="mini">'+esc(motherText(w))+'</td>'+
+      '<td class="mini">'+esc(dobText(w))+'</td>'+
+      '<td><select data-wsec="'+w.id+'"><option value="">بدون قسم</option>'+
       sortedSections().map(s=>{ const z=zoneOf(s.zoneId);
         return '<option value="'+s.id+'"'+(s.id===w.sectionId?" selected":"")+'>'+esc(s.name)+(z?" — "+esc(z.short||z.name):"")+'</option>'; }).join("")+
-      '</select></td><td style="text-align:left;white-space:nowrap">'+btns+'</td></tr>';
-  }).join("")||'<tr><td style="color:var(--ink-2)">ماكو عمال بعد.</td></tr>';
+      '</select></td>'+
+      '<td><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">'+
+        statusBadge(w)+
+        '<select class="wsel" data-wstat="'+w.id+'">'+statusOptions(getWorkerStatus(w))+'</select>'+
+      '</div></td>'+
+      '<td style="text-align:left;white-space:nowrap">'+btns+'</td></tr>';
+  }).join("")||'<tr><td colspan="6" style="color:var(--ink-2)">ماكو عمال بعد.</td></tr>';
   renderDirectory();
   if(editWorkerId){
     const box=document.getElementById("wRenameBox");
@@ -1913,19 +2063,24 @@ el("secTable").addEventListener("click",e=>{
       queueSave(); refresh(); renderPeople(); } }
 });
 el("addW").onclick=()=>{
-  const n=el("wName").value.trim(); if(!n){ el("wName").focus(); return; }
-  C().workers.push({id:uid(),name:n,sectionId:el("wSec").value,createdAt:todayISO(),
-    phone:normPhone(el("wPhone").value), phone2:normPhone(el("wPhone2").value),
-    address:el("wAddr").value.trim()});
-  el("wName").value=""; el("wPhone").value=""; el("wPhone2").value=""; el("wAddr").value="";
-  el("wName").focus(); queueSave(); refresh(); renderPeople();
+  const n=normName(el("wName").value); if(!n){ el("wName").focus(); return; }
+  const st=normStatus(el("wStatus").value);
+  const w=newWorker({ name:n, sectionId:el("wSec").value,
+    phone:el("wPhone").value, phone2:el("wPhone2").value, address:el("wAddr").value,
+    motherName:el("wMother").value, dob:el("wDob").value, status:st });
+  /* عامل يُسجَّل أصلاً بحالة غير مستمرة: تاريخ التغيير هو تاريخ تسجيله */
+  if(st!==WS_ACTIVE) setWorkerStatus(w,st,{date:todayISO()});
+  C().workers.push(w);
+  ["wName","wPhone","wPhone2","wAddr","wMother","wDob"].forEach(id=>{ el(id).value=""; });
+  el("wStatus").value=WS_ACTIVE;
+  el("wName").focus(); queueSave(); refresh(); renderPeople(); renderVariables();
 };
 el("addBulk").onclick=()=>{
-  const lines=el("bulk").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const lines=el("bulk").value.split("\n").map(s=>normName(s)).filter(Boolean);
   if(!lines.length)return;
   const sid=el("wSec").value;
-  lines.forEach(n=>C().workers.push({id:uid(),name:n,sectionId:sid,createdAt:todayISO()}));
-  el("bulk").value=""; queueSave(); refresh(); renderPeople();
+  lines.forEach(n=>C().workers.push(newWorker({name:n,sectionId:sid})));
+  el("bulk").value=""; queueSave(); refresh(); renderPeople(); renderVariables();
 };
 el("wTable").addEventListener("click",e=>{
   const d=e.target.closest("[data-wdel]"); if(!d)return;
@@ -1955,13 +2110,54 @@ el("wTable").addEventListener("click",e=>{
     c.issues=(c.issues||[]).filter(l=>l.workerId!==w.id);
     c.adjustments=(c.adjustments||[]).filter(l=>l.workerId!==w.id);
     Object.keys(c.days).forEach(k=>{ if(c.days[k]&&c.days[k].states) delete c.days[k].states[w.id]; });
-    queueSave(); refresh(); renderPeople(); if(RP) runReport(); }
+    queueSave(); refresh(); renderPeople(); renderVariables(); if(RP) runReport(); }
 });
 el("wTable").addEventListener("change",e=>{
-  const s=e.target.closest("[data-wsec]"); if(!s)return;
-  const w=C().workers.find(x=>x.id===s.dataset.wsec);
-  w.sectionId=s.value; queueSave(); refresh(); renderPeople();
+  const s=e.target.closest("[data-wsec]");
+  if(s){
+    const w=C().workers.find(x=>x.id===s.dataset.wsec);
+    if(w){ w.sectionId=s.value; queueSave(); refresh(); renderPeople(); }
+    return;
+  }
+  const st=e.target.closest("[data-wstat]");
+  if(st) changeWorkerStatus(st.dataset.wstat, st.value);
 });
+
+/* ==================== تغيير حالة العامل ====================
+   مسار واحد تستعمله كل الواجهات (جدول العمال، دليل العمال، تبويب المتغيرات)
+   حتى يبقى الأثر واحداً: لا يُحذف أي حضور ولا راتب ولا وصل — فقط تتوقف
+   احتسابه في الأيام الجديدة من تاريخ التغيير. */
+function statusOptions(sel, allLabel){
+  const head = allLabel ? '<option value="">'+esc(allLabel)+'</option>' : "";
+  return head+WSTATUSES.map(t=>
+    '<option value="'+esc(t)+'"'+(t===sel?" selected":"")+'>'+esc(t)+'</option>').join("");
+}
+function changeWorkerStatus(id,next,opts){
+  opts=opts||{};
+  const c=C(), w=c.workers.find(x=>x.id===id);
+  if(!w){ renderPeople(); renderVariables(); return false; }
+  const cur=getWorkerStatus(w), nx=normStatus(next);
+  if(cur===nx){ renderPeople(); renderVariables(); return false; }
+  const back=(nx===WS_ACTIVE);
+  const when=opts.date||todayISO();
+  if(!opts.silent){
+    const msg = back
+      ? "ترجع حالة «"+w.name+"» إلى «"+WS_ACTIVE+"»؟\n\n"+
+        "· يرجع للجرد اليومي والحضور والغياب\n"+
+        "· أيامه ورواتبه وإجازاته وعقوباته السابقة تبقى محفوظة كما هي"
+      : "تتغيّر حالة «"+w.name+"» إلى «"+nx+"»؟\n\n"+
+        "· ما يظهر بالجرد اليومي الجديد بعد "+dateTextOf(when)+"\n"+
+        "· راتبه ينحسب لغاية ذلك اليوم\n"+
+        "· كل سجله السابق يبقى محفوظاً بلا أي تغيير";
+    if(!confirm(msg)){ renderPeople(); renderVariables(); return false; }
+  }
+  setWorkerStatus(w,nx,{date:when, note:opts.note, clearEnd:back});
+  queueSave(); refresh(); renderPeople(); renderVariables(); renderDirectory();
+  if(RP) runReport();
+  el("savedNote").textContent="انتغيّرت الحالة إلى «"+nx+"» ✓";
+  setTimeout(()=>el("savedNote").textContent="",2400);
+  return true;
+}
 
 /* ==================== الإعدادات ==================== */
 const setMap={ setCompany:"company", setTitle:"title", setAddress:"address", setSigner:"signer",
@@ -2242,7 +2438,7 @@ function nextLeaveNo(){
 function initLeaveView(){
   const c=C(), sel=el("lvWorker"), keep=sel.value;
   sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
-    '<option value="'+w.id+'">'+esc(w.name)+'</option>').join("");
+    '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("lvFrom").value) el("lvFrom").value=curDate;
   if(!el("lvAdmin").value) el("lvAdmin").value=S().signer||"";
@@ -2530,8 +2726,9 @@ function defaultPenKind(type){
    بتاريخ القرار، فيختفي من الجرد بعده وينحسب راتبه لغاية ذلك اليوم. */
 /* تحذير: إصدار وثيقة بتاريخ بعد انتهاء الخدمة — ما تنزل على أي كشف */
 function warnIfEnded(w,date,what){
-  if(w && w.endDate && date>w.endDate)
-    return confirm("\u062e\u062f\u0645\u0629 \u00ab"+w.name+"\u00bb \u0645\u0646\u062a\u0647\u064a\u0629 \u0628\u062a\u0627\u0631\u064a\u062e "+dateTextOf(w.endDate)+".\n\n"+
+  const _e=serviceEnd(w);
+  if(w && _e && date>_e)
+    return confirm("\u062e\u062f\u0645\u0629 \u00ab"+w.name+"\u00bb \u0645\u0646\u062a\u0647\u064a\u0629 \u0628\u062a\u0627\u0631\u064a\u062e "+dateTextOf(_e)+".\n\n"+
       what+" \u0628\u062a\u0627\u0631\u064a\u062e \u0628\u0639\u062f \u0630\u0644\u0643 \u0645\u0627 \u064a\u0646\u0632\u0644 \u0639\u0644\u0649 \u0623\u064a \u0643\u0634\u0641 \u0631\u0648\u0627\u062a\u0628.\n\u062a\u0643\u0645\u0644\u061f");
   return true;
 }
@@ -2636,7 +2833,7 @@ function pnHintRender(){
 function initPenView(){
   const c=C(), sel=el("pnWorker"), keep=sel.value;
   sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
-    '<option value="'+w.id+'">'+esc(w.name)+'</option>').join("");
+    '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("pnDate").value) el("pnDate").value=curDate;
   if(!el("pnAdmin").value) el("pnAdmin").value=S().signer||"";
@@ -2680,7 +2877,8 @@ el("pnSave").onclick=()=>{
     const already = w.endDate && w.endDate!==date;
     if(!confirm("راح تنتهي خدمة «"+w.name+"» بتاريخ "+dateTextOf(date)+".\n\n"+
       "· ما يظهر بالجرد بعد هذا اليوم\n"+
-      "· راتبه ينحسب لغاية هذا اليوم فقط"+
+      "· راتبه ينحسب لغاية هذا اليوم فقط\n"+
+      "· حالته تصير «"+WS_END+"» ويظهر بتبويب المتغيرات"+
       (already?"\n· موجود عنده إنهاء سابق بتاريخ "+dateTextOf(w.endDate)+" وراح ينستبدل":"")+
       "\n\nتكمل؟")) return;
   }
@@ -2693,9 +2891,14 @@ el("pnSave").onclick=()=>{
     reason:el("pnReason").value,
     admin:el("pnAdmin").value, issued:todayISO() });
   c.penSeq=(c.penSeq||0)+1;
-  if(term) w.endDate=date;
+  /* قرار إنهاء الخدمة يوحّد المسارين: تاريخ نهاية الخدمة وحالة العمل معاً،
+     فلا يبقى عامل منتهي الخدمة ظاهراً بحالة «مستمر». */
+  if(term){
+    w.endDate=date;
+    setWorkerStatus(w,WS_END,{date:date,note:"قرار إنهاء خدمة رقم "+no});
+  }
   queueSave(); el("pnNo").value=nextPenaltyNo(); renderPenalties();
-  if(term){ refresh(); renderPeople(); }
+  if(term){ refresh(); renderPeople(); renderVariables(); }
   if(RP) runReport();
   el("savedNote").textContent = term ? "انحفظ قرار إنهاء الخدمة ✓" : "انحفظت العقوبة ✓";
   setTimeout(()=>el("savedNote").textContent="",2400);
@@ -2920,7 +3123,7 @@ function acHintRender(){
 function initAchView(){
   const c=C(), sel=el("acWorker"), keep=sel.value;
   sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
-    '<option value="'+w.id+'">'+esc(w.name)+'</option>').join("");
+    '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("acDate").value) el("acDate").value=curDate;
   if(!el("acAdmin").value) el("acAdmin").value=S().signer||"";
@@ -3256,7 +3459,7 @@ el("catList").addEventListener("click",e=>{
 function initMatView(){
   const c=C(), sel=el("mtWorker"), keep=sel.value;
   sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
-    '<option value="'+w.id+'">'+esc(w.name)+'</option>').join("");
+    '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("mtFrom").value) el("mtFrom").value=curDate;
   if(!el("mtAdmin").value) el("mtAdmin").value=S().signer||"";
@@ -3506,25 +3709,49 @@ function phoneLooksOff(v){
 /* الحالة مختصرة وتاريخ المباشرة بخانة مستقلة،
    لأن دمجهما يطوّل السطر ثلاث أسطر ويفرد الجدول على صفحات زائدة. */
 function hireText(w){ return w.createdAt ? dateTextOf(w.createdAt) : "—"; }
+/* حالة الخدمة الزمنية (مرتبطة بالتواريخ) — غير «حالة العمل» الإدارية */
 function workerStatusText(w){
-  return w.endDate ? "منتهي "+dateTextOf(w.endDate) : "على رأس العمل";
+  const e=serviceEnd(w);
+  return e ? "منتهي "+dateTextOf(e) : "على رأس العمل";
 }
+/* تاريخ تغيير الحالة وملاحظته كنص جاهز للعرض والتصدير */
+function statusDateText(w){
+  return (w && w.statusChangedAt) ? dateTextOf(w.statusChangedAt) : "—";
+}
+function statusNoteText(w){ return (w && w.statusNote) ? String(w.statusNote) : "—"; }
+/* لون الحالة داخل وورد والطباعة — يتبع لوحة الشركة الحالية */
+function statusDocColor(st){
+  const CLR=CL(), t=normStatus(st);
+  return t===WS_ACTIVE ? CLR.present : (t===WS_END ? CLR.gold : (t===WS_CUT ? CLR.purple : CLR.absent));
+}
+function statusPrintClass(st){
+  const t=normStatus(st);
+  return t===WS_ACTIVE ? "st-on" : (t===WS_END ? "st-end" : (t===WS_CUT ? "st-cut" : "st-fire"));
+}
+const STATUS_PRINT_CSS=
+  '.st-on{color:#2C6E49;font-weight:700}.st-end{color:#9A7420;font-weight:700}'+
+  '.st-cut{color:#3E2C73;font-weight:700}.st-fire{color:#9B1C31;font-weight:700}';
 function sectionLabel(w){
   const sc=sectionOf(w.sectionId); if(!sc) return "بدون قسم";
   const z=zoneOf(sc.zoneId);
   return sc.name+(z?" — "+(z.short||z.name):"");
 }
 let editDirId=null;
+/* مطابقة نصية موحّدة للعامل — يستعملها الدليل وتبويب المتغيرات معاً */
+function workerMatches(w,q){
+  if(!q) return true;
+  const qp=normPhone(q);
+  return String(w.name||"").indexOf(q)!==-1 ||
+    String(w.motherName||"").indexOf(q)!==-1 ||
+    String(w.dob||"").indexOf(q)!==-1 ||
+    String(w.address||"").indexOf(q)!==-1 ||
+    sectionLabel(w).indexOf(q)!==-1 ||
+    (!!qp && (normPhone(w.phone).indexOf(qp)!==-1 || normPhone(w.phone2).indexOf(qp)!==-1));
+}
 function dirList(){
   const c=C(), q=String(el("dirSearch").value||"").trim();
   let list=c.workers.slice();
-  if(q){
-    const qp=normPhone(q);
-    list=list.filter(w=>
-      String(w.name||"").indexOf(q)!==-1 ||
-      String(w.address||"").indexOf(q)!==-1 ||
-      (!!qp && (normPhone(w.phone).indexOf(qp)!==-1 || normPhone(w.phone2).indexOf(qp)!==-1)));
-  }
+  if(q) list=list.filter(w=>workerMatches(w,q));
   return list;
 }
 function renderDirectory(){
@@ -3538,18 +3765,21 @@ function renderDirectory(){
     const z=zoneOf(x.zoneId);
     return '<option value="'+x.id+'"'+(x.id===sel?" selected":"")+'>'+esc(x.name)+(z?" — "+esc(z.short||z.name):"")+'</option>';
   }).join("");
-  let h='<table><thead><tr><th>ت</th><th>الاسم</th><th>القسم</th><th>رقم الهاتف</th>'+
-    '<th>رقم الطوارئ</th><th>العنوان</th><th>المباشرة</th><th>الحالة</th><th></th></tr></thead><tbody>';
+  let h='<table><thead><tr><th>ت</th><th>الاسم</th><th>اسم الأم</th><th>التولد</th><th>القسم</th><th>رقم الهاتف</th>'+
+    '<th>رقم الطوارئ</th><th>العنوان</th><th>المباشرة</th><th>الخدمة</th><th>حالة العمل</th><th></th></tr></thead><tbody>';
   list.forEach((w,i)=>{
     if(editDirId===w.id){
       h+='<tr><td>'+fmtNum(i+1)+'</td>'+
         '<td><input type="text" id="dirName" value="'+esc(w.name)+'"></td>'+
+        '<td><input type="text" id="dirMother" value="'+esc(w.motherName||"")+'" placeholder="اسم الأم"></td>'+
+        '<td><input type="text" id="dirDob" value="'+esc(w.dob||"")+'" placeholder="١٩٨٥"></td>'+
         '<td><select id="dirSec">'+secOpts(w.sectionId)+'</select></td>'+
         '<td><input type="tel" id="dirPhone" class="ltr" value="'+esc(w.phone||"")+'" placeholder="07XXXXXXXXX"></td>'+
         '<td><input type="tel" id="dirPhone2" class="ltr" value="'+esc(w.phone2||"")+'" placeholder="اختياري"></td>'+
         '<td><input type="text" id="dirAddr" value="'+esc(w.address||"")+'" placeholder="محلة ، زقاق ، دار"></td>'+
         '<td class="mini">'+esc(hireText(w))+'</td>'+
         '<td class="mini">'+esc(workerStatusText(w))+'</td>'+
+        '<td><select id="dirStatus" class="wsel">'+statusOptions(getWorkerStatus(w))+'</select></td>'+
         '<td style="text-align:left;white-space:nowrap">'+
         '<button class="btn sm primary" data-dsave="'+w.id+'">حفظ</button> '+
         '<button class="btn sm ghost" data-dcancel="1">إلغاء</button></td></tr>';
@@ -3557,13 +3787,17 @@ function renderDirectory(){
     }
     const ph=fmtPhone(w.phone), ph2=fmtPhone(w.phone2);
     const warn=phoneLooksOff(w.phone)?' <span class="stag warn">رقم ناقص</span>':"";
-    h+='<tr><td>'+fmtNum(i+1)+'</td><td>'+esc(w.name)+(w.endDate?' <span class="stag out">منتهي</span>':"")+'</td>'+
+    h+='<tr'+(isActiveWorker(w)?"":' class="rowvar"')+'><td>'+fmtNum(i+1)+'</td>'+
+      '<td>'+esc(w.name)+(serviceEnd(w)?' <span class="stag out">منتهي</span>':"")+'</td>'+
+      '<td>'+(w.motherName?esc(w.motherName):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
+      '<td class="mini">'+(w.dob?esc(w.dob):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
       '<td>'+esc(sectionLabel(w))+'</td>'+
       '<td class="ltr">'+(ph?esc(ph):'<span style="color:var(--ink-2)">—</span>')+warn+'</td>'+
       '<td class="ltr">'+(ph2?esc(ph2):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
       '<td>'+(w.address?esc(w.address):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
       '<td class="mini">'+esc(hireText(w))+'</td>'+
       '<td class="mini">'+esc(workerStatusText(w))+'</td>'+
+      '<td>'+statusBadge(w)+'</td>'+
       '<td style="text-align:left;white-space:nowrap">'+
       '<button class="btn sm" data-dedit="'+w.id+'">تعديل</button></td></tr>';
   });
@@ -3571,7 +3805,7 @@ function renderDirectory(){
   if(editDirId){
     const n=document.getElementById("dirName");
     if(n){ n.focus(); if(n.select) n.select();
-      ["dirName","dirPhone","dirPhone2","dirAddr"].forEach(id=>{
+      ["dirName","dirMother","dirDob","dirPhone","dirPhone2","dirAddr"].forEach(id=>{
         const f=document.getElementById(id); if(!f||!f.addEventListener) return;
         f.addEventListener("keydown",ev=>{
           if(ev.key==="Enter") dirSave(editDirId);
@@ -3584,12 +3818,17 @@ function dirSave(id){
   const c=C(), w=c.workers.find(x=>x.id===id);
   if(!w){ editDirId=null; renderDirectory(); return; }
   const g=i=>{ const n=document.getElementById(i); return n?String(n.value||"").trim():""; };
-  const name=g("dirName").replace(/\s+/g," ");
+  const name=normName(g("dirName"));
   if(!name){ alert("اسم العامل ما يصير فارغ."); return; }
   const secNode=document.getElementById("dirSec");
+  const stNode=document.getElementById("dirStatus");
+  const nextSt=stNode?normStatus(stNode.value):getWorkerStatus(w);
+  const stChanged=(nextSt!==getWorkerStatus(w));
   w.phone=normPhone(g("dirPhone"));
   w.phone2=normPhone(g("dirPhone2"));
   w.address=g("dirAddr");
+  w.motherName=normName(g("dirMother"));
+  w.dob=normDob(g("dirDob"));
   if(secNode) w.sectionId=secNode.value;
   editDirId=null;
   if(name!==w.name){
@@ -3598,7 +3837,9 @@ function dirSave(id){
   }else{
     queueSave(); refresh(); renderPeople(); if(RP) runReport();
   }
-  renderDirectory();
+  /* الحالة آخر ما يُطبّق: لها تأكيدها الخاص، وبقية الحقول محفوظة قبلها */
+  if(stChanged) changeWorkerStatus(id,nextSt);
+  renderDirectory(); renderVariables();
   el("dirNote").textContent="انحفظت المعلومات ✓";
   setTimeout(()=>el("dirNote").textContent="",2200);
 }
@@ -3612,19 +3853,24 @@ el("dirTable").addEventListener("click",e=>{
 
 /* ---- تصدير الدليل ---- */
 function dirExportRows(){
-  return dirList().map((w,i)=>[i+1, w.name, sectionLabel(w),
+  return dirList().map((w,i)=>[i+1, w.name, w.motherName||"—", w.dob||"—", sectionLabel(w),
     fmtPhone(w.phone)||"—", fmtPhone(w.phone2)||"—", w.address||"—",
-    hireText(w), workerStatusText(w)]);
+    hireText(w), workerStatusText(w), getWorkerStatus(w)]);
 }
-const DIR_HEAD=["ت","الاسم","القسم","رقم الهاتف","رقم الطوارئ","العنوان","المباشرة","الحالة"];
+const DIR_HEAD=["ت","الاسم","اسم الأم","التولد","القسم","رقم الهاتف","رقم الطوارئ",
+  "العنوان","المباشرة","الخدمة","حالة العمل"];
+/* مواضع أعمدة الهاتف — تُستعمل لضبط اتجاه النص عند الطباعة */
+const DIR_LTR_COLS=[5,6];
+const DIR_STATUS_COL=10;
 el("dirXls").onclick=()=>{
   const list=dirList();
   if(!list.length){ alert("ماكو عمال للتصدير."); return; }
   try{
-    const rows=[DIR_HEAD].concat(dirList().map((w,i)=>[i+1, w.name, sectionLabel(w),
+    const rows=[DIR_HEAD].concat(dirList().map((w,i)=>[i+1, w.name, w.motherName||"\u2014",
+      w.dob||"\u2014", sectionLabel(w),
       normPhone(w.phone)||"\u2014", normPhone(w.phone2)||"\u2014", w.address||"\u2014",
-      hireText(w), workerStatusText(w)]));
-    saveXlsx(buildXlsx(rows,{sheet:"دليل العمال",widths:[5,26,22,16,16,40,16,18]}),
+      hireText(w), workerStatusText(w), getWorkerStatus(w)]));
+    saveXlsx(buildXlsx(rows,{sheet:"دليل العمال",widths:[5,26,24,14,22,16,16,34,16,18,16]}),
       "دليل-العمال-"+todayISO()+".xlsx");
     el("dirNote").textContent="انصدّر Excel ✓";
     setTimeout(()=>el("dirNote").textContent="",2200);
@@ -3642,8 +3888,11 @@ el("dirPrint").onclick=()=>{
   if(!rows.length){ alert("ماكو عمال للطباعة."); return; }
   const s=S(), w=window.open("","_blank");
   if(!w){ alert("المتصفح منع فتح النافذة."); return; }
-  const body=rows.map(r=>'<tr>'+r.map((v,i)=>
-    '<td'+(i===3||i===4?' class="ltr"':'')+'>'+esc(String(v))+'</td>').join("")+'</tr>').join("");
+  const body=rows.map(r=>'<tr>'+r.map((v,i)=>{
+    const cls = DIR_LTR_COLS.indexOf(i)>=0 ? ' class="ltr"'
+      : (i===DIR_STATUS_COL ? ' class="'+statusPrintClass(v)+'"' : '');
+    return '<td'+cls+'>'+esc(String(v))+'</td>';
+  }).join("")+'</tr>').join("");
   w.document.write(
     '<html dir="rtl"><head><meta charset="utf-8"><title>دليل العمال</title><style>'+
     '@page{size:A4 portrait;margin:12mm}'+
@@ -3656,6 +3905,7 @@ el("dirPrint").onclick=()=>{
     'th{background:#EFEAF6;color:#33205C;font-weight:700}'+
     'tr:nth-child(even) td{background:#FAF8FC}'+
     '.ltr{direction:ltr;text-align:right;unicode-bidi:embed;white-space:nowrap}'+
+    STATUS_PRINT_CSS+
     '</style></head><body>'+
     '<h1>'+esc(s.company||"")+' — دليل العمال</h1>'+
     '<p class="sub">عدد العمال: '+fmtNum(rows.length)+
@@ -3665,6 +3915,227 @@ el("dirPrint").onclick=()=>{
     '<tbody>'+body+'</tbody></table></body></html>');
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
+
+/* ==================== تبويب المتغيرات ====================
+   العمال غير المستمرين: إنهاء خدمات، انقطاع عن العمل، مفصول.
+   هذا التبويب قراءة على سجل العمال نفسه — ما ينسخ بيانات ولا ينقلها،
+   فأي تعديل هنا يرجع للعامل ذاته ويظهر فوراً بكل التبويبات الثانية. */
+function variableWorkers(){ return C().workers.filter(w=>!isActiveWorker(w)); }
+function filterWorkersByStatus(list,st){
+  const t=normStatus0(st);
+  return t ? list.filter(w=>getWorkerStatus(w)===t) : list.slice();
+}
+/* فلتر الحالة يقبل الفراغ بمعنى «الكل» — فلا نمرّره على normStatus
+   لأنها تحوّل الفراغ إلى «مستمر» وتقلب معنى الفلتر. */
+function normStatus0(v){
+  const t=String(v==null?"":v).trim();
+  return WSTATUSES.indexOf(t)>=0 ? t : "";
+}
+function fillVarFilter(){
+  const sel=el("varFilter");
+  if(!sel||sel.innerHTML===undefined) return;
+  const keep=normStatus0(sel.value);
+  sel.innerHTML='<option value="">الكل</option>'+WS_VARIABLE.map(t=>
+    '<option value="'+esc(t)+'"'+(t===keep?" selected":"")+'>'+esc(t)+'</option>').join("");
+}
+function varList(){
+  const q=String(el("varSearch").value||"").trim();
+  let list=filterWorkersByStatus(variableWorkers(), el("varFilter").value);
+  if(q) list=list.filter(w=>workerMatches(w,q));
+  return list;
+}
+const VAR_HEAD=["ت","الاسم","اسم الأم","التولد","القسم","رقم الهاتف","العنوان",
+  "حالة العمل","تاريخ تغيير الحالة","ملاحظة التغيير"];
+const VAR_LTR_COLS=[5];
+const VAR_STATUS_COL=7;
+const VAR_EMPTY_ROW=["—","ماكو عمال ضمن المتغيرات بهذا الفلتر","—","—","—","—","—","—","—","—"];
+function varExportRows(raw){
+  return varList().map((w,i)=>[i+1, w.name, w.motherName||"—", w.dob||"—", sectionLabel(w),
+    (raw?normPhone(w.phone):fmtPhone(w.phone))||"—", w.address||"—",
+    getWorkerStatus(w), statusDateText(w), statusNoteText(w)]);
+}
+/* وصف المدى المصدَّر — يُطبع بترويسة الملف حتى يُعرف ما الذي صُدِّر */
+function varScopeText(){
+  const f=normStatus0(el("varFilter").value), q=String(el("varSearch").value||"").trim();
+  const parts=[];
+  parts.push("الحالة: "+(f||"الكل"));
+  if(q) parts.push("بحث: "+q);
+  return parts.join("  ·  ");
+}
+function renderVariables(){
+  const box=el("variablesTable"); if(!box||box.innerHTML===undefined) return;
+  fillVarFilter();
+  const all=variableWorkers(), list=varList();
+
+  const cnt={};
+  WS_VARIABLE.forEach(t=>{ cnt[t]=0; });
+  all.forEach(w=>{ const k=getWorkerStatus(w); if(cnt[k]!==undefined) cnt[k]++; });
+  el("varCards").innerHTML=
+    '<div class="card hero"><div class="k">إجمالي المتغيرات</div><div class="v">'+fmtNum(all.length)+'</div></div>'+
+    '<div class="card warn"><div class="k">'+esc(WS_END)+'</div><div class="v">'+fmtNum(cnt[WS_END])+'</div></div>'+
+    '<div class="card cut"><div class="k">'+esc(WS_CUT)+'</div><div class="v">'+fmtNum(cnt[WS_CUT])+'</div></div>'+
+    '<div class="card bad"><div class="k">'+esc(WS_FIRE)+'</div><div class="v">'+fmtNum(cnt[WS_FIRE])+'</div></div>';
+  el("varCount").textContent = all.length
+    ? fmtNum(list.length)+" من "+fmtNum(all.length)+" عامل" : "";
+
+  if(!all.length){
+    box.innerHTML='<div class="empty"><h3>ماكو متغيرات</h3>'+
+      '<p>كل العمال المسجلين حالتهم «'+esc(WS_ACTIVE)+'». أي عامل تغيّر حالته يظهر هنا تلقائياً.</p></div>';
+    return;
+  }
+  if(!list.length){
+    box.innerHTML='<div class="empty"><p>ماكو نتيجة لهذا الفلتر أو البحث.</p></div>';
+    return;
+  }
+  let h='<table><thead><tr><th>ت</th><th>الاسم</th><th>اسم الأم</th><th>التولد</th><th>القسم</th>'+
+    '<th>رقم الهاتف</th><th>العنوان</th><th>حالة العمل</th><th>تاريخ تغيير الحالة</th>'+
+    '<th>ملاحظة التغيير</th><th></th></tr></thead><tbody>';
+  list.forEach((w,i)=>{
+    const ph=fmtPhone(w.phone);
+    h+='<tr><td>'+fmtNum(i+1)+'</td>'+
+      '<td><b>'+esc(w.name)+'</b></td>'+
+      '<td>'+(w.motherName?esc(w.motherName):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
+      '<td class="mini">'+(w.dob?esc(w.dob):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
+      '<td>'+esc(sectionLabel(w))+'</td>'+
+      '<td class="ltr">'+(ph?esc(ph):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
+      '<td>'+(w.address?esc(w.address):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
+      '<td>'+statusBadge(w)+'</td>'+
+      '<td class="mini">'+(w.statusChangedAt?esc(dateTextOf(w.statusChangedAt)):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
+      '<td class="mini">'+(w.statusNote?esc(w.statusNote):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
+      '<td style="text-align:left;white-space:nowrap">'+
+        '<button class="btn sm primary" data-vrestore="'+w.id+'">استعادة إلى '+esc(WS_ACTIVE)+'</button> '+
+        '<button class="btn sm" data-vedit="'+w.id+'">تعديل البيانات</button></td></tr>';
+  });
+  box.innerHTML=h+'</tbody></table>';
+}
+/* «تعديل البيانات» يفتح نموذج التعديل القائم بدليل العمال —
+   بلا نموذج ثانٍ مكرّر، فكل الحقول القديمة والجديدة تنفتح معاً. */
+function openWorkerEditor(id){
+  editDirId=id;
+  el("dirSearch").value="";
+  switchView("people");
+  const box=el("dirTable");
+  if(box && box.scrollIntoView) { try{ box.scrollIntoView({behavior:"smooth",block:"center"}); }catch(e){} }
+}
+el("variablesTable").addEventListener("click",e=>{
+  const r=e.target.closest("[data-vrestore]"), ed=e.target.closest("[data-vedit]");
+  if(r){ changeWorkerStatus(r.dataset.vrestore, WS_ACTIVE); return; }
+  if(ed){ openWorkerEditor(ed.dataset.vedit); }
+});
+el("varFilter").addEventListener("change",renderVariables);
+el("varSearch").addEventListener("input",renderVariables);
+
+/* ---- تصدير المتغيرات: يتبع الفلتر والبحث الحاليين ---- */
+function varNote(t){
+  el("varNote").textContent=t;
+  setTimeout(()=>{ el("varNote").textContent=""; },2200);
+}
+el("varXls").onclick=()=>{
+  try{
+    const body=varExportRows(true);
+    const rows=[VAR_HEAD].concat(body.length?body:[VAR_EMPTY_ROW]);
+    saveXlsx(buildXlsx(rows,{sheet:"المتغيرات",widths:[5,26,24,14,22,16,32,18,18,30]}),
+      "المتغيرات-"+todayISO()+".xlsx");
+    varNote("انصدّر Excel ✓");
+  }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
+};
+el("varWord").onclick=()=>{
+  try{ saveDocx(variablesDocx(),"المتغيرات-"+todayISO()+".docx"); varNote("انصدّر Word ✓"); }
+  catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+};
+el("varPrint").onclick=()=>{
+  const rows=varExportRows();
+  const s=S(), w=window.open("","_blank");
+  if(!w){ alert("المتصفح منع فتح النافذة."); return; }
+  const data=rows.length?rows:[VAR_EMPTY_ROW];
+  const body=data.map(r=>'<tr>'+r.map((v,i)=>{
+    const cls = VAR_LTR_COLS.indexOf(i)>=0 ? ' class="ltr"'
+      : (i===VAR_STATUS_COL && rows.length ? ' class="'+statusPrintClass(v)+'"' : '');
+    return '<td'+cls+'>'+esc(String(v))+'</td>';
+  }).join("")+'</tr>').join("");
+  w.document.write(
+    '<html dir="rtl"><head><meta charset="utf-8"><title>المتغيرات</title><style>'+
+    '@page{size:A4 landscape;margin:10mm}'+
+    'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
+    'h1{font-size:16pt;margin:0 0 2mm;color:#4B2E83}'+
+    '.sub{font-size:9pt;color:#666;margin:0 0 6mm}'+
+    'table{width:100%;border-collapse:collapse}'+
+    'thead{display:table-header-group}'+
+    'th,td{border:1px solid #bbb;padding:4px 6px;font-size:9.5pt;vertical-align:top}'+
+    'th{background:#EFEAF6;color:#33205C;font-weight:700}'+
+    'tr:nth-child(even) td{background:#FAF8FC}'+
+    '.ltr{direction:ltr;text-align:right;unicode-bidi:embed;white-space:nowrap}'+
+    STATUS_PRINT_CSS+
+    '</style></head><body>'+
+    '<h1>'+esc(s.company||"")+' — المتغيرات (العمال غير المستمرين)</h1>'+
+    '<p class="sub">'+esc(varScopeText())+' · عدد النتائج: '+fmtNum(rows.length)+
+      ' · تاريخ الطباعة: '+dateTextOf(todayISO())+
+      ' · وثيقة داخلية تُحفظ لدى الإدارة</p>'+
+    '<table><thead><tr>'+VAR_HEAD.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead>'+
+    '<tbody>'+body+'</tbody></table></body></html>');
+  w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
+};
+/* ---- المتغيرات بالوورد (عرضي — عشرة أعمدة) ---- */
+function variablesDocx(){
+  docReset();
+  const s=S(), CLR=CL();
+  const SOFT=isMono()?"#F2F2F2":"#F5F3F8";
+  const m=receiptMedia();
+  const rows=varExportRows();
+  const FULL=16838-640*2-6;
+  const GFIX=[400,2150,1900,900,1700,1400,0,1400,1500,1700];
+  const G=GFIX.slice();
+  G[6]=FULL-GFIX.reduce((a,b)=>a+b,0);
+
+  const ld=logoDims(0.95,0.42);
+  let b=wTable([wRow([
+    wCell(
+      (m.logoRid?wImage(m.logoRid,ld.w,ld.h,"right"):"")+
+      wPara(s.company||"اسم الشركة",{size:14,bold:true,color:CLR.purpleDeep,align:"right",after:20})+
+      wPara("إدارة الموارد البشرية — الشعبة الإدارية",{size:9,color:CLR.ink2,align:"right",after:0}),
+      {width:Math.round(FULL*0.34),raw:true,valign:"center"}),
+    wCell(
+      wPara("المتغيرات",{size:20,bold:true,color:CLR.purple,align:"center",after:20})+
+      wPara("العمال غير المستمرين — "+varScopeText(),{size:9,color:CLR.ink2,align:"center",after:0}),
+      {width:FULL-2*Math.round(FULL*0.34),raw:true,valign:"center"}),
+    wCell(
+      wPara("عدد النتائج: "+fmtNum(rows.length),{size:10,bold:true,align:"left",after:20})+
+      wPara("تاريخ الطباعة: "+dateTextOf(todayISO()),{size:9,align:"left",after:0}),
+      {width:Math.round(FULL*0.34),raw:true,valign:"center"})
+  ],{height:1000})],{border:CLR.purple,borderSize:8,
+      grid:[Math.round(FULL*0.34),FULL-2*Math.round(FULL*0.34),Math.round(FULL*0.34)]});
+  b+=wGap(160);
+
+  const th=(t,wd)=>wCell(t,{bold:true,size:10,color:"#FFFFFF",shade:CLR.purple,align:"center",width:wd});
+  const trs=[wRow(VAR_HEAD.map((h,i)=>th(h,G[i])),{header:true,height:380})];
+  if(!rows.length){
+    trs.push(wRow([wCell("ماكو عمال ضمن المتغيرات بهذا الفلتر",
+      {size:10,align:"center",color:CLR.ink2,width:FULL,span:VAR_HEAD.length})],{height:420}));
+  }
+  rows.forEach((r,i)=>{
+    const zebra=(i%2===1)?(isMono()?"#F7F7F7":"#FAF8FC"):null;
+    trs.push(wRow([
+      wCell(fmtNum(r[0]),{size:9,align:"center",width:G[0],shade:zebra}),
+      wCell(r[1],{size:11,bold:true,align:"right",width:G[1],shade:zebra}),
+      wCell(r[2],{size:10,align:"right",width:G[2],shade:zebra}),
+      wCell(r[3],{size:9,align:"center",width:G[3],shade:zebra,color:CLR.ink2}),
+      wCell(r[4],{size:10,align:"right",width:G[4],shade:zebra,color:CLR.ink2}),
+      wCell(r[5],{size:11,bold:true,align:"center",width:G[5],shade:zebra,color:CLR.purpleDeep,ltr:true}),
+      wCell(r[6],{size:10,align:"right",width:G[6],shade:zebra}),
+      wCell(r[7],{size:9,bold:true,align:"center",width:G[7],shade:zebra,color:statusDocColor(r[7])}),
+      wCell(r[8],{size:9,align:"center",width:G[8],shade:zebra,color:CLR.ink2}),
+      wCell(r[9],{size:9,align:"right",width:G[9],shade:zebra,color:CLR.ink2})
+    ],{height:340}));
+  });
+  b+=wTable(trs,{border:CLR.line,borderSize:6,grid:G});
+  b+=wGap(200);
+  b+=wTable([wRow([wCell(
+    "وثيقة داخلية تُحفظ لدى الإدارة · سجل العامل وأيامه ورواتبه السابقة محفوظة بالكامل · "+
+    (s.company||"")+" · "+dateTextOf(todayISO()),
+    {size:9,color:CLR.ink2,shade:SOFT,align:"center",width:FULL})],{height:360})],
+    {border:CLR.line,borderSize:4,grid:[FULL]});
+  return buildDocx(b,{media:m.media,landscape:true,margin:640});
+}
 
 /* ==================== التقارير والرواتب ==================== */
 /* لا تقريب: يُعرض المبلغ كما هو، والكسر يظهر بمنزلتين فقط عند وجوده */
@@ -3759,12 +4230,23 @@ function policyOfLeave(l, w){
    المرجع: تاريخ المباشرة إن حُدّد، وإلا تاريخ إضافته للنظام.
    هذا يمنع ظهور عامل جديد في جرود سابقة لتاريخ التحاقه. */
 function serviceStart(w){ return (w && (w.startDate || w.createdAt)) || ""; }
-function serviceEnd(w){ return (w && w.endDate) || ""; }
+/* نهاية الخدمة: التاريخ اليدوي أولاً، وإلا تاريخ تغيير الحالة لعامل غير مستمر.
+   بهذا يمشي استبعاد المتغيّرين على نفس محرّك التواريخ القائم: الجرد يستبعدهم
+   بعد يوم التغيير فقط، والراتب ينحسب لأيام خدمتهم الفعلية — بلا حذف أي سجل. */
+function serviceEnd(w){
+  if(!w) return "";
+  if(w.endDate) return w.endDate;
+  if(!isActiveWorker(w) && w.statusChangedAt) return w.statusChangedAt;
+  return "";
+}
 /* هل العامل ضمن الخدمة في هذا اليوم؟ */
 function inService(w, iso){
   const s=serviceStart(w), e=serviceEnd(w);
   if(s && iso < s) return false;
   if(e && iso > e) return false;
+  /* حالة غير مستمرة بلا أي تاريخ (بيانات قديمة أو مستوردة): لا نُلغي ماضيه،
+     نستبعده من اليوم فصاعداً فقط حتى لا ينكسر أي تقرير تاريخي. */
+  if(!e && !isActiveWorker(w) && iso >= todayISO()) return false;
   return true;
 }
 
@@ -3972,6 +4454,7 @@ function buildReport(from,to){
     const sec=sectionOf(w.sectionId), z=sec?zoneOf(sec.zoneId):null;
     const workSlots=eligible-off-leave;             // الأيام التي كان مطالباً بالحضور فيها
     return { id:w.id, name:w.name, section:sec?sec.name:"—", zone:z?(z.short||z.name):"",
+      status:getWorkerStatus(w), statusChangedAt:w.statusChangedAt||"",
       eligible, totalDays, paidDays, svcDays, present, misc, absent, leave, off, leaveBy,
       excused, excusedDed, leavePolicy:pol, dailyRate, fullService,
       startDate:svcS, endDate:svcE, ended: !!(svcE && svcE < to),
@@ -4075,7 +4558,9 @@ function renderReport(){
         '<th>استقطاع خاص</th><th>عقوبات</th><th>إضافات</th><th>مكافآت</th><th>الصافي</th></tr></thead><tbody>';
   rows.forEach((r,i)=>{
     h+='<tr'+(r.net<0?' style="background:#fbe9ec"':'')+'><td>'+fmtNum(i+1)+'</td><td>'+esc(r.name)+
-      (r.ended?' <span class="stag out">منقول</span>':'')+'</td><td>'+esc(r.section)+'</td>'+
+      (r.ended?' <span class="stag out">منقول</span>':'')+
+      (r.status!==WS_ACTIVE?' <span class="wst '+WS_CLASS[r.status]+'">'+esc(r.status)+'</span>':'')+
+      '</td><td>'+esc(r.section)+'</td>'+
       '<td>'+fmtNum(r.eligible)+'</td><td style="color:var(--present)">'+fmtNum(r.present)+'</td>'+
       '<td style="color:var(--absent);font-weight:700">'+fmtNum(r.absent)+'</td>'+
       '<td style="color:var(--misc)">'+fmtNum(r.misc)+'</td>'+
@@ -4163,13 +4648,16 @@ function renderSalTable(){
   c.workers.forEach(w=>{
     const sec=sectionOf(w.sectionId);
     const p=w.leavePolicy||"";
-    const gone = w.endDate && w.endDate < today;
+    /* نهاية الخدمة قد تأتي من تاريخ يدوي أو من تغيير حالة العمل — نقرأ الاثنين */
+    const eDate = serviceEnd(w);
+    const gone = eDate && eDate < today;
     const status = gone
       ? '<span class="stag out">منقول / منتهي</span>'
-      : (w.endDate ? '<span class="stag soon">ينتهي '+dateNumeric(w.endDate)+'</span>'
-                   : '<span class="stag in">نشط</span>');
+      : (eDate ? '<span class="stag soon">ينتهي '+dateNumeric(eDate)+'</span>'
+               : '<span class="stag in">نشط</span>');
     h+='<tr'+(gone?' class="rowout"':'')+'><td>'+esc(w.name)+'</td>'+
-      '<td>'+status+'<div><button class="btn sm ghost" data-xfer="'+w.id+'">'+
+      '<td>'+status+' '+statusBadge(w)+
+        '<div><button class="btn sm ghost" data-xfer="'+w.id+'">'+
         (gone?"إلغاء النقل":"نقل / إنهاء")+'</button></div></td>'+
       '<td class="mini">'+esc(sec?sec.name:"—")+'</td>'+
       '<td><input class="salin" type="number" min="0" step="1000" data-sal="'+w.id+'" value="'+
@@ -4191,9 +4679,13 @@ function renderSalTable(){
 el("salTable").addEventListener("click",e=>{
   const b=e.target.closest("[data-xfer]"); if(!b)return;
   const w=C().workers.find(x=>x.id===b.dataset.xfer); if(!w)return;
-  if(w.endDate && w.endDate < todayISO()){
-    if(!confirm("إلغاء النقل وإرجاع "+w.name+" للخدمة؟")) return;
+  const eDate=serviceEnd(w);
+  if(eDate && eDate < todayISO()){
+    if(!confirm("إلغاء النقل وإرجاع "+w.name+" للخدمة؟"+
+      (isActiveWorker(w)?"":"\n\nحالته ترجع «"+WS_ACTIVE+"» ويختفي من تبويب المتغيرات.\n"+
+        "كل أيامه ورواتبه السابقة تبقى محفوظة."))) return;
     w.endDate="";
+    if(!isActiveWorker(w)) setWorkerStatus(w,WS_ACTIVE,{clearEnd:true});
   }else{
     const d=prompt("تاريخ آخر يوم عمل لـ "+w.name+" (بصيغة YYYY-MM-DD).\n"+
       "اسمه وأيامه السابقة تبقى محفوظة، ويتوقف احتسابه بعد هذا التاريخ:", w.endDate||todayISO());
@@ -4202,7 +4694,7 @@ el("salTable").addEventListener("click",e=>{
     if(v && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ alert("صيغة التاريخ غير صحيحة. استعمل YYYY-MM-DD."); return; }
     w.endDate=v;
   }
-  queueSave(); renderSalTable(); if(RP) runReport(); refresh();
+  queueSave(); renderSalTable(); renderVariables(); if(RP) runReport(); refresh();
 });
 el("salTable").addEventListener("change",e=>{
   const c=C();
@@ -4261,7 +4753,7 @@ el("wTable").addEventListener("click",e=>{
 function renderAdjWorkers(){
   const c=C(), sel=el("adjWorker"), keep=sel.value;
   sel.innerHTML='<option value="">— اختر العامل —</option>'+
-    c.workers.map(w=>'<option value="'+w.id+'">'+esc(w.name)+'</option>').join("");
+    c.workers.map(w=>'<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("adjDate").value) el("adjDate").value=todayISO();
 }
@@ -4369,7 +4861,7 @@ function currentOffWorker(){
 function renderOffWorkerList(){
   const sel=el("offWorker"), keep=sel.value, c=C();
   sel.innerHTML='<option value="">— اختر العامل —</option>'+
-    c.workers.map(w=>'<option value="'+w.id+'">'+esc(w.name)+(hasOffConfig(w)?" ✓":"")+'</option>').join("");
+    c.workers.map(w=>'<option value="'+w.id+'">'+esc(workerOptionLabel(w))+(hasOffConfig(w)?" ✓":"")+'</option>').join("");
   if(keep) sel.value=keep;
   el("offPanel").classList.toggle("hidden",!sel.value);
 }
@@ -4440,26 +4932,26 @@ el("rpXls").onclick=()=>{
   if(!RP){ alert("احسب التقرير أول."); return; }
   if(!RP.rows.length){ alert("ماكو عمال بالتقرير."); return; }
   const st=S(), cur=st.currency||"";
-  const head=["ت","الاسم","القسم","أيام مجرودة له","أيام العمل بالمدة","أيام خدمته بالتقويم",
+  const head=["ت","الاسم","حالة العمل","القسم","أيام مجرودة له","أيام العمل بالمدة","أيام خدمته بالتقويم",
     "حضور","غياب","متفرقة","إجازة","أوف",
     "مجموع المتفرقة والإجازات","أيام مستقطعة منها","نسبة الحضور %",
     "الراتب الكامل ("+cur+")","الراتب المستحق","أجر اليوم","استقطاع اليوم",
     "استقطاع الغياب","استقطاع خاص","عدد العقوبات","استقطاع العقوبات","إضافات","عدد المكافآت","مبلغ المكافآت","الصافي"];
   const n2=v=>Math.round((Number(v)||0)*100)/100;
   const rows=[head];
-  RP.rows.forEach((r,i)=>rows.push([i+1,r.name,r.section,r.eligible,r.totalDays,r.svcDays,
+  RP.rows.forEach((r,i)=>rows.push([i+1,r.name,r.status,r.section,r.eligible,r.totalDays,r.svcDays,
     r.present,r.absent,r.misc,r.leave,r.off,r.excused,r.excusedDed,Math.round(r.rate*100),
     n2(r.fullSalary),n2(r.salary),n2(r.dailyRate),n2(r.dayDed),
     n2(r.absDeduction),n2(r.extraDed),r.penCount,n2(r.penDed),n2(r.extraAdd),
     r.achCount,n2(r.achAdd),n2(r.net)]));
   const t=RP.tot;
-  rows.push(["","المجموع ("+RP.rows.length+" عامل)","","","","",t.present,t.absent,t.misc,t.leave,t.off,
+  rows.push(["","المجموع ("+RP.rows.length+" عامل)","","","","","",t.present,t.absent,t.misc,t.leave,t.off,
     t.excused,t.excusedDed,Math.round(t.rate*100),"",n2(t.salary),"","",
     n2(t.absDeduction),n2(t.extraDed),t.penCount,n2(t.penDed),n2(t.extraAdd),
     t.achCount,n2(t.achAdd),n2(t.net)]);
   try{
     saveXlsx(buildXlsx(rows,{sheet:"كشف الرواتب",
-      widths:[5,26,18,12,12,12,9,9,9,9,9,14,14,12,16,16,12,12,14,14,12,16,12,16,12,16]}),
+      widths:[5,26,16,18,12,12,12,9,9,9,9,9,14,14,12,16,16,12,12,14,14,12,16,12,16,12,16]}),
       "كشف-الرواتب-"+RP.from+"_"+RP.to+".xlsx");
   }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
@@ -4526,7 +5018,8 @@ function drawReportPage(rows, pageNo, pages, k){
     ctx.strokeStyle=tint(CLR.purple,.85); ctx.lineWidth=1;
     line(ctx,L,y+rowH,R,y+rowH);
     let x=R;
-    const vals=[ fmtNum(r.idx), r.name, r.section, fmtNum(r.eligible), fmtNum(r.present),
+    const vals=[ fmtNum(r.idx), r.name+(r.status!==WS_ACTIVE?" ("+r.status+")":""),
+      r.section, fmtNum(r.eligible), fmtNum(r.present),
       fmtNum(r.absent), fmtNum(r.misc), fmtNum(r.leave), fmtNum(r.off), fmtNum(r.excusedDed),
       fmtMoney(r.salary)+(r.partial?" *":""),
       (r.absDeduction?"-"+fmtMoney(r.absDeduction):fmtNum(0)),
@@ -5124,7 +5617,7 @@ function payrollDocx(){
     const zebra=i%2?(isMono()?"#F2F2F2":"#F5F3F8"):null;
     const vals=[
       [fmtNum(i+1),{}],
-      [r.name,{align:"right",bold:true}],
+      [r.name+(r.status!==WS_ACTIVE?"  ("+r.status+")":""),{align:"right",bold:true}],
       [r.section,{align:"right",size:8}],
       [fmtNum(r.eligible),{}],
       [fmtNum(r.present),{color:CLR.present}],
@@ -5734,7 +6227,11 @@ function directoryDocx(){
   const m=receiptMedia();
   const rows=dirExportRows();
   const FULL=16838-640*2-6;
-  const G=[480,2700,2050,1700,1700,FULL-480-2700-2050-1700-1700-1900-1550,1900,1550];
+  /* العنوان يأخذ ما تبقّى من عرض الصفحة بعد الأعمدة ثابتة العرض،
+     فلا يتجاوز الجدول حدود الورقة مهما تغيّر عدد الأعمدة. */
+  const GFIX=[400,2150,1900,900,1500,1300,1300,0,1250,1250,1250];
+  const G=GFIX.slice();
+  G[7]=FULL-GFIX.reduce((a,b)=>a+b,0);
 
   const ld=logoDims(0.95,0.42);
   let b=wTable([wRow([
@@ -5762,12 +6259,15 @@ function directoryDocx(){
     trs.push(wRow([
       wCell(fmtNum(r[0]),{size:9,align:"center",width:G[0],shade:zebra}),
       wCell(r[1],{size:11,bold:true,align:"right",width:G[1],shade:zebra}),
-      wCell(r[2],{size:10,align:"right",width:G[2],shade:zebra,color:CLR.ink2}),
-      wCell(r[3],{size:11,bold:true,align:"center",width:G[3],shade:zebra,color:CLR.purpleDeep,ltr:true}),
-      wCell(r[4],{size:10,align:"center",width:G[4],shade:zebra,color:CLR.ink2,ltr:true}),
-      wCell(r[5],{size:10,align:"right",width:G[5],shade:zebra}),
-      wCell(r[6],{size:9,align:"center",width:G[6],shade:zebra,color:CLR.ink2}),
-      wCell(r[7],{size:9,align:"center",width:G[7],shade:zebra,color:CLR.ink2})
+      wCell(r[2],{size:10,align:"right",width:G[2],shade:zebra}),
+      wCell(r[3],{size:9,align:"center",width:G[3],shade:zebra,color:CLR.ink2}),
+      wCell(r[4],{size:10,align:"right",width:G[4],shade:zebra,color:CLR.ink2}),
+      wCell(r[5],{size:11,bold:true,align:"center",width:G[5],shade:zebra,color:CLR.purpleDeep,ltr:true}),
+      wCell(r[6],{size:10,align:"center",width:G[6],shade:zebra,color:CLR.ink2,ltr:true}),
+      wCell(r[7],{size:10,align:"right",width:G[7],shade:zebra}),
+      wCell(r[8],{size:9,align:"center",width:G[8],shade:zebra,color:CLR.ink2}),
+      wCell(r[9],{size:9,align:"center",width:G[9],shade:zebra,color:CLR.ink2}),
+      wCell(r[10],{size:9,bold:true,align:"center",width:G[10],shade:zebra,color:statusDocColor(r[10])})
     ],{height:340}));
   });
   b+=wTable(trs,{border:CLR.line,borderSize:6,grid:G});
@@ -5794,13 +6294,14 @@ function issueDocx(){
 
 /* ==================== التبويبات ==================== */
 function switchView(v){
-  ["daily","leaves","penalties","achievements","materials","history","people","report","settings"].forEach(x=>
+  ["daily","leaves","penalties","achievements","materials","history","people","variables","report","settings"].forEach(x=>
     el("view-"+x).classList.toggle("hidden",x!==v));
   document.querySelectorAll(".tabs button").forEach(b=>
     b.setAttribute("aria-selected",b.dataset.view===v?"true":"false"));
   el("tally").classList.toggle("hidden",v!=="daily");
   if(v==="history") renderHistory();
   if(v==="people") renderPeople();
+  if(v==="variables") renderVariables();
   if(v==="leaves") initLeaveView();
   if(v==="penalties") initPenView();
   if(v==="achievements") initAchView();
@@ -5824,7 +6325,7 @@ function loadDemo(){
     "عباس جبار علي","محمد رضا هادي","سيف الدين قاسم","ليث عبد الأمير","حيدر مجيد خلف",
     "مصطفى وليد شاكر","نور الهدى صالح","زيد عماد ياسر","باسم عبد الرزاق","رياض نعيم داود",
     "أمير طالب حمزة","عمار جليل عبود","سجاد فاضل كريم","ياسر خضير عباس","وسام لطيف جودة"];
-  c.workers=names.map((n,i)=>({id:uid(),name:n,sectionId:c.sections[i%c.sections.length].id}));
+  c.workers=names.map((n,i)=>newWorker({name:n,sectionId:c.sections[i%c.sections.length].id}));
   c.settings.company=c.settings.company||"شركة النموذج";
   c.settings.address="البصرة"; c.settings.signer=c.settings.signer||"اسمك هنا";
   const r=dayRec(curDate);
@@ -5852,6 +6353,7 @@ function refresh(){
   renderTally(); renderRoster(); drawSheet();
   if(!el("view-history").classList.contains("hidden")) renderHistory();
   if(!el("view-people").classList.contains("hidden")) renderPeople();
+  if(!el("view-variables").classList.contains("hidden")) renderVariables();
   if(!el("view-leaves").classList.contains("hidden")) initLeaveView();
   if(!el("view-penalties").classList.contains("hidden")) initPenView();
   if(!el("view-achievements").classList.contains("hidden")) initAchView();
