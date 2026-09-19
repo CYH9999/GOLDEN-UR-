@@ -764,10 +764,18 @@ tr.rowvar td{background:#FCFAFE}
           </select></label>
         <label class="field" id="wrapDed"><span>استقطاع اليوم الواحد</span><input type="number" id="setDeduct" min="0" step="1"></label>
       </div>
-      <div class="row2">
+      <div class="row3">
         <label class="field" id="wrapWD"><span>أيام الشهر للحساب</span><input type="number" id="setWorkDays" min="1" max="31"></label>
         <label class="field"><span>العملة</span><input type="text" id="setCurrency" placeholder="د.ع"></label>
+        <label class="field"><span>تقريب الصافي</span>
+          <select id="setNetRound">
+            <option value="1">أقرب دينار</option>
+            <option value="250">أقرب ٢٥٠ دينار</option>
+            <option value="1000">أقرب ١٠٠٠ دينار</option>
+          </select></label>
       </div>
+      <p class="hint">كل استقطاع وكل إضافة يُقرَّب لأقرب دينار صحيح، والصافي يُحسب
+        من القيم المقرّبة ثم يُقرَّب لهذه الوحدة. المجاميع = جمع صفوف الكشف نفسها.</p>
       <div class="row2">
         <label class="field"><span>استقطاع المتفرقة والإجازات (لكل العمال)</span>
           <select id="setLeavePolicy">
@@ -1293,6 +1301,7 @@ function blankCompany(name){
     settings:{ company:name||"شركة جديدة", title:"الجرد اليومي", address:"", signer:"", role:"المسؤول الإداري",
       mark:"ج", numerals:"arab", miscInTotal:"no", secCount:"active", signature:"",
       salary:335000, deduct:11166.67, dedMode:"auto", workDays:30, miscPaid:"yes", currency:"د.ع",
+      netRound:250,
       exportDPI:"300", printMode:"color",
       cmT1:"مراقب العمل", cmN1:"", cmT2:"المسؤول الإداري", cmN2:"",
       cmT3:"المدير", cmN3:"", cmSig:"2", termNote:DEF_TERM_NOTE,
@@ -1328,6 +1337,7 @@ function ensureFields(st){
     if(!S2.currency) S2.currency="د.ع";
     if(!S2.leavePolicy) S2.leavePolicy="none";
     if(!S2.proRate) S2.proRate="yes";
+    if(!S2.netRound) S2.netRound=250;
     if(!Array.isArray(S2.weekendDays)) S2.weekendDays=[5];
     if(!Array.isArray(S2.holidays)) S2.holidays=[];
     if(!Array.isArray(c.adjustments)) c.adjustments=[];
@@ -4799,6 +4809,21 @@ function missedDaysIn(w,mFrom,mTo,from,to){
    يُطبَّق على المجاميع فقط — الصفوف تبقى بدقتها الكاملة حتى لا نُدخل
    خطأ تقريب حقيقي مكان خطأ ثنائي غير مرئي. */
 function money(x){ return Math.round((Number(x)||0)*10000)/10000; }
+/* ---- التقريب النقدي ----
+   الحساب الداخلي يبقى بدقة كاملة، والتقريب يقع عند بناء الصف فقط:
+   كل استقطاع وكل إضافة لأقرب دينار صحيح، ثم الصافي من القيم المقرّبة
+   ويُقرَّب لوحدة الإعداد. المجاميع جمع صفوف مقرّبة، فيطابق المطبوع مجموعه. */
+function roundHalf(x){ const v=Number(x)||0; return v<0 ? -Math.round(-v) : Math.round(v); }
+function roundDinar(x){ return roundHalf(x); }
+function netUnit(){
+  const u=Number(S().netRound);
+  return (u===1||u===250||u===1000) ? u : 250;
+}
+function roundNet(x){
+  const u=netUnit(), v=Number(x)||0;
+  if(u<=1) return roundHalf(v);
+  return v<0 ? -Math.round(-v/u)*u : Math.round(v/u)*u;
+}
 /* فهرسة الإجازات والاستقطاعات حسب العامل قبل بناء الكشف.
    بدونها كل (عامل × يوم) يمسح قائمة الإجازات كاملة، فيصير التعقيد
    O(عمال × أيام × إجازات) — ٨٠٠ عامل و٣٢٠٠ إجازة = ٥٣ مليون عملية.
@@ -4906,7 +4931,16 @@ function buildReport(from,to){
     const achAdd=achs.reduce((sum,a)=>sum+achAmount(a,w),0);
     const achCount=achs.length;
 
-    const deduction=absDeduction+extraDed+penDed;
+    /* ── التقريب ── القيم أعلاه بدقة كاملة، ومن هنا تصير أرقاماً صحيحة */
+    const grossR   = roundDinar(gross);
+    const absDedR  = roundDinar(absDeduction);
+    const extraDedR= roundDinar(extraDed);
+    const extraAddR= roundDinar(extraAdd);
+    const penDedR  = roundDinar(penDed);
+    const achAddR  = roundDinar(achAdd);
+    const deduction= absDedR + extraDedR + penDedR;
+    const netExact = grossR - deduction + extraAddR + achAddR;
+    const netR     = roundNet(netExact);
     const sec=sectionOf(w.sectionId), z=sec?zoneOf(sec.zoneId):null;
     const workSlots=eligible-off-leave;             // الأيام التي كان مطالباً بالحضور فيها
     return { id:w.id, name:w.name, section:sec?sec.name:"—", zone:z?(z.short||z.name):"",
@@ -4915,10 +4949,11 @@ function buildReport(from,to){
       present, misc, absent, leave, off, timedHours, leaveBy,
       excused, excusedDed, leavePolicy:pol, dailyRate, fullService,
       startDate:svcS, svcEnd:svcE, ended: !!(svcE && svcE < to),
-      deductDays, fullSalary:fullSal, salary:gross, partial, dayDed:ded,
-      absDeduction, extraDed, extraAdd, adjs, penDed, penDays, penCount, pens,
-      achAdd, achCount, achs, deduction,
-      net:gross-deduction+extraAdd+achAdd,
+      deductDays, fullSalary:roundDinar(fullSal), salary:grossR, partial, dayDed:ded,
+      absDeduction:absDedR, extraDed:extraDedR, extraAdd:extraAddR, adjs,
+      penDed:penDedR, penDays, penCount, pens,
+      achAdd:achAddR, achCount, achs, deduction,
+      net:netR, netExact:netExact,
       rate: workSlots>0 ? (workSlots-absent)/workSlots : 1 };
   });
   /* مدى يتجاوز الشهر: ما ننشر أرقاماً غلط — المبالغ تُصفَّر والعرض يقول لماذا */
@@ -5079,7 +5114,7 @@ document.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>{
 
 /* ---- إعداد الرواتب ---- */
 const salMap={ setSalary:"salary", setDeduct:"deduct", setDedMode:"dedMode",
-  setWorkDays:"workDays", setCurrency:"currency",
+  setWorkDays:"workDays", setCurrency:"currency", setNetRound:"netRound",
   setLeavePolicy:"leavePolicy", setProRate:"proRate" };
 function fillSalary(){
   Object.keys(salMap).forEach(id=>{ el(id).value=S()[salMap[id]]; });
@@ -5237,7 +5272,7 @@ el("addAdj").onclick=()=>{
   const aw=c.workers.find(x=>x.id===wid);
   if(!requireInService(aw,date,el("adjType").value==="add"?"الإضافة":"الاستقطاع")) return;
   c.adjustments.push({ id:uid(), workerId:wid, type:el("adjType").value,
-    amount:amt, reason:el("adjReason").value.trim(), date:date, issued:todayISO() });
+    amount:roundDinar(amt), reason:el("adjReason").value.trim(), date:date, issued:todayISO() });
   el("adjAmount").value=""; el("adjReason").value="";
   queueSave(); renderAdjList(); if(RP) runReport();
   el("savedNote").textContent="انضافت ✓"; setTimeout(()=>el("savedNote").textContent="",1600);
