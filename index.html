@@ -731,7 +731,6 @@ tr.rowvar td{background:#FCFAFE}
       </div>
       <button class="btn sm" data-quick="this">هذا الشهر</button>
       <button class="btn sm" data-quick="last">الشهر الماضي</button>
-      <button class="btn sm" data-quick="30">آخر ٣٠ يوم</button>
       <button class="btn primary sm" id="rpRun">احسب</button>
     </div>
     <div class="panel-body">
@@ -828,12 +827,14 @@ tr.rowvar td{background:#FCFAFE}
           <span>أيام الراحة الأسبوعية</span>
           <div id="wdBoxes" class="wdays"></div>
         </div>
-        <label class="field"><span>احتساب الراتب لمن باشر أو ترك العمل داخل المدة</span>
+        <label class="field"><span>احتساب الراتب لمن باشر أو ترك العمل داخل الشهر</span>
           <select id="setProRate">
-            <option value="yes">نسبي: أجر اليوم × أيام خدمته</option>
+            <option value="yes">نسبي: الراتب الكامل − أجر اليوم × الأيام الفائتة</option>
             <option value="no">راتب كامل دائماً</option>
           </select>
-          <span class="hint">أجر اليوم = الراتب ÷ أيام الشهر المعتمدة</span></label>
+          <span class="hint">أجر اليوم = الراتب ÷ أيام الشهر المعتمدة (٣٠).
+            الأيام الفائتة = أيام تقويم الشهر قبل المباشرة أو بعد آخر يوم خدمة.
+            المستمر طوال الشهر يأخذ راتبه كاملاً مهما كان عدد أيام الشهر.</span></label>
       </div>
       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
         <label class="field" style="margin:0"><span>من تاريخ</span><input type="date" id="hlDate"></label>
@@ -4466,15 +4467,38 @@ function missingDays(from,to){
   const cap = to<today ? to : today;
   return workdaysBetween(from,cap).filter(k=>!(c.days[k] && c.days[k].confirmed===true));
 }
+/* عدد أيام التقويم بين تاريخين (شامل الطرفين) */
+function calDays(a,b){ return (!a||!b||a>b) ? 0 : daysBetween(a,b)+1; }
 /* عدد أيام التقويم التي كان فيها العامل ضمن الخدمة داخل المدة */
 function serviceDaysIn(w,from,to){
   const s=serviceStart(w), e=serviceEnd(w);
   const a = (s && s>from) ? s : from;
   const b = (e && e<to)   ? e : to;
-  if(a>b) return 0;
-  let n=0, d=a, guard=0;
-  while(d<=b && guard++<LOOP_MAX){ n++; d=addDays(d,1); }
-  return n;
+  return calDays(a,b);
+}
+/* ---- الشهر المحاسبي للكشف ----
+   الرواتب تُحسب شهرياً: المدة لازم تقع داخل شهر ميلادي واحد.
+   ما دام كذلك، الشهر كله هو وعاء الحساب حتى لو كان المدى أقصر منه. */
+function payMonthOf(from,to){
+  if(!from||!to||from>to) return null;
+  if(from.slice(0,7)!==to.slice(0,7)) return null;
+  return monthOf(from);           // [أول الشهر, آخر الشهر]
+}
+/* الأيام الفائتة: أيام تقويم الشهر التي وقعت قبل المباشرة، أو بعد آخر
+   يوم خدمة، أو خارج مدى الكشف. الراتب المستحق = الكامل − أجر اليوم × هذه.
+   بهذا لا يظلم شهر ٢٨ يوم، ويأخذ المستمر طوال الشهر راتبه كاملاً
+   مهما كان عدد أيام الشهر. */
+function missedDaysIn(w,mFrom,mTo,from,to){
+  const total=calDays(mFrom,mTo);
+  if(!total) return 0;
+  const s=serviceStart(w), e=serviceEnd(w);
+  let a = mFrom, b = mTo;
+  if(s && s>a) a=s;
+  if(from && from>a) a=from;
+  if(e && e<b) b=e;
+  if(to && to<b) b=to;
+  const inside=calDays(a,b);
+  return Math.max(0,total-inside);
 }
 /* بناء التقرير: صف لكل عامل */
 /* المبالغ بأرقام عشرية ثنائية تتراكم فيها أخطاء دقيقة (٠.٠٠٠٠٠٠٠٠٢ مثلاً)
@@ -4514,6 +4538,11 @@ function buildReport(from,to){
       absDeduction:0,extraDed:0,extraAdd:0,penDed:0,penCount:0,achAdd:0,achCount:0,
       deduction:0,net:0,rate:1,days:0},
     totalDays:0, invalid:true };
+  /* الرواتب شهرية: مدى يمتد على أكثر من شهر لا ينحسب راتباً إطلاقاً،
+     يُعرض الحضور فقط. */
+  const payMonth=payMonthOf(from,to);
+  const crossMonth=!payMonth;
+  const monthDays=payMonth?calDays(payMonth[0],payMonth[1]):0;
   const days=recordedDays(from,to);          // أيام العمل المعتمدة (بلا عطل)
   const totalDays=days.length;
   const gaps=missingDays(from,to);           // أيام عمل مرّت ولم تُعتمد
@@ -4544,16 +4573,17 @@ function buildReport(from,to){
     const fullSal=salaryFor(w), ded=dayDeductFor(w);
     const dailyRate=dailyRateFor(w);
     // ── الراتب المستحق ──
-    // يُحسب على أيام التقويم التي كان فيها بالخدمة، لا على عدد الأيام المجرودة.
-    // يعني نسيان جرد يوم لا ينقص من راتب أحد.
+    // طرح لا ضرب: الراتب الكامل ناقص أجر اليوم × الأيام الفائتة، والأيام
+    // الفائتة هي أيام تقويم الشهر التي وقعت قبل المباشرة أو بعد آخر يوم
+    // خدمة أو خارج مدى الكشف. المستمر طوال الشهر يأخذ راتبه كاملاً مهما
+    // كان عدد أيام الشهر — فلا يُظلم شهر ٢٨ يوم.
     const svcS=serviceStart(w), svcE=serviceEnd(w);
-    const coversStart = !svcS || svcS <= from;
-    const coversEnd   = !svcE || svcE >= to;
-    const fullService = coversStart && coversEnd;
     const svcDays = serviceDaysIn(w,from,to);
-    const paidDays = fullService ? Math.max(svcDays,0) : svcDays;
-    const gross = (!proRate || fullService) ? fullSal : Math.min(fullSal, dailyRate*svcDays);
-    const partial = gross < fullSal - 0.005;
+    const missedDays = crossMonth ? 0 : missedDaysIn(w,payMonth[0],payMonth[1],from,to);
+    const fullService = missedDays===0;
+    const paidDays = Math.max(0, monthDays-missedDays);
+    const gross = proRate ? Math.max(0, fullSal - dailyRate*missedDays) : fullSal;
+    const partial = proRate && missedDays>0;
 
     // ── أيام الاستقطاع ──
     // المتفرقة تتبع سياسة العامل/الشركة، وكل إجازة تتبع سياسة وصلها.
@@ -4588,7 +4618,8 @@ function buildReport(from,to){
     const workSlots=eligible-off-leave;             // الأيام التي كان مطالباً بالحضور فيها
     return { id:w.id, name:w.name, section:sec?sec.name:"—", zone:z?(z.short||z.name):"",
       status:getWorkerStatus(w), statusChangedAt:w.statusChangedAt||"",
-      eligible, totalDays, paidDays, svcDays, present, misc, absent, leave, off, leaveBy,
+      eligible, totalDays, paidDays, svcDays, missedDays, monthDays,
+      present, misc, absent, leave, off, leaveBy,
       excused, excusedDed, leavePolicy:pol, dailyRate, fullService,
       startDate:svcS, svcEnd:svcE, ended: !!(svcE && svcE < to),
       deductDays, fullSalary:fullSal, salary:gross, partial, dayDed:ded,
@@ -4596,6 +4627,11 @@ function buildReport(from,to){
       achAdd, achCount, achs, deduction,
       net:gross-deduction+extraAdd+achAdd,
       rate: workSlots>0 ? (workSlots-absent)/workSlots : 1 };
+  });
+  /* مدى يتجاوز الشهر: ما ننشر أرقاماً غلط — المبالغ تُصفَّر والعرض يقول لماذا */
+  if(crossMonth) rows.forEach(r=>{
+    r.salary=0; r.absDeduction=0; r.extraDed=0; r.extraAdd=0;
+    r.penDed=0; r.achAdd=0; r.deduction=0; r.net=0; r.partial=false;
   });
   const tot=rows.reduce((a,r)=>({
     present:a.present+r.present, absent:a.absent+r.absent, misc:a.misc+r.misc,
@@ -4613,9 +4649,12 @@ function buildReport(from,to){
   const slots=rows.reduce((a,r)=>a+Math.max(0,r.eligible-r.off-r.leave),0);
   tot.rate = slots? (slots-tot.absent)/slots : 1;
   tot.days = totalDays;
-  return { from, to, days, gaps, rows, tot, totalDays };
+  return { from, to, days, gaps, rows, tot, totalDays,
+    payMonth:payMonth, crossMonth:crossMonth, monthDays:monthDays };
 }
 
+const CROSS_MSG="الرواتب تنحسب شهرياً.\n\nالمدة المختارة تمتد على أكثر من شهر ميلادي، "+
+  "فحساب الرواتب وتصديرها متوقفان.\nاختر مدى داخل شهر واحد ثم أعد الحساب.";
 let RP=null;   // آخر تقرير محسوب
 function monthRange(offset){
   const n=new Date(); n.setDate(1); n.setMonth(n.getMonth()+(offset||0));
@@ -4641,26 +4680,34 @@ function runReport(manual){
   renderAdjList();
   renderReport();
 }
+/* المبالغ تُكتب «—» إذا كان حساب الرواتب مرفوضاً لهذا المدى */
+function payTxt(v){ return (RP && RP.crossMonth) ? "—" : fmtMoney(v); }
 function renderReport(){
   if(!RP){ const r=monthRange(0); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; RP=buildReport(r[0],r[1]); }
   const st=S(), cur=st.currency||"";
   const d=RP.days.length;
   el("rpCards").innerHTML=[
-    ['<div class="card hero"><div class="k">صافي الرواتب</div><div class="v">'+fmtMoney(RP.tot.net)+'</div><div class="k">'+esc(cur)+'</div></div>'],
+    ['<div class="card hero"><div class="k">صافي الرواتب</div><div class="v">'+payTxt(RP.tot.net)+'</div><div class="k">'+esc(cur)+'</div></div>'],
     ['<div class="card"><div class="k">أيام مجرودة</div><div class="v">'+fmtNum(d)+'</div></div>'],
     ['<div class="card good"><div class="k">نسبة الحضور</div><div class="v">'+fmtNum(Math.round(RP.tot.rate*100))+'%</div></div>'],
     ['<div class="card bad"><div class="k">إجمالي الغياب (يوم)</div><div class="v">'+fmtNum(RP.tot.absent)+'</div></div>'],
     ['<div class="card"><div class="k">متفرقة + إجازات</div><div class="v">'+fmtNum(RP.tot.excused)+
       '</div><div class="k">مستقطع منها '+fmtNum(RP.tot.excusedDed)+' يوم</div></div>'],
-    ['<div class="card"><div class="k">إجمالي الاستقطاع</div><div class="v">'+fmtMoney(RP.tot.deduction)+
-      '</div><div class="k">غياب '+fmtMoney(RP.tot.absDeduction)+' · خاص '+fmtMoney(RP.tot.extraDed)+
-      ' · عقوبات '+fmtMoney(RP.tot.penDed)+'</div></div>'],
-    ['<div class="card good"><div class="k">إضافات ومكافآت</div><div class="v">'+fmtMoney(RP.tot.extraAdd+RP.tot.achAdd)+
-      '</div><div class="k">خاص '+fmtMoney(RP.tot.extraAdd)+' · إنجازات '+fmtMoney(RP.tot.achAdd)+'</div></div>'],
-    ['<div class="card"><div class="k">إجمالي الرواتب</div><div class="v">'+fmtMoney(RP.tot.salary)+'</div></div>']
+    ['<div class="card"><div class="k">إجمالي الاستقطاع</div><div class="v">'+payTxt(RP.tot.deduction)+
+      '</div><div class="k">غياب '+payTxt(RP.tot.absDeduction)+' · خاص '+payTxt(RP.tot.extraDed)+
+      ' · عقوبات '+payTxt(RP.tot.penDed)+'</div></div>'],
+    ['<div class="card good"><div class="k">إضافات ومكافآت</div><div class="v">'+payTxt(RP.tot.extraAdd+RP.tot.achAdd)+
+      '</div><div class="k">خاص '+payTxt(RP.tot.extraAdd)+' · إنجازات '+payTxt(RP.tot.achAdd)+'</div></div>'],
+    ['<div class="card"><div class="k">إجمالي الرواتب</div><div class="v">'+payTxt(RP.tot.salary)+'</div></div>']
   ].map(x=>x[0]).join("");
 
   let warn="";
+  if(RP.crossMonth)
+    warn+='<div class="errbox"><b>حساب الرواتب متوقف لهذا المدى.</b><br>'+
+      'الرواتب تنحسب شهرياً، والمدة المختارة تمتد على أكثر من شهر ميلادي '+
+      '(من '+dateNumeric(RP.from)+' إلى '+dateNumeric(RP.to)+').<br>'+
+      'اختر مدى داخل شهر واحد — زر «هذا الشهر» أو «الشهر الماضي». '+
+      'عرض الحضور فقط شغّال، أما المبالغ والتصدير فمتوقفة.</div>';
   if(d===0) warn+='<div class="errbox">ماكو أيام معتمدة بهذه المدة. سجّل الحضور بتبويب «جرد اليوم» واضغط «اعتماد اليوم».</div>';
   if(RP.gaps.length){
     const show=RP.gaps.slice(0,12).map(dateNumeric).join(" · ");
@@ -4670,7 +4717,8 @@ function renderReport(){
       '<div style="margin-top:8px"><button class="btn sm" id="fixGaps">اعتماد كل هذه الأيام «الكل حاضر»</button></div></div>';
   }
   if(RP.rows.some(r=>r.partial))
-    warn+='<div class="warnbox">بعض العمال راتبهم نسبي لأن مباشرتهم أو انتهاء خدمتهم داخل المدة — محسوب بأيام التقويم لا بأيام الجرد.</div>';
+    warn+='<div class="warnbox">بعض العمال راتبهم نسبي: مباشرتهم أو نهاية خدمتهم داخل الشهر. '+
+      'الحساب = الراتب الكامل ناقص أجر اليوم × الأيام الفائتة من تقويم الشهر.</div>';
   if(RP.rows.some(r=>r.net<0))
     warn+='<div class="errbox">عامل أو أكثر صافيه بالسالب (الاستقطاعات تجاوزت راتبه). راجع الصفوف الحمراء.</div>';
   el("rpWarn").innerHTML=warn;
@@ -4702,19 +4750,19 @@ function renderReport(){
       '<td style="font-weight:700">'+fmtNum(r.excusedDed)+
         (r.excused?' <span class="mini">من '+fmtNum(r.excused)+'</span>':'')+'</td>'+
       '<td>'+fmtNum(Math.round(r.rate*100))+'%</td>'+
-      '<td>'+fmtMoney(r.salary)+
-        (r.partial?'<div class="mini">'+fmtNum(r.svcDays)+' يوم × '+fmtMoney(r.dailyRate)+
+      '<td>'+payTxt(r.salary)+
+        (r.partial?'<div class="mini">ناقص '+fmtNum(r.missedDays)+' يوم فائت × '+fmtMoney(r.dailyRate)+
           ' (من '+fmtMoney(r.fullSalary)+')</div>':'')+
       '</td>'+
-      '<td style="color:var(--absent)">'+(r.absDeduction?"-"+fmtMoney(r.absDeduction):fmtNum(0))+
+      '<td style="color:var(--absent)">'+(RP.crossMonth?"—":(r.absDeduction?"-"+fmtMoney(r.absDeduction):fmtNum(0)))+
         (r.deductDays?'<div class="mini">'+fmtNum(r.deductDays)+' يوم × '+fmtMoney(r.dayDed)+'</div>':'')+'</td>'+
-      '<td style="color:var(--absent)">'+(r.extraDed?"-"+fmtMoney(r.extraDed):fmtNum(0))+'</td>'+
-      '<td style="color:var(--absent)">'+(r.penDed?"-"+fmtMoney(r.penDed):fmtNum(0))+
+      '<td style="color:var(--absent)">'+(RP.crossMonth?"—":(r.extraDed?"-"+fmtMoney(r.extraDed):fmtNum(0)))+'</td>'+
+      '<td style="color:var(--absent)">'+(RP.crossMonth?"—":(r.penDed?"-"+fmtMoney(r.penDed):fmtNum(0)))+
         (r.penCount?'<div class="mini">'+fmtNum(r.penCount)+' إشعار'+(r.penDays?' · '+fmtNum(r.penDays)+' يوم':'')+'</div>':'')+'</td>'+
-      '<td style="color:var(--present)">'+(r.extraAdd?"+"+fmtMoney(r.extraAdd):fmtNum(0))+'</td>'+
-      '<td style="color:var(--present)">'+(r.achAdd?"+"+fmtMoney(r.achAdd):fmtNum(0))+
+      '<td style="color:var(--present)">'+(RP.crossMonth?"—":(r.extraAdd?"+"+fmtMoney(r.extraAdd):fmtNum(0)))+'</td>'+
+      '<td style="color:var(--present)">'+(RP.crossMonth?"—":(r.achAdd?"+"+fmtMoney(r.achAdd):fmtNum(0)))+
         (r.achCount?'<div class="mini">'+fmtNum(r.achCount)+' إشعار</div>':'')+'</td>'+
-      '<td style="font-weight:800'+(r.net<0?';color:var(--absent)':'')+'">'+fmtMoney(r.net)+'</td></tr>';
+      '<td style="font-weight:800'+(r.net<0?';color:var(--absent)':'')+'">'+payTxt(r.net)+'</td></tr>';
   });
   h+='</tbody><tfoot><tr><td colspan="4">المجموع ('+fmtNum(rows.length)+' عامل)</td>'+
     '<td>'+fmtNum(RP.tot.present)+'</td><td>'+fmtNum(RP.tot.absent)+'</td>'+
@@ -4728,12 +4776,9 @@ function renderReport(){
 }
 el("rpRun").onclick=()=>runReport(true);
 el("rpSearch").addEventListener("input",()=>{ if(RP) renderReport(); });
+/* ما بقي زر «آخر ٣٠ يوم»: مدى يقفز بين شهرين لا ينحسب راتباً */
 document.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>{
-  const k=b.dataset.quick;
-  let r;
-  if(k==="this") r=monthRange(0);
-  else if(k==="last") r=monthRange(-1);
-  else r=[addDays(todayISO(),-29),todayISO()];
+  const r = b.dataset.quick==="last" ? monthRange(-1) : monthRange(0);
   el("rpFrom").value=r[0]; el("rpTo").value=r[1]; runReport(true);
 });
 
@@ -5036,6 +5081,7 @@ el("offSummary").addEventListener("click",e=>{
 
 el("rpXls").onclick=()=>{
   if(!RP){ alert("احسب التقرير أول."); return; }
+  if(RP.crossMonth){ alert(CROSS_MSG); return; }
   if(!RP.rows.length){ alert("ماكو عمال بالتقرير."); return; }
   const st=S(), cur=st.currency||"";
   const head=["ت","الاسم","حالة العمل","القسم","أيام مجرودة له","أيام العمل بالمدة","أيام خدمته بالتقويم",
@@ -5191,12 +5237,14 @@ function drawReportPage(rows, pageNo, pages, k){
 }
 el("rpWord").onclick=()=>{
   if(!RP){ alert("احسب التقرير أول."); return; }
+  if(RP.crossMonth){ alert(CROSS_MSG); return; }
   if(!RP.rows.length){ alert("ماكو عمال بالتقرير."); return; }
   try{ saveDocx(payrollDocx(),"كشف-الرواتب-"+RP.from+"_"+RP.to+".docx"); }
   catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("rpPdf").onclick=()=>{
   if(!RP){ alert("احسب التقرير أول."); return; }
+  if(RP.crossMonth){ alert(CROSS_MSG); return; }
   if(!RP.rows.length){ alert("ماكو عمال بالتقرير."); return; }
   const per=26;
   const all=RP.rows.map((r,i)=>Object.assign({},r,{idx:i+1}));
