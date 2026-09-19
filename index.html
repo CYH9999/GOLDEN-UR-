@@ -293,6 +293,11 @@ tr.rowvar td{background:#FCFAFE}
   <button role="tab" aria-selected="false" data-view="settings">الإعدادات</button>
 </nav>
 
+<div class="reminder hidden" id="lockBar">
+  <span class="rm-txt">البرنامج مفتوح بنافذة ثانية — التعديل معطّل هنا. سكّر هذه النافذة واشتغل بالأولى.</span>
+  <button class="btn sm" id="lockRetry">حاول تفعيل هذه النافذة</button>
+</div>
+
 <div class="tally" id="tally"></div>
 
 <div class="wrap">
@@ -1164,15 +1169,70 @@ function lsSet(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ ret
    الحفظ حتى تكتمل القراءة. */
 let stateLoaded=false;
 
+/* ==================== قفل النافذة الواحدة ====================
+   نافذتان مفتوحتان على نفس البيانات تعني أن كل واحدة تكتب فوق الثانية:
+   آخر من يحفظ يفوز، فتضيع تأشيرات يوم كامل بلا أي إنذار. النسخة الثانية
+   تصير للقراءة فقط: لا تكتب شيئاً، ويظهر فوقها شريط يقول ذلك.
+   القناة BroadcastChannel، وإن لم تتوفّر نستعمل حدث storage. */
+const LOCK_CH="jard_pro_lock", LOCK_LS="jard_pro_lock_msg";
+const TAB_ID=uid();
+let roLocked=false, lockChan=null;
+function lockSend(msg){
+  msg.id=TAB_ID; msg.at=Date.now();
+  try{ if(lockChan) lockChan.postMessage(msg); }catch(e){}
+  /* الاحتياط: حدث storage يصل لبقية النوافذ بنفس الأصل */
+  try{ lsSet(LOCK_LS, JSON.stringify(msg)); }catch(e){}
+}
+function setReadOnly(on){
+  if(roLocked===on) return;
+  roLocked=on;
+  const b=el("lockBar");
+  if(b && b.classList){ if(on) b.classList.remove("hidden"); else b.classList.add("hidden"); }
+  const d=el("dbBadge");
+  if(d && d.textContent!==undefined){
+    if(on){ d.textContent="للقراءة فقط — نافذة ثانية مفتوحة"; d.className="dbbadge warn"; }
+    else badge("local");
+  }
+}
+function lockRecv(msg){
+  if(!msg || msg.id===TAB_ID) return;
+  if(msg.t==="hello"){
+    /* نافذة جديدة تسأل: إذا كنا النسخة الفعّالة نردّ عليها فتقفل نفسها */
+    if(!roLocked) lockSend({t:"here", to:msg.id});
+    return;
+  }
+  if(msg.t==="here" && msg.to===TAB_ID){ setReadOnly(true); return; }
+  if(msg.t==="bye" && roLocked){ setReadOnly(false); }
+}
+function lockInit(){
+  try{ lockChan=new BroadcastChannel(LOCK_CH); lockChan.onmessage=ev=>lockRecv(ev.data); }
+  catch(e){ lockChan=null; }
+  try{
+    window.addEventListener("storage",ev=>{
+      if(!ev || ev.key!==LOCK_LS || !ev.newValue) return;
+      try{ lockRecv(JSON.parse(ev.newValue)); }catch(_){}
+    });
+  }catch(e){}
+  lockSend({t:"hello"});
+  try{ window.addEventListener("beforeunload",()=>lockSend({t:"bye"})); }catch(e){}
+}
+el("lockRetry").onclick=()=>{
+  /* لو انسكّرت النافذة الأولى بلا إشعار: نسأل من جديد */
+  setReadOnly(false);
+  lockSend({t:"hello"});
+  setTimeout(()=>{ if(!roLocked) badge("local"); },600);
+};
+
 async function persistState(){
   if(!stateLoaded) return false;
+  if(roLocked) return false;          // النسخة المقفلة لا تكتب أبداً
   const t=Date.now(); state.savedAt=t;
   const s=JSON.stringify(state);
   const a=await idbSet(KEY,s); await idbSet(KEY+"_t",t);
   const b=lsSet("jard_pro_state",s); lsSet("jard_pro_state_t",String(t)); return a||b; }
 /* حفظ متزامن فوري (يُستدعى عند إغلاق الصفحة) — localStorage فقط لأنه متزامن */
 function flushSync(){
-  if(!stateLoaded) return;
+  if(!stateLoaded || roLocked) return;
   try{ lsSet("jard_pro_state",JSON.stringify(state)); lsSet("jard_pro_state_t",String(Date.now())); }catch(e){} }
 
 /* هل هذه النسخة فارغة فعلياً؟ (بلا عمال وبلا أيام جرد بأي شركة) */
@@ -1436,6 +1496,11 @@ function migrate(obj){
 
 /* ==================== الحفظ التلقائي ==================== */
 function queueSave(){
+  if(roLocked){
+    el("savedNote").textContent="التعديل معطّل — البرنامج مفتوح بنافذة ثانية";
+    setTimeout(()=>el("savedNote").textContent="",2600);
+    return;
+  }
   clearTimeout(saveTimer);
   badge("saving");
   saveTimer=setTimeout(async()=>{
@@ -6949,6 +7014,7 @@ function bootView(){
     if(bd && await dirPermOK(bd,false)){ backupDir=bd; await writeBackupFile(false); }
   }catch(e){}
   refreshBackupState(); renderSnaps();
+  lockInit();
   window.addEventListener("beforeunload",flushSync);
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushSync(); });
 })();
