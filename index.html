@@ -2736,12 +2736,21 @@ el("lvSave").onclick=()=>{
   if(!w){ alert("اختر اسم العامل أولاً."); return; }
   const days=lvDaysCount(), hours=lvHoursCount();
   const from=el("lvFrom").value||curDate;
+  const to=addDays(from,days-1);
   let open = lvEditId ? (c.leaves||[]).find(l=>l.id===lvEditId) : null;
   if(lvEditId && !open){ lvEditId=null; }
-  if(!warnIfEnded(w,from,"\u0627\u0644\u0625\u062c\u0627\u0632\u0629")) return;
+  if(!requireInService(w,from,"الإجازة","بداية")) return;
+  if(!requireInService(w,to,"الإجازة","نهاية")) return;
+  const clash=overlappingLeave(w.id,from,to,open?open.id:null);
+  if(clash){
+    alert("مرفوض: «"+w.name+"» عنده إجازة متداخلة بهذا المدى.\n\n"+
+      "الوصل "+clash.no+" — "+(clash.type||"إجازة")+" من "+dateTextOf(clash.from)+
+      " إلى "+dateTextOf(leaveEnd(clash))+".\n\nعدّل التواريخ، أو افتح ذاك الوصل وعدّله.");
+    return;
+  }
   const data={ workerId:w.id, name:w.name,
     section:el("lvSection").value, type:el("lvType").value, from:from, days:days, hours:hours||null,
-    to:addDays(from,days-1),
+    to:to,
     policy: lvIsTimed() ? "none" : (el("lvPolicy").value||defaultLeavePolicy(el("lvType").value)),
     reason:el("lvReason").value, admin:el("lvAdmin").value };
   if(open){
@@ -2934,13 +2943,45 @@ function defaultPenKind(type){
 }
 /* قرار إنهاء الخدمات: ليس استقطاعاً مالياً بل يُغلق خدمة العامل
    بتاريخ القرار، فيختفي من الجرد بعده وينحسب راتبه لغاية ذلك اليوم. */
-/* تحذير: إصدار وثيقة بتاريخ بعد انتهاء الخدمة — ما تنزل على أي كشف */
+/* تحذير لطيف — يبقى لوصل المواد لأنه لا يمسّ الراتب */
 function warnIfEnded(w,date,what){
   const _e=serviceEnd(w);
   if(w && _e && date>_e)
-    return confirm("\u062e\u062f\u0645\u0629 \u00ab"+w.name+"\u00bb \u0645\u0646\u062a\u0647\u064a\u0629 \u0628\u062a\u0627\u0631\u064a\u062e "+dateTextOf(_e)+".\n\n"+
-      what+" \u0628\u062a\u0627\u0631\u064a\u062e \u0628\u0639\u062f \u0630\u0644\u0643 \u0645\u0627 \u064a\u0646\u0632\u0644 \u0639\u0644\u0649 \u0623\u064a \u0643\u0634\u0641 \u0631\u0648\u0627\u062a\u0628.\n\u062a\u0643\u0645\u0644\u061f");
+    return confirm("خدمة «"+w.name+"» منتهية بتاريخ "+dateTextOf(_e)+".\n\n"+
+      what+" بتاريخ بعد ذلك ما ينزل على أي كشف رواتب.\nتكمل؟");
   return true;
+}
+/* ---- رفض الوثائق خارج مدة الخدمة ----
+   وثيقة مالية (إجازة، عقوبة، مكافأة، استقطاع خاص) بتاريخ قبل المباشرة أو
+   بعد آخر يوم خدمة لا تنزل على أي كشف، فتبقى رقماً وهمياً بالسجل.
+   الرفض هنا قاطع لا تحذير. الاستثناء الوحيد قرار إنهاء الخدمة نفسه. */
+function requireInService(w, date, what, dateLabel){
+  if(!w || !date) return true;
+  const s=serviceStart(w), _e=serviceEnd(w);
+  const lbl=dateLabel||"تاريخ";
+  if(s && date<s){
+    alert("مرفوض: "+lbl+" "+what+" ("+dateTextOf(date)+") قبل مباشرة «"+w.name+"» "+
+      "بتاريخ "+dateTextOf(s)+".\n\nصحّح التاريخ، أو صحّح تاريخ المباشرة من جدول الرواتب.");
+    return false;
+  }
+  if(_e && date>_e){
+    alert("مرفوض: "+lbl+" "+what+" ("+dateTextOf(date)+") بعد آخر يوم خدمة لـ «"+w.name+"» "+
+      "بتاريخ "+dateTextOf(_e)+".\n\nصحّح التاريخ، أو غيّر حالة العامل من «تغيير الحالة».");
+    return false;
+  }
+  return true;
+}
+/* وصل إجازة يتداخل مع مدى معيّن لنفس العامل، أو null */
+function overlappingLeave(workerId, from, to, skipId){
+  const ls=C().leaves||[];
+  for(let i=0;i<ls.length;i++){
+    const l=ls[i];
+    if(l.workerId!==workerId) continue;
+    if(skipId && l.id===skipId) continue;
+    if(!l.from) continue;
+    if(from<=leaveEnd(l) && to>=l.from) return l;
+  }
+  return null;
 }
 function isTerminationType(t){ return String(t||"").indexOf("إنهاء الخدم") >= 0; }
 /* السند القانوني يننكتب لوحده بصندوق السبب متى اخترت إنهاء الخدمات،
@@ -3107,7 +3148,8 @@ el("pnSave").onclick=()=>{
       "احذف القرار — ترجع حالة العامل الأول كما كانت — ثم أنشئ قراراً جديداً باسم العامل الصحيح.");
     return;
   }
-  if(!term && !warnIfEnded(w,date,"\u0627\u0644\u0639\u0642\u0648\u0628\u0629")) return;
+  /* قرار إنهاء الخدمة هو الاستثناء الوحيد: هو الذي يرسم نهاية الخدمة */
+  if(!term && !requireInService(w,date,"العقوبة")) return;
   if(term){
     const prevEndDate = serviceEnd(w);
     const already = prevEndDate && prevEndDate!==date;
@@ -3427,7 +3469,7 @@ el("acSave").onclick=()=>{
   const acDate=el("acDate").value||curDate;
   let open = acEditId ? (c.achievements||[]).find(x=>x.id===acEditId) : null;
   if(acEditId && !open){ acEditId=null; }
-  if(!warnIfEnded(w,acDate,"\u0627\u0644\u0645\u0643\u0627\u0641\u0623\u0629")) return;
+  if(!requireInService(w,acDate,"المكافأة")) return;
   const data={ workerId:w.id, name:w.name,
     section:el("acSection").value, type:el("acType").value,
     kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:dailyRateFor(w),
@@ -5120,6 +5162,8 @@ el("addAdj").onclick=()=>{
   const amt=Number(el("adjAmount").value)||0;
   if(amt<=0){ alert("اكتب مبلغاً أكبر من صفر."); return; }
   const date=el("adjDate").value||todayISO();
+  const aw=c.workers.find(x=>x.id===wid);
+  if(!requireInService(aw,date,el("adjType").value==="add"?"الإضافة":"الاستقطاع")) return;
   c.adjustments.push({ id:uid(), workerId:wid, type:el("adjType").value,
     amount:amt, reason:el("adjReason").value.trim(), date:date, issued:todayISO() });
   el("adjAmount").value=""; el("adjReason").value="";
