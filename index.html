@@ -2564,7 +2564,29 @@ el("wipeAll").onclick=async()=>{
   await idbSet(HKEY,null); await persistState(); bootView();
 };
 
+/* ==================== تعديل الوثائق المحفوظة ====================
+   فتح وثيقة بزر «عرض» ثم الضغط على «حفظ» كان ينشئ سجلاً جديداً برقم
+   جديد، فيتضاعف الاستقطاع. الآن كل نموذج يتتبّع السجل المفتوح بمتغير،
+   والحفظ يعدّل نفس السجل بنفس رقمه بعد نسخ نسخته السابقة إلى revisions. */
+function reviseRecord(rec, fields){
+  if(!rec) return null;
+  if(!Array.isArray(rec.revisions)) rec.revisions=[];
+  const snap=Object.assign({},rec);
+  delete snap.revisions;                 // ما ننسخ التاريخ داخل التاريخ
+  rec.revisions.push(snap);
+  Object.assign(rec, fields);
+  rec.editedAt=todayISO();
+  return rec;
+}
+/* نص زر الحفظ يقول بالضبط شنو راح يصير */
+function syncSaveBtn(id, editing, newText){
+  const b=el(id);
+  if(b && b.textContent!==undefined) b.textContent = editing ? "حفظ التعديل" : newText;
+}
+
 /* ==================== الإجازات ==================== */
+let lvEditId=null;
+function lvSyncSave(){ syncSaveBtn("lvSave", !!lvEditId, "حفظ الإجازة"); }
 function nextLeaveNo(){
   const n=(C().leaveSeq||0)+1;
   return "إ-"+new Date().getFullYear()+"-"+String(n).padStart(3,"0");
@@ -2578,7 +2600,7 @@ function initLeaveView(){
   if(!el("lvAdmin").value) el("lvAdmin").value=S().signer||"";
   if(!el("lvNo").value) el("lvNo").value=nextLeaveNo();
   if(!el("lvPolicy").value) el("lvPolicy").value=defaultLeavePolicy(el("lvType").value);
-  lvSyncType();
+  lvSyncType(); lvSyncSave();
   renderLeaves(); drawLeave(); lvHint();
 }
 el("lvWorker").addEventListener("change",()=>{
@@ -2663,9 +2685,7 @@ function lvHint(){
   const skipped=n-own;
   const [ms,me]=monthOf(from);
   // لو الوصل المفتوح محفوظ أصلاً، لا نحسبه مرتين
-  const openNo=el("lvNo").value;
-  const opened=(C().leaves||[]).find(l=>l.no===openNo);
-  const before=excusedTally(wid,ms,me,opened?opened.id:null);
+  const before=excusedTally(wid,ms,me,lvEditId||null);
   const after=Object.assign({},before); after[p]+=own;
   const dedOf=t=>leaveDeductDays(t.half,"half")+t.full;
   const d0=dedOf(before), d1=dedOf(after);
@@ -2686,29 +2706,42 @@ function lvHint(){
   h.innerHTML=msg;
 }
 el("lvNew").onclick=()=>{
+  lvEditId=null;
   el("lvWorker").value=""; el("lvSection").value=""; el("lvReason").value="";
   el("lvDays").value=1; el("lvFrom").value=curDate; el("lvNo").value=nextLeaveNo();
   el("lvPolicy").value=defaultLeavePolicy(el("lvType").value);
-  lvSyncType(); drawLeave(); lvHint();
+  lvSyncType(); lvSyncSave(); drawLeave(); lvHint();
 };
 el("lvSave").onclick=()=>{
   const c=C(), w=c.workers.find(x=>x.id===el("lvWorker").value);
   if(!w){ alert("اختر اسم العامل أولاً."); return; }
   const days=lvDaysCount(), hours=lvHoursCount();
   const from=el("lvFrom").value||curDate;
+  let open = lvEditId ? (c.leaves||[]).find(l=>l.id===lvEditId) : null;
+  if(lvEditId && !open){ lvEditId=null; }
   if(!warnIfEnded(w,from,"\u0627\u0644\u0625\u062c\u0627\u0632\u0629")) return;
-  // ضمان رقم فريد: إذا كان الرقم الحالي مستعملاً (فتحت وصلاً قديماً)، ولّد رقماً جديداً
-  let no=el("lvNo").value;
-  if(!no || c.leaves.some(l=>l.no===no)) no=nextLeaveNo();
-  c.leaves.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
+  const data={ workerId:w.id, name:w.name,
     section:el("lvSection").value, type:el("lvType").value, from:from, days:days, hours:hours||null,
     to:addDays(from,days-1),
     policy: lvIsTimed() ? "none" : (el("lvPolicy").value||defaultLeavePolicy(el("lvType").value)),
-    reason:el("lvReason").value, admin:el("lvAdmin").value, issued:todayISO() });
-  c.leaveSeq=(c.leaveSeq||0)+1;
-  queueSave(); el("lvNo").value=nextLeaveNo(); renderLeaves();
+    reason:el("lvReason").value, admin:el("lvAdmin").value };
+  if(open){
+    reviseRecord(open,data);
+    el("savedNote").textContent="انحفظ التعديل على وصل "+open.no+" ✓";
+  }else{
+    let no=el("lvNo").value;
+    if(!no || c.leaves.some(l=>l.no===no)) no=nextLeaveNo();
+    const rec=Object.assign({ id:uid(), no:no, issued:todayISO() }, data);
+    c.leaves.unshift(rec);
+    c.leaveSeq=(c.leaveSeq||0)+1;
+    lvEditId=rec.id;                 // يبقى مفتوحاً: ضغطة ثانية تعدّل ولا تكرّر
+    el("lvNo").value=rec.no;
+    el("savedNote").textContent="انحفظت الإجازة ✓";
+  }
+  lvSyncSave();
+  queueSave(); renderLeaves();
   if(RP) runReport(); refresh();
-  el("savedNote").textContent="انحفظت الإجازة ✓";
+  setTimeout(()=>el("savedNote").textContent="",2400);
 };
 function renderLeaves(){
   const c=C(), q=el("lvSearch").value.trim();
@@ -2727,14 +2760,18 @@ el("lvSearch").addEventListener("input",renderLeaves);
 el("leavesList").addEventListener("click",e=>{
   const o=e.target.closest("[data-lopen]"), d=e.target.closest("[data-ldel]");
   const c=C();
-  if(o){ const l=c.leaves.find(x=>x.id===o.dataset.lopen);
+  if(o){ const l=c.leaves.find(x=>x.id===o.dataset.lopen); if(!l) return;
+    lvEditId=l.id;
     el("lvNo").value=l.no; el("lvWorker").value=l.workerId||""; el("lvSection").value=l.section||"";
     el("lvType").value=l.type||"اعتيادية"; el("lvFrom").value=l.from;
     el("lvDays").value=l.hours?l.hours:l.days; lvSyncType();
     el("lvPolicy").value=l.policy||defaultLeavePolicy(l.type);
-    el("lvReason").value=l.reason||""; el("lvAdmin").value=l.admin||""; drawLeave(); lvHint(); }
+    el("lvReason").value=l.reason||""; el("lvAdmin").value=l.admin||"";
+    lvSyncSave(); drawLeave(); lvHint(); }
   if(d){ const l=c.leaves.find(x=>x.id===d.dataset.ldel);
-    if(confirm("يتحذف وصل "+l.no+"؟")){ c.leaves=c.leaves.filter(x=>x.id!==l.id); queueSave(); renderLeaves();
+    if(confirm("يتحذف وصل "+l.no+"؟")){
+      if(lvEditId===l.id){ lvEditId=null; lvSyncSave(); }
+      c.leaves=c.leaves.filter(x=>x.id!==l.id); queueSave(); renderLeaves();
       if(RP) runReport(); refresh(); } }
 });
 
@@ -2929,6 +2966,19 @@ function monthNameOf(iso){
    بدون هذا العلم تبقى القائمة على أول خيار عند فتح التبويب،
    فيظهر «لا يُطلب مبلغ» مع نوع المفروض له مبلغ. */
 let pnKindManual=false;
+let pnEditId=null;
+function pnSyncSave(){ syncSaveBtn("pnSave", !!pnEditId, "حفظ العقوبة"); }
+/* هل هذا القرار هو صاحب حالة العامل الحالية؟ */
+function ownsStatus(w,rec){
+  return !!(w && rec && rec.terminates && !isActiveWorker(w) && (w.statusChangedAt||"")===rec.date);
+}
+/* إرجاع أثر قرار إنهاء خدمة إلى ما قبله */
+function undoTermination(w,rec){
+  if(!ownsStatus(w,rec)) return false;
+  const back = rec.prevStatus ? normStatus(rec.prevStatus) : WS_ACTIVE;
+  return setWorkerStatus(w, back, { date:rec.prevChangedAt||todayISO(),
+    note:rec.prevNote||"", ref:rec.no });
+}
 function pnKindV(){ return el("pnKind").value||"none"; }
 function pnVal(){ return Math.max(0,Number(el("pnAmount").value)||0); }
 function pnWorkerObj(){ return C().workers.find(x=>x.id===el("pnWorker").value)||null; }
@@ -2989,7 +3039,7 @@ function initPenView(){
   if(!el("pnAdmin").value) el("pnAdmin").value=S().signer||"";
   if(!el("pnNo").value) el("pnNo").value=nextPenaltyNo();
   if(!pnKindManual) el("pnKind").value=defaultPenKind(el("pnType").value);
-  pnSyncTermNote(); pnSyncKind();
+  pnSyncTermNote(); pnSyncKind(); pnSyncSave();
   renderPenalties(); drawPenalty(); pnHintRender();
 }
 el("pnWorker").addEventListener("change",()=>{
@@ -3009,11 +3059,12 @@ el("pnDate").addEventListener("change",pnHintRender);
 el("pnAmount").addEventListener("input",()=>{ drawPenalty(); pnHintRender(); });
 
 el("pnNew").onclick=()=>{
+  pnEditId=null;
   el("pnWorker").value=""; el("pnSection").value=""; el("pnReason").value="";
   el("pnAmount").value=0; el("pnDate").value=curDate; el("pnNo").value=nextPenaltyNo();
   pnKindManual=false;
   el("pnKind").value=defaultPenKind(el("pnType").value);
-  pnSyncTermNote(); pnSyncKind(); drawPenalty(); pnHintRender();
+  pnSyncTermNote(); pnSyncKind(); pnSyncSave(); drawPenalty(); pnHintRender();
 };
 el("pnSave").onclick=()=>{
   const c=C(), w=pnWorkerObj();
@@ -3022,6 +3073,15 @@ el("pnSave").onclick=()=>{
   if(k!=="none" && v<=0){ alert("اكتب مقدار العقوبة أولاً."); el("pnAmount").focus(); return; }
   const type=el("pnType").value, date=el("pnDate").value||curDate;
   const term=isTerminationType(type);
+  let open = pnEditId ? (c.penalties||[]).find(x=>x.id===pnEditId) : null;
+  if(pnEditId && !open){ pnEditId=null; }
+  /* تبديل العامل داخل قرار إنهاء خدمة ممنوع: القرار غيّر حالة عامل معيّن،
+     ونقله لعامل ثاني يترك الأول منتهي الخدمة بلا قرار. */
+  if(open && open.terminates && open.workerId!==w.id){
+    alert("ما يصير تبدّل العامل داخل قرار إنهاء خدمة.\n\n"+
+      "احذف القرار — ترجع حالة العامل الأول كما كانت — ثم أنشئ قراراً جديداً باسم العامل الصحيح.");
+    return;
+  }
   if(!term && !warnIfEnded(w,date,"\u0627\u0644\u0639\u0642\u0648\u0628\u0629")) return;
   if(term){
     const prevEndDate = serviceEnd(w);
@@ -3033,9 +3093,10 @@ el("pnSave").onclick=()=>{
       (already?"\n· موجود عنده إنهاء سابق بتاريخ "+dateTextOf(prevEndDate)+" وراح ينستبدل":"")+
       "\n\nتكمل؟")) return;
   }
-  let no=el("pnNo").value;
-  if(!no || c.penalties.some(x=>x.no===no)) no=nextPenaltyNo();
-  c.penalties.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
+  /* تعديل قرار قائم: نرفع أثره القديم أولاً حتى تكون الحالة السابقة
+     المخزّنة صحيحة، ثم نعيد تطبيقه بالتاريخ الجديد. */
+  if(open && open.terminates) undoTermination(w,open);
+  const data={ workerId:w.id, name:w.name,
     section:el("pnSection").value, type:type,
     kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:dayDeductFor(w),
     date:date, terminates:term,
@@ -3043,16 +3104,29 @@ el("pnSave").onclick=()=>{
     prevStatus:term?getWorkerStatus(w):undefined,
     prevChangedAt:term?(w.statusChangedAt||""):undefined,
     prevNote:term?(w.statusNote||""):undefined,
-    reason:el("pnReason").value,
-    admin:el("pnAdmin").value, issued:todayISO() });
-  c.penSeq=(c.penSeq||0)+1;
+    reason:el("pnReason").value, admin:el("pnAdmin").value };
+  let no;
+  if(open){
+    reviseRecord(open,data);
+    no=open.no;
+    el("savedNote").textContent="انحفظ التعديل على إشعار "+no+" ✓";
+  }else{
+    no=el("pnNo").value;
+    if(!no || c.penalties.some(x=>x.no===no)) no=nextPenaltyNo();
+    const rec=Object.assign({ id:uid(), no:no, issued:todayISO() }, data);
+    c.penalties.unshift(rec);
+    c.penSeq=(c.penSeq||0)+1;
+    pnEditId=rec.id;
+    el("pnNo").value=rec.no;
+    el("savedNote").textContent = term ? "انحفظ قرار إنهاء الخدمة ✓" : "انحفظت العقوبة ✓";
+  }
   /* قرار إنهاء الخدمة يمرّ من نفس دالة تغيير الحالة الموحّدة،
      فلا يبقى عامل منتهي الخدمة ظاهراً بحالة «مستمر». */
   if(term) setWorkerStatus(w,WS_END,{date:date,note:"قرار إنهاء خدمة رقم "+no,ref:no});
-  queueSave(); el("pnNo").value=nextPenaltyNo(); renderPenalties();
-  if(term){ refresh(); renderPeople(); renderVariables(); }
+  pnSyncSave();
+  queueSave(); renderPenalties();
+  if(term||open){ refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable(); }
   if(RP) runReport();
-  el("savedNote").textContent = term ? "انحفظ قرار إنهاء الخدمة ✓" : "انحفظت العقوبة ✓";
   setTimeout(()=>el("savedNote").textContent="",2400);
 };
 function renderPenalties(){
@@ -3078,24 +3152,25 @@ el("penaltiesList").addEventListener("click",e=>{
   const o=e.target.closest("[data-popen]"), d=e.target.closest("[data-pdel]");
   const c=C();
   if(o){ const l=(c.penalties||[]).find(x=>x.id===o.dataset.popen); if(!l) return;
+    pnEditId=l.id;
     el("pnNo").value=l.no; el("pnWorker").value=l.workerId||""; el("pnSection").value=l.section||"";
     el("pnType").value=l.type||PN_TYPES[0]; el("pnDate").value=l.date;
     el("pnKind").value=l.kind||"none"; pnKindManual=true;
     el("pnAmount").value = l.kind==="days" ? (l.days||0) : (l.amount||0);
     el("pnReason").value=l.reason||""; el("pnAdmin").value=l.admin||"";
-    pnSyncKind(); drawPenalty(); pnHintRender(); }
+    pnSyncKind(); pnSyncSave(); drawPenalty(); pnHintRender(); }
   if(d){ const l=(c.penalties||[]).find(x=>x.id===d.dataset.pdel); if(!l) return;
     const w=c.workers.find(x=>x.id===l.workerId);
     /* نرجّع الحالة فقط إذا كان هذا القرار هو صاحب الحالة الحالية فعلاً */
-    const undoTerm = !!(l.terminates && w && !isActiveWorker(w) && (w.statusChangedAt||"")===l.date);
+    const undoTerm = ownsStatus(w,l);
     /* قرارات قديمة بلا prevStatus: الرجوع إلى «مستمر» */
     const back = l.prevStatus ? normStatus(l.prevStatus) : WS_ACTIVE;
     if(confirm("يتحذف إشعار "+l.no+"؟"+
       (undoTerm?"\n\nهذا هو قرار إنهاء خدمة «"+w.name+"» — بحذفه ترجع حالته «"+back+"»"+
         (back===WS_ACTIVE?" ويرجع للجرد والراتب.":" بتاريخ "+(l.prevChangedAt?dateTextOf(l.prevChangedAt):"—")+"."):""))){
+      if(pnEditId===l.id){ pnEditId=null; pnSyncSave(); }
       c.penalties=c.penalties.filter(x=>x.id!==l.id);
-      if(undoTerm) setWorkerStatus(w,back,{ date:l.prevChangedAt||todayISO(),
-        note:l.prevNote||"", ref:l.no });
+      if(undoTerm) undoTermination(w,l);
       queueSave(); renderPenalties();
       if(undoTerm){ refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable(); }
       if(RP) runReport(); } }
@@ -3232,6 +3307,8 @@ function achAmount(a,w){
 }
 
 let acKindManual=false;
+let acEditId=null;
+function acSyncSave(){ syncSaveBtn("acSave", !!acEditId, "حفظ المكافأة"); }
 function acKindV(){ return el("acKind").value||"none"; }
 function acVal(){ return Math.max(0,Number(el("acAmount").value)||0); }
 function acWorkerObj(){ return C().workers.find(x=>x.id===el("acWorker").value)||null; }
@@ -3286,7 +3363,7 @@ function initAchView(){
   if(!el("acAdmin").value) el("acAdmin").value=S().signer||"";
   if(!el("acNo").value) el("acNo").value=nextAchNo();
   if(!acKindManual) el("acKind").value=defaultAchKind(el("acType").value);
-  acSyncKind();
+  acSyncKind(); acSyncSave();
   renderAchievements(); drawAchievement(); acHintRender();
 }
 el("acWorker").addEventListener("change",()=>{
@@ -3305,11 +3382,12 @@ el("acKind").addEventListener("change",()=>{ acKindManual=true; acSyncKind(); dr
 el("acAmount").addEventListener("input",()=>{ drawAchievement(); acHintRender(); });
 
 el("acNew").onclick=()=>{
+  acEditId=null;
   el("acWorker").value=""; el("acSection").value=""; el("acReason").value="";
   el("acAmount").value=0; el("acDate").value=curDate; el("acNo").value=nextAchNo();
   acKindManual=false;
   el("acKind").value=defaultAchKind(el("acType").value);
-  acSyncKind(); drawAchievement(); acHintRender();
+  acSyncKind(); acSyncSave(); drawAchievement(); acHintRender();
 };
 el("acSave").onclick=()=>{
   const c=C(), w=acWorkerObj();
@@ -3317,18 +3395,29 @@ el("acSave").onclick=()=>{
   const k=acKindV(), v=acVal();
   if(k!=="none" && v<=0){ alert("اكتب مقدار المكافأة أولاً."); el("acAmount").focus(); return; }
   const acDate=el("acDate").value||curDate;
+  let open = acEditId ? (c.achievements||[]).find(x=>x.id===acEditId) : null;
+  if(acEditId && !open){ acEditId=null; }
   if(!warnIfEnded(w,acDate,"\u0627\u0644\u0645\u0643\u0627\u0641\u0623\u0629")) return;
-  let no=el("acNo").value;
-  if(!no || (c.achievements||[]).some(x=>x.no===no)) no=nextAchNo();
-  c.achievements.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
+  const data={ workerId:w.id, name:w.name,
     section:el("acSection").value, type:el("acType").value,
     kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:dailyRateFor(w),
-    date:acDate, reason:el("acReason").value,
-    admin:el("acAdmin").value, issued:todayISO() });
-  c.achSeq=(c.achSeq||0)+1;
-  queueSave(); el("acNo").value=nextAchNo(); renderAchievements();
+    date:acDate, reason:el("acReason").value, admin:el("acAdmin").value };
+  if(open){
+    reviseRecord(open,data);
+    el("savedNote").textContent="انحفظ التعديل على إشعار "+open.no+" ✓";
+  }else{
+    let no=el("acNo").value;
+    if(!no || (c.achievements||[]).some(x=>x.no===no)) no=nextAchNo();
+    const rec=Object.assign({ id:uid(), no:no, issued:todayISO() }, data);
+    c.achievements.unshift(rec);
+    c.achSeq=(c.achSeq||0)+1;
+    acEditId=rec.id;
+    el("acNo").value=rec.no;
+    el("savedNote").textContent="انحفظت المكافأة ✓";
+  }
+  acSyncSave();
+  queueSave(); renderAchievements();
   if(RP) runReport();
-  el("savedNote").textContent="انحفظت المكافأة ✓";
   setTimeout(()=>el("savedNote").textContent="",2400);
 };
 function renderAchievements(){
@@ -3354,14 +3443,16 @@ el("achList").addEventListener("click",e=>{
   const o=e.target.closest("[data-aopen]"), d=e.target.closest("[data-adel]");
   const c=C();
   if(o){ const l=(c.achievements||[]).find(x=>x.id===o.dataset.aopen); if(!l) return;
+    acEditId=l.id;
     el("acNo").value=l.no; el("acWorker").value=l.workerId||""; el("acSection").value=l.section||"";
     el("acType").value=l.type||AC_TYPES[0]; el("acDate").value=l.date;
     el("acKind").value=l.kind||"none"; acKindManual=true;
     el("acAmount").value = l.kind==="days" ? (l.days||0) : (l.amount||0);
     el("acReason").value=l.reason||""; el("acAdmin").value=l.admin||"";
-    acSyncKind(); drawAchievement(); acHintRender(); }
+    acSyncKind(); acSyncSave(); drawAchievement(); acHintRender(); }
   if(d){ const l=(c.achievements||[]).find(x=>x.id===d.dataset.adel); if(!l) return;
     if(confirm("يتحذف إشعار "+l.no+"؟")){
+      if(acEditId===l.id){ acEditId=null; acSyncSave(); }
       c.achievements=c.achievements.filter(x=>x.id!==l.id); queueSave(); renderAchievements();
       if(RP) runReport(); } }
 });
@@ -3485,6 +3576,8 @@ function fmtQty(n){
 
 /* ---- حالة النموذج ---- */
 let mtSel={};                        // { materialId: الكمية }
+let mtEditId=null;
+function mtSyncSave(){ syncSaveBtn("mtSave", !!mtEditId, "حفظ الوصل"); }
 function mtWorkerObj(){ return C().workers.find(x=>x.id===el("mtWorker").value)||null; }
 function mtFromDate(){ return el("mtFrom").value||curDate; }
 function mtToDate(){ return el("mtTo").value||mtFromDate(); }
@@ -3621,7 +3714,7 @@ function initMatView(){
   if(!el("mtFrom").value) el("mtFrom").value=curDate;
   if(!el("mtAdmin").value) el("mtAdmin").value=S().signer||"";
   if(!el("mtNo").value) el("mtNo").value=nextIssueNo();
-  mtRecalc();
+  mtRecalc(); mtSyncSave();
   renderCatalog(); renderMatItems(); renderIssues(); mtStatusRender(); drawIssue();
 }
 el("mtWorker").addEventListener("change",()=>{
@@ -3638,10 +3731,11 @@ el("mtTo").addEventListener("change",()=>{
   el("mtPeriod").value="custom"; mtRecalc(); mtStatusRender(); drawIssue(); });
 
 el("mtNew").onclick=()=>{
+  mtEditId=null;
   el("mtWorker").value=""; el("mtSection").value=""; el("mtNotes").value="";
   el("mtFrom").value=curDate; el("mtPeriod").value="30";
   el("mtNo").value=nextIssueNo(); mtSel={};
-  mtRecalc(); renderMatItems(); mtStatusRender(); drawIssue();
+  mtRecalc(); mtSyncSave(); renderMatItems(); mtStatusRender(); drawIssue();
 };
 el("mtSave").onclick=()=>{
   const c=C(), w=mtWorkerObj();
@@ -3649,23 +3743,34 @@ el("mtSave").onclick=()=>{
   const items=mtItemsForDoc();
   if(!items.length){ alert("أشّر على مادة واحدة على الأقل."); return; }
   const from=mtFromDate(), to=mtToDate();
+  let open = mtEditId ? (c.issues||[]).find(x=>x.id===mtEditId) : null;
+  if(mtEditId && !open){ mtEditId=null; }
   if(!warnIfEnded(w,from,"وصل المواد")) return;
-  const prev=(c.issues||[]).filter(x=>x.workerId===w.id)
+  const prev=(c.issues||[]).filter(x=>x.workerId===w.id && (!open || x.id!==open.id))
     .sort((a,b)=>String(b.to||"").localeCompare(String(a.to||"")))[0];
   if(prev && prev.to>=from){
     if(!confirm("«"+w.name+"» مواده السابقة (وصل "+prev.no+") تكفي لغاية "+dateTextOf(prev.to)+".\n\n"+
       "يستحق صرفة جديدة بتاريخ "+dateTextOf(addDays(prev.to,1))+".\nتريد تصرف له من هسّة؟")) return;
   }
-  let no=el("mtNo").value;
-  if(!no || (c.issues||[]).some(x=>x.no===no)) no=nextIssueNo();
-  c.issues.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
+  const data={ workerId:w.id, name:w.name,
     section:el("mtSection").value, from:from, to:to, days:mtSpanDays(),
     items:items.map(x=>({name:x.name,unit:x.unit,qty:x.qty})),
-    notes:el("mtNotes").value, admin:el("mtAdmin").value, issued:todayISO() });
-  c.issueSeq=(c.issueSeq||0)+1;
-  queueSave(); el("mtNo").value=nextIssueNo();
-  renderIssues(); mtStatusRender();
-  el("savedNote").textContent="انحفظ وصل المواد ✓";
+    notes:el("mtNotes").value, admin:el("mtAdmin").value };
+  if(open){
+    reviseRecord(open,data);
+    el("savedNote").textContent="انحفظ التعديل على وصل "+open.no+" ✓";
+  }else{
+    let no=el("mtNo").value;
+    if(!no || (c.issues||[]).some(x=>x.no===no)) no=nextIssueNo();
+    const rec=Object.assign({ id:uid(), no:no, issued:todayISO() }, data);
+    c.issues.unshift(rec);
+    c.issueSeq=(c.issueSeq||0)+1;
+    mtEditId=rec.id;
+    el("mtNo").value=rec.no;
+    el("savedNote").textContent="انحفظ وصل المواد ✓";
+  }
+  mtSyncSave();
+  queueSave(); renderIssues(); mtStatusRender();
   setTimeout(()=>el("savedNote").textContent="",2400);
 };
 function renderIssues(){
@@ -3691,6 +3796,7 @@ el("mtSearch").addEventListener("input",renderIssues);
 el("issuesList").addEventListener("click",e=>{
   const o=e.target.closest("[data-iopen]"), d=e.target.closest("[data-idel]"), c=C();
   if(o){ const l=(c.issues||[]).find(x=>x.id===o.dataset.iopen); if(!l) return;
+    mtEditId=l.id; mtSyncSave();
     el("mtNo").value=l.no; el("mtWorker").value=l.workerId||""; el("mtSection").value=l.section||"";
     el("mtFrom").value=l.from; el("mtTo").value=l.to; el("mtPeriod").value="custom";
     el("mtNotes").value=l.notes||""; el("mtAdmin").value=l.admin||"";
@@ -3707,6 +3813,7 @@ el("issuesList").addEventListener("click",e=>{
   }
   if(d){ const l=(c.issues||[]).find(x=>x.id===d.dataset.idel); if(!l) return;
     if(confirm("يتحذف وصل "+l.no+"؟")){
+      if(mtEditId===l.id){ mtEditId=null; mtSyncSave(); }
       c.issues=c.issues.filter(x=>x.id!==l.id); queueSave(); renderIssues(); mtStatusRender(); } }
 });
 
@@ -6569,6 +6676,8 @@ function resetReceiptForms(){
   const aw=el("acWorker"); if(aw && aw.value!==undefined) aw.value="";
   const aamt=el("acAmount"); if(aamt && aamt.value!==undefined) aamt.value=0;
   pnKindManual=false; acKindManual=false;
+  lvEditId=null; pnEditId=null; acEditId=null; mtEditId=null;
+  lvSyncSave(); pnSyncSave(); acSyncSave(); mtSyncSave();
   const mw=el("mtWorker"); if(mw && mw.value!==undefined) mw.value="";
   mtSel={};
   const d=el("lvDays"); if(d && d.value!==undefined) d.value=1;
