@@ -12,6 +12,8 @@
   --gold:#B8912E; --gold-soft:#C9A94A;
   --present:#2C6E49; --absent:#9B1C31; --misc:#B8912E;
   --present-bg:#E4F0EA; --absent-bg:#F7E5E8; --misc-bg:#F7EFD8;
+  /* كانت مستعملة بلا تعريف: اللمسة، تظليل البطاقة المؤشّرة، والعنوان الغامق */
+  --accent:#B8912E; --brand-lite:#F1EBF8; --purple-deep:#2E1B4D;
   --font:"Dubai","Segoe UI","Noto Naskh Arabic",Tahoma,Arial,sans-serif;
 }
 *{box-sizing:border-box}
@@ -145,7 +147,7 @@ tr:hover td{background:#FAF7FD}
 .mbody{padding:0 4px 4px}
 .stag.ok{background:var(--present-bg);color:var(--present)}
 .stag.warn{background:var(--misc-bg);color:var(--misc)}
-.subhead{font-size:13px;font-weight:800;color:var(--purple-deep,#3b2266);margin:18px 0 6px;
+.subhead{font-size:13px;font-weight:800;color:var(--purple-deep);margin:18px 0 6px;
   padding-top:14px;border-top:1px solid var(--line)}
 .renameBox{width:100%;padding:6px 9px;border:2px solid var(--accent);border-radius:6px;
   font:inherit;font-weight:600;background:#fff;color:var(--ink)}
@@ -1124,6 +1126,9 @@ function applyTheme(){
   r.style.setProperty("--brand-deep",p.deep);
   r.style.setProperty("--gold",p.accent);
   r.style.setProperty("--gold-soft",tint(p.accent,.35));
+  r.style.setProperty("--accent",p.accent);
+  r.style.setProperty("--brand-lite",tint(p.base,.90));
+  r.style.setProperty("--purple-deep",p.deep);
   r.style.setProperty("--ground",tint(p.base,.86));
   r.style.setProperty("--line",tint(p.base,.72));
   r.style.setProperty("--ink",shade(p.base,.62));
@@ -1473,7 +1478,7 @@ function compute(iso){
   // العمال ضمن الخدمة في هذا اليوم فقط (لا يظهر عامل جديد في جرد سابق)
   const ws=c.workers.filter(w=>inService(w,iso));
   const o={ total:ws.length, present:0, absent:0, misc:0, leave:0, off:0,
-    absentNames:[], miscNames:[], offNames:[], byZone:{}, none:0, sections:0 };
+    absentNames:[], miscNames:[], leaveNames:[], offNames:[], byZone:{}, none:0, sections:0 };
   c.zones.forEach(z=>o.byZone[z.id]=0);
   const act=new Set();
   const asPresent=w=>{
@@ -1487,7 +1492,8 @@ function compute(iso){
     // الأوف يوم راحة من الشركة: مدفوع بالكامل ولا يُستقطع عنه،
     // لكنه ليس حضوراً فعلياً — فلا يدخل «الحضور الكلي» ولا أعداد المناطق
     if(isOffDay(w,iso)){ o.off++; o.offNames.push(w.name); return; }
-    if(onLeave(w.id,iso)){ o.leave++; o.miscNames.push(w.name+" (إجازة)"); return; }
+    /* الإجازات بقائمة مستقلة عن المتفرقة حتى تطابق الأعداد الأسماء */
+    if(onLeave(w.id,iso)){ o.leave++; o.leaveNames.push(w.name); return; }
     const s=stateOf(iso,w.id);
     if(s==="absent"){ o.absent++; o.absentNames.push(w.name); return; }
     if(s==="misc"){ o.misc++; o.miscNames.push(w.name); return; }
@@ -1504,7 +1510,8 @@ function renderTally(){
   let items=[["الحضور الكلي",c.attendance,"t-hero"],["عدد الأقسام",c.sections,""]];
   zs.forEach(z=>items.push([z.short||z.name,c.byZone[z.id],""]));
   if(c.none) items.push(["بدون قسم",c.none,""]);
-  items.push(["الغياب",c.absent,"t-absent"],["المتفرقة",c.misc,"t-misc"],["المجموع الكلي",c.total,"t-total"]);
+  items.push(["الغياب",c.absent,"t-absent"],["المتفرقة",c.misc,"t-misc"],
+    ["إجازة",c.leave,""],["أوف",c.off,""],["المجموع الكلي",c.total,"t-total"]);
   el("tally").innerHTML=items.map(i=>'<div class="'+i[2]+'"><div class="k">'+esc(i[0])+'</div><div class="v">'+fmtNum(i[1])+'</div></div>').join("");
 }
 
@@ -1770,8 +1777,9 @@ function drawSheet(target,k){
   // قوائم الأسماء — عمودان، ويصيرون ثلاثة إذا أكو عمال أوف اليوم
   const blocks=[
     ["أسماء الغياب", c.absentNames, CLR.absent, isMono()?"#E6E6E6":"#F7E5E8"],
-    [c.leave?"المتفرقة والإجازات":"أسماء المتفرقة", c.miscNames, CLR.gold, CLR.goldLite]
+    ["أسماء المتفرقة", c.miscNames, CLR.gold, CLR.goldLite]
   ];
+  if(c.leaveNames.length) blocks.push(["إجازة", c.leaveNames, CLR.gold, CLR.goldLite]);
   if(c.offNames.length) blocks.push(["أوف (راحة)", c.offNames, CLR.present, CLR.presentLite]);
   const lg=16, nb=blocks.length, lw=(W-lg*(nb-1))/nb;
   // الخط يُختار أكبر ما يمكن مع ضمان مساحة كافية للملاحظات وحيّز التوقيع.
@@ -1782,7 +1790,7 @@ function drawSheet(target,k){
   // نختار أكبر خط يتّسع فعلاً. لو ما اتّسع أي خيار نأخذ الأقل ارتفاعاً
   // (لا آخر ما جُرّب) ثم نقصّ القائمة بسطر «و ن آخرين» — فالورقة
   // لا تتجاوز حدودها مهما كان عدد الأسماء.
-  const colChoices = nb>=3 ? [1,2] : [1,2,3];
+  const colChoices = nb>=4 ? [1] : (nb>=3 ? [1,2] : [1,2,3]);
   let nameFS=0, nameCols=1, bestH=Infinity, bestFS=14, bestCols=colChoices[colChoices.length-1];
   outer:
   for(const fs of [25,24,23,22,21,20,19,18,17,16,15,14]){
@@ -1897,9 +1905,13 @@ el("copyTxt").onclick=()=>{
     "الحضور الكلي: "+fmtNum(c.attendance),"عدد الأقسام: "+fmtNum(c.sections)];
   C().zones.forEach(z=>L.push(z.name+": "+fmtNum(c.byZone[z.id])));
   if(c.none) L.push("بدون قسم: "+fmtNum(c.none));
-  L.push("عدد الغياب: "+fmtNum(c.absent),"عدد المتفرقة: "+fmtNum(c.misc),"المجموع الكلي: "+fmtNum(c.total),"",
+  L.push("عدد الغياب: "+fmtNum(c.absent),"عدد المتفرقة: "+fmtNum(c.misc),
+    "عدد الإجازات: "+fmtNum(c.leave),"عدد الأوف: "+fmtNum(c.off),
+    "المجموع الكلي: "+fmtNum(c.total),"",
     "الغياب:", c.absentNames.length?c.absentNames.map((n,i)=>fmtNum(i+1)+" - "+n).join("\n"):"لا يوجد","",
     "المتفرقة:", c.miscNames.length?c.miscNames.map((n,i)=>fmtNum(i+1)+" - "+n).join("\n"):"لا يوجد","",
+    "إجازة:", c.leaveNames.length?c.leaveNames.map((n,i)=>fmtNum(i+1)+" - "+n).join("\n"):"لا يوجد","",
+    "أوف:", c.offNames.length?c.offNames.map((n,i)=>fmtNum(i+1)+" - "+n).join("\n"):"لا يوجد","",
     "الملاحظات: "+(rec.notes||"—"),"",s.signer||"");
   navigator.clipboard.writeText(L.join("\n")).then(
     ()=>{ el("savedNote").textContent="انتسخ النص"; setTimeout(()=>el("savedNote").textContent="",1800); },
@@ -4848,6 +4860,27 @@ function leaveAtIn(arr, iso){
   }
   return null;
 }
+/* مجاميع مجموعة صفوف — يستعملها المحرّك لكل العمال، ويستعملها العرض
+   للصفوف المفلترة بالبحث حتى يطابق سطر المجموع ما هو ظاهر فعلاً. */
+function totalsOf(rows, totalDays){
+  const tot=(rows||[]).reduce((a,r)=>({
+    present:a.present+r.present, absent:a.absent+r.absent, misc:a.misc+r.misc,
+    leave:a.leave+r.leave, off:a.off+r.off, timedHours:a.timedHours+r.timedHours,
+    excused:a.excused+r.excused, excusedDed:a.excusedDed+r.excusedDed,
+    salary:a.salary+r.salary, absDeduction:a.absDeduction+r.absDeduction,
+    extraDed:a.extraDed+r.extraDed, extraAdd:a.extraAdd+r.extraAdd,
+    penDed:a.penDed+r.penDed, penCount:a.penCount+r.penCount,
+    achAdd:a.achAdd+r.achAdd, achCount:a.achCount+r.achCount,
+    deduction:a.deduction+r.deduction, net:a.net+r.net
+  }),{present:0,absent:0,misc:0,leave:0,off:0,timedHours:0,excused:0,excusedDed:0,salary:0,
+      absDeduction:0,extraDed:0,extraAdd:0,penDed:0,penCount:0,achAdd:0,achCount:0,
+      deduction:0,net:0});
+  ["salary","absDeduction","extraDed","extraAdd","penDed","achAdd","deduction","net"].forEach(k=>{ tot[k]=money(tot[k]); });
+  const slots=(rows||[]).reduce((a,r)=>a+Math.max(0,r.eligible-r.off-r.leave),0);
+  tot.rate = slots? (slots-tot.absent)/slots : 1;
+  tot.days = totalDays||0;
+  return tot;
+}
 function buildReport(from,to){
   const c=C(), st=S();
   // حارس: مدة مقلوبة تُنتج صفراً من أيام العمل ورواتب كاملة للجميع.
@@ -4870,7 +4903,9 @@ function buildReport(from,to){
   const adjIdx=indexByWorker(c.adjustments||[]);
   const penIdx=indexByWorker(c.penalties||[]);
   const achIdx=indexByWorker(c.achievements||[]);
-  const rows=c.workers.map(w=>{
+  /* عامل خدمته لا تتقاطع مع المدى إطلاقاً (أيام خدمته = صفر) لا يظهر
+     بالكشف: صف بأصفار يوهم أن له استحقاقاً. */
+  const rows=c.workers.filter(w=>serviceDaysIn(w,from,to)>0).map(w=>{
     const myLeaves=leaveIdx.get(w.id)||null;
     const timedHours=timedHoursIn(myLeaves,from,to);   // ساعات زمنية — بلا استقطاع
     let present=0,absent=0,misc=0,leave=0,off=0,eligible=0;
@@ -4963,22 +4998,7 @@ function buildReport(from,to){
     r.salary=0; r.absDeduction=0; r.extraDed=0; r.extraAdd=0;
     r.penDed=0; r.achAdd=0; r.deduction=0; r.net=0; r.partial=false;
   });
-  const tot=rows.reduce((a,r)=>({
-    present:a.present+r.present, absent:a.absent+r.absent, misc:a.misc+r.misc,
-    leave:a.leave+r.leave, off:a.off+r.off, timedHours:a.timedHours+r.timedHours,
-    excused:a.excused+r.excused, excusedDed:a.excusedDed+r.excusedDed,
-    salary:a.salary+r.salary, absDeduction:a.absDeduction+r.absDeduction,
-    extraDed:a.extraDed+r.extraDed, extraAdd:a.extraAdd+r.extraAdd,
-    penDed:a.penDed+r.penDed, penCount:a.penCount+r.penCount,
-    achAdd:a.achAdd+r.achAdd, achCount:a.achCount+r.achCount,
-    deduction:a.deduction+r.deduction, net:a.net+r.net
-  }),{present:0,absent:0,misc:0,leave:0,off:0,timedHours:0,excused:0,excusedDed:0,salary:0,
-      absDeduction:0,extraDed:0,extraAdd:0,penDed:0,penCount:0,achAdd:0,achCount:0,
-      deduction:0,net:0});
-  ["salary","absDeduction","extraDed","extraAdd","penDed","achAdd","deduction","net"].forEach(k=>{ tot[k]=money(tot[k]); });
-  const slots=rows.reduce((a,r)=>a+Math.max(0,r.eligible-r.off-r.leave),0);
-  tot.rate = slots? (slots-tot.absent)/slots : 1;
-  tot.days = totalDays;
+  const tot=totalsOf(rows,totalDays);
   return { from, to, days, gaps, rows, tot, totalDays,
     payMonth:payMonth, crossMonth:crossMonth, monthDays:monthDays };
 }
@@ -5069,8 +5089,8 @@ function renderReport(){
         '<th>استقطاع خاص</th><th>عقوبات</th><th>إضافات</th><th>مكافآت</th><th>الصافي</th></tr></thead><tbody>';
   rows.forEach((r,i)=>{
     h+='<tr'+(r.net<0?' style="background:#fbe9ec"':'')+'><td>'+fmtNum(i+1)+'</td><td>'+esc(r.name)+
-      (r.ended?' <span class="stag out">منقول</span>':'')+
-      (r.status!==WS_ACTIVE?' <span class="wst '+WS_CLASS[r.status]+'">'+esc(r.status)+'</span>':'')+
+      (r.status!==WS_ACTIVE?' <span class="wst '+WS_CLASS[r.status]+'">'+esc(r.status)+
+        (r.svcEnd?' '+dateShort(r.svcEnd):'')+'</span>':'')+
       '</td><td>'+esc(r.section)+'</td>'+
       '<td>'+fmtNum(r.eligible)+'</td><td style="color:var(--present)">'+fmtNum(r.present)+'</td>'+
       '<td style="color:var(--absent);font-weight:700">'+fmtNum(r.absent)+'</td>'+
@@ -5095,15 +5115,19 @@ function renderReport(){
         (r.achCount?'<div class="mini">'+fmtNum(r.achCount)+' إشعار</div>':'')+'</td>'+
       '<td style="font-weight:800'+(r.net<0?';color:var(--absent)':'')+'">'+payTxt(r.net)+'</td></tr>';
   });
-  h+='</tbody><tfoot><tr><td colspan="4">المجموع ('+fmtNum(rows.length)+' عامل)</td>'+
-    '<td>'+fmtNum(RP.tot.present)+'</td><td>'+fmtNum(RP.tot.absent)+'</td>'+
-    '<td>'+fmtNum(RP.tot.misc)+'</td><td>'+fmtNum(RP.tot.leave)+'</td>'+
-    '<td>'+fmtNum(RP.tot.timedHours)+'</td><td>'+fmtNum(RP.tot.off)+'</td>'+
-    '<td>'+fmtNum(RP.tot.excusedDed)+'</td><td></td>'+
-    '<td>'+fmtMoney(RP.tot.salary)+'</td><td>-'+fmtMoney(RP.tot.absDeduction)+'</td>'+
-    '<td>-'+fmtMoney(RP.tot.extraDed)+'</td><td>-'+fmtMoney(RP.tot.penDed)+
-    '</td><td>+'+fmtMoney(RP.tot.extraAdd)+'</td><td>+'+fmtMoney(RP.tot.achAdd)+'</td>'+
-    '<td>'+fmtMoney(RP.tot.net)+'</td></tr></tfoot>';
+  /* سطر المجموع يجمع الصفوف الظاهرة فعلاً — لا كل العمال */
+  const ft = q ? totalsOf(rows,RP.totalDays) : RP.tot;
+  const ftLbl = q ? "مجموع نتائج البحث" : "المجموع";
+  const sgn=(v,s)=>RP.crossMonth?"—":(s+fmtMoney(v));
+  h+='</tbody><tfoot><tr><td colspan="4">'+ftLbl+' ('+fmtNum(rows.length)+' عامل)</td>'+
+    '<td>'+fmtNum(ft.present)+'</td><td>'+fmtNum(ft.absent)+'</td>'+
+    '<td>'+fmtNum(ft.misc)+'</td><td>'+fmtNum(ft.leave)+'</td>'+
+    '<td>'+fmtNum(ft.timedHours)+'</td><td>'+fmtNum(ft.off)+'</td>'+
+    '<td>'+fmtNum(ft.excusedDed)+'</td><td></td>'+
+    '<td>'+payTxt(ft.salary)+'</td><td>'+sgn(ft.absDeduction,"-")+'</td>'+
+    '<td>'+sgn(ft.extraDed,"-")+'</td><td>'+sgn(ft.penDed,"-")+'</td>'+
+    '<td>'+sgn(ft.extraAdd,"+")+'</td><td>'+sgn(ft.achAdd,"+")+'</td>'+
+    '<td>'+payTxt(ft.net)+'</td></tr></tfoot>';
   el("rpTable").innerHTML=h;
 }
 el("rpRun").onclick=()=>runReport(true);
@@ -6025,8 +6049,9 @@ function dailyDocx(){
   /* --- قوائم الأسماء جنباً إلى جنب --- */
   const lists=[
     ["أسماء الغياب",c.absentNames,CLR.absent,isMono()?"#E6E6E6":"#F7E5E8"],
-    [c.leave?"المتفرقة والإجازات":"أسماء المتفرقة",c.miscNames,CLR.gold,CLR.goldLite]
+    ["أسماء المتفرقة",c.miscNames,CLR.gold,CLR.goldLite]
   ];
+  if(c.leaveNames.length) lists.push(["إجازة",c.leaveNames,CLR.gold,CLR.goldLite]);
   if(c.offNames.length) lists.push(["أوف (راحة)",c.offNames,CLR.present,CLR.presentLite]);
   const NC=lists.length, LW=Math.floor(DY_FULL/NC);
   const LG=lists.map((x,i)=>i<NC-1?LW:DY_FULL-LW*(NC-1));
