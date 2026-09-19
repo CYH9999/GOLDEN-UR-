@@ -3096,7 +3096,9 @@ function penaltyAmount(pn,w){
   if(k==="days"){
     // أجر اليوم مجمّد وقت الإصدار: لو تغيّر راتب العامل بعدين،
     // يبقى المبلغ مطابقاً للإشعار الموقّع بيد العامل.
-    const rate = (pn.dayRate!=null && pn.dayRate!=="") ? Number(pn.dayRate) : dayDeductFor(w);
+    // عند غيابه نرجع لـ dailyRateFor — نفس أجر اليوم المعتمد بالمكافآت،
+    // فلا يختلف سعر اليوم بين عقوبة ومكافأة لنفس العامل.
+    const rate = (pn.dayRate!=null && pn.dayRate!=="") ? Number(pn.dayRate) : dailyRateFor(w);
     return Math.max(0,Number(pn.days)||0)*(rate||0);
   }
   return 0;
@@ -3131,7 +3133,7 @@ function pnWorkerObj(){ return C().workers.find(x=>x.id===el("pnWorker").value)|
 function pnCurrentAmount(){
   const k=pnKindV();
   if(k==="amount") return pnVal();
-  if(k==="days")   return pnVal()*dayDeductFor(pnWorkerObj());
+  if(k==="days")   return pnVal()*dailyRateFor(pnWorkerObj());
   return 0;
 }
 /* صيغة العقوبة بجملة يفهمها العامل بلا شرح */
@@ -3169,7 +3171,7 @@ function pnHintRender(){
   if(!w){ h.innerHTML="اختر العامل حتى يظهر أثر العقوبة على راتبه."; return; }
   const amt=pnCurrentAmount(), sal=salaryFor(w);
   let msg = k==="days"
-    ? "يُستقطع أجر <b>"+daysText(pnVal())+"</b> · أجر اليوم "+fmtMoney(dayDeductFor(w))+" ← <b>"+fmtMoney(amt)+"</b> "+esc(cur)
+    ? "يُستقطع أجر <b>"+daysText(pnVal())+"</b> · أجر اليوم "+fmtMoney(dailyRateFor(w))+" ← <b>"+fmtMoney(amt)+"</b> "+esc(cur)
     : "يُستقطع <b>"+fmtMoney(amt)+"</b> "+esc(cur);
   if(sal>0) msg+='<br><span class="mini">يعادل '+fmtNum(Math.round(amt/sal*100))+"% من راتبه الشهري.</span>";
   if(amt>sal) msg+='<br><span class="mini" style="color:var(--absent)">تنبيه: المبلغ أكبر من راتبه الشهري كله.</span>';
@@ -3247,7 +3249,7 @@ el("pnSave").onclick=()=>{
   if(open && open.terminates) undoTermination(w,open);
   const data={ workerId:w.id, name:w.name,
     section:el("pnSection").value, type:type,
-    kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:dayDeductFor(w),
+    kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:dailyRateFor(w),
     date:date, terminates:term,
     /* الحالة السابقة كاملة — حذف القرار يرجّعها كما كانت بالضبط */
     prevStatus:term?getWorkerStatus(w):undefined,
