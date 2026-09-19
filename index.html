@@ -1634,7 +1634,20 @@ el("roster").addEventListener("click",e=>{
   queueSave(); refresh();
 });
 el("search").addEventListener("input",renderRoster);
-el("allPresent").onclick=()=>{ const r=dayRec(curDate); r.states={}; r.confirmed=true; queueSave(); refresh(); };
+el("allPresent").onclick=()=>{
+  const r=dayRec(curDate), st=r.states||{};
+  let a=0, m=0;
+  Object.keys(st).forEach(k=>{ if(st[k]==="absent") a++; else if(st[k]==="misc") m++; });
+  /* الزر يمسح كل التأشيرات — ما ينضغط سهواً على يوم مؤشّر */
+  if(a||m){
+    const parts=[];
+    if(a) parts.push(fmtNum(a)+" غياب");
+    if(m) parts.push(fmtNum(m)+" متفرقة");
+    if(!confirm("باليوم "+dateTextOf(curDate)+" مؤشّر "+parts.join(" و")+".\n\n"+
+      "«الكل حاضر» يمسحها كلها ويعتبر الجميع حاضرين.\nتكمل؟")) return;
+  }
+  r.states={}; r.confirmed=true; queueSave(); refresh();
+};
 el("confirmDay").onclick=()=>{
   const r=dayRec(curDate); r.confirmed=true; queueSave(); refresh();
   el("savedNote").textContent="تم اعتماد اليوم ✓"; setTimeout(()=>el("savedNote").textContent="",1600);
