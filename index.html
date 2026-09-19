@@ -3845,8 +3845,9 @@ function phoneLooksOff(v){
   return !!p && /^07/.test(p) && p.length!==11;
 }
 /* الحالة مختصرة وتاريخ المباشرة بخانة مستقلة،
-   لأن دمجهما يطوّل السطر ثلاث أسطر ويفرد الجدول على صفحات زائدة. */
-function hireText(w){ return w.createdAt ? dateTextOf(w.createdAt) : "—"; }
+   لأن دمجهما يطوّل السطر ثلاث أسطر ويفرد الجدول على صفحات زائدة.
+   العامل بلا تاريخ مباشرة «قديم»: بلا قيد بداية ولا راتب نسبي. */
+function hireText(w){ return (w && w.startDate) ? dateTextOf(w.startDate) : "قديم"; }
 /* حالة الخدمة الزمنية (مرتبطة بالتواريخ) — غير «حالة العمل» الإدارية */
 function workerStatusText(w){
   const e=serviceEnd(w);
@@ -4362,9 +4363,10 @@ function policyOfLeave(l, w){
   return leavePolicyFor(w);
 }
 /* ---- فترة خدمة العامل ----
-   المرجع: تاريخ المباشرة إن حُدّد، وإلا تاريخ إضافته للنظام.
-   هذا يمنع ظهور عامل جديد في جرود سابقة لتاريخ التحاقه. */
-function serviceStart(w){ return (w && (w.startDate || w.createdAt)) || ""; }
+   تاريخ المباشرة وحده. createdAt هو تاريخ إدخال العامل للنظام لا تاريخ
+   مباشرته: الرجوع إليه كان يعطي العمال القدامى المُدخلين منتصف الشهر
+   راتباً نسبياً بلا وجه حق. العامل بلا startDate = عامل قديم بلا قيد بداية. */
+function serviceStart(w){ return (w && w.startDate) ? String(w.startDate) : ""; }
 /* نهاية الخدمة — مصدر حقيقة واحد: حالة العمل وتاريخ سريانها.
    statusChangedAt هو آخر يوم عمل (شامل)، والعامل «المستمر» بلا نهاية. */
 function serviceEnd(w){
