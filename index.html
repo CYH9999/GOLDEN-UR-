@@ -1395,6 +1395,8 @@ function ensureFields(st){
         }
         delete w.endDate;
       });
+      /* الإجازة الزمنية لا يُستقطع عنها شيء — أي وصل قديم بسياسة استقطاع يُصحَّح */
+      (c.leaves||[]).forEach(l=>{ if(l && isTimedLeaveType(l.type)) l.policy="none"; });
       c.payV4=true;
     }
     c.workers.forEach(normalizeWorker);
@@ -2590,14 +2592,22 @@ el("lvWorker").addEventListener("change",()=>{
 /* تغيير النوع يقترح السياسة المعتادة، وتقدر تغيّرها يدوياً */
 /* الإجازة الزمنية تُقاس بالساعات داخل يوم واحد، لا بالأيام.
    حقل المدة نفسه يتبدّل معناه حسب النوع، والراتب يبقى يحسب يوماً واحداً. */
-function lvIsTimed(){ return String(el("lvType").value||"").indexOf("زمني") >= 0; }
+function isTimedLeaveType(t){ return String(t||"").indexOf("زمني") >= 0; }
+/* سجل إجازة زمنية — تُقاس بالساعات ولا تُعدّ يوم إجازة */
+function isTimedLeave(l){ return !!(l && isTimedLeaveType(l.type)); }
+function lvIsTimed(){ return isTimedLeaveType(el("lvType").value); }
 function lvAmount(){ return Math.max(1,parseInt(el("lvDays").value,10)||1); }
 function lvDaysCount(){ return lvIsTimed()?1:lvAmount(); }
 function lvHoursCount(){ return lvIsTimed()?Math.min(12,lvAmount()):0; }
 function lvSyncType(){
-  const t=lvIsTimed(), lb=el("lvDaysLbl"), inp=el("lvDays");
+  const t=lvIsTimed(), lb=el("lvDaysLbl"), inp=el("lvDays"), pol=el("lvPolicy");
   if(lb && lb.textContent!==undefined) lb.textContent = t ? "المدة (ساعات)" : "المدة (أيام)";
   if(inp && inp.setAttribute){ inp.setAttribute("max", t?"12":"365"); }
+  /* الإجازة الزمنية لا يُستقطع عنها شيء أبداً: السياسة مقفلة والخانة معطّلة */
+  if(pol && pol.value!==undefined){
+    if(t) pol.value="none";
+    pol.disabled=!!t;
+  }
 }
 el("lvType").addEventListener("change",()=>{
   el("lvPolicy").value=defaultLeavePolicy(el("lvType").value);
@@ -2612,6 +2622,7 @@ function excusedTally(workerId, from, to, skipLeaveId){
   const by={none:0,half:0,full:0};
   (c.leaves||[]).forEach(l=>{
     if(l.workerId!==workerId) return;
+    if(isTimedLeave(l)) return;            // ساعات لا أيام — بلا استقطاع
     if(skipLeaveId && l.id===skipLeaveId) return;
     const a = l.from>from ? l.from : from;
     const b = leaveEnd(l)<to ? leaveEnd(l) : to;
@@ -2639,6 +2650,12 @@ function lvHint(){
   const wid=el("lvWorker").value;
   const w=C().workers.find(x=>x.id===wid);
   const from=el("lvFrom").value||todayISO();
+  if(lvIsTimed()){
+    h.innerHTML="إجازة زمنية: <b>بلا أي استقطاع</b>."+
+      '<br><span class="mini">تُخزَّن بالساعات ('+hoursText(lvHoursCount())+
+      ") ولا تُعدّ يوم إجازة بالعدّاد ولا بالكشف. بالجرد اليومي يبقى العامل حسب تأشيره.</span>";
+    return;
+  }
   if(!w){ h.innerHTML="اختر العامل حتى يظهر أثر الإجازة على راتبه."; return; }
   const to=addDays(from,n-1);
   // أيام هذه الإجازة فعلياً (بلا عطل ولا أوف)
@@ -2685,7 +2702,8 @@ el("lvSave").onclick=()=>{
   if(!no || c.leaves.some(l=>l.no===no)) no=nextLeaveNo();
   c.leaves.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
     section:el("lvSection").value, type:el("lvType").value, from:from, days:days, hours:hours||null,
-    to:addDays(from,days-1), policy:el("lvPolicy").value||defaultLeavePolicy(el("lvType").value),
+    to:addDays(from,days-1),
+    policy: lvIsTimed() ? "none" : (el("lvPolicy").value||defaultLeavePolicy(el("lvType").value)),
     reason:el("lvReason").value, admin:el("lvAdmin").value, issued:todayISO() });
   c.leaveSeq=(c.leaveSeq||0)+1;
   queueSave(); el("lvNo").value=nextLeaveNo(); renderLeaves();
@@ -4340,25 +4358,40 @@ function leaveEnd(l){
 /* السياسة الافتراضية حسب نوع الإجازة — تُقترح عند إصدار الوصل وتبقى قابلة للتغيير */
 function defaultLeavePolicy(type){
   const t=String(type||"");
+  /* الزمنية مقفلة على «بلا استقطاع» — ساعات داخل يوم دوام لا يُخصم عنها شيء */
+  if(isTimedLeaveType(t)) return "none";
   if(t.indexOf("مرض")>=0) return "none";
   if(t.indexOf("وفاة")>=0||t.indexOf("زواج")>=0) return "none";
   if(t.indexOf("بدون راتب")>=0) return "full";
-  return "half";   // اعتيادية وزمنية
+  return "half";   // اعتيادية
 }
-/* وصل الإجازة الذي يغطي هذا اليوم، أو null */
+/* وصل الإجازة الذي يغطي هذا اليوم، أو null.
+   الإجازة الزمنية مستثناة: هي ساعات داخل يوم دوام، فالعامل يبقى يُعامل
+   حسب تأشيره بالجرد (عادةً حاضر) ولا تُعدّ يوم إجازة. */
 function leaveAt(workerId, iso){
   const ls=C().leaves||[];
   for(let i=0;i<ls.length;i++){
     const l=ls[i];
     if(l.workerId!==workerId) continue;
-    if(!l.from) continue;
+    if(!l.from || isTimedLeave(l)) continue;
     if(iso>=l.from && iso<=leaveEnd(l)) return l;
   }
   return null;
 }
+/* ساعات الإجازات الزمنية لعامل ضمن مدة */
+function timedHoursIn(list, from, to){
+  let h=0;
+  (list||[]).forEach(l=>{
+    if(!isTimedLeave(l) || !l.from) return;
+    if(l.from<from || l.from>to) return;
+    h+=Math.max(0,Number(l.hours)||0);
+  });
+  return h;
+}
 function onLeave(workerId, iso){ return leaveAt(workerId,iso)!==null; }
 /* سياسة الاستقطاع الفعلية لوصل إجازة معيّن */
 function policyOfLeave(l, w){
+  if(isTimedLeave(l)) return "none";        // قفل السياسة: لا استقطاع أبداً
   if(l && l.policy) return l.policy;
   if(l && l.type) return defaultLeavePolicy(l.type);
   return leavePolicyFor(w);
@@ -4524,7 +4557,7 @@ function leaveAtIn(arr, iso){
   if(!arr) return null;
   for(let i=0;i<arr.length;i++){
     const l=arr[i];
-    if(!l.from) continue;
+    if(!l.from || isTimedLeave(l)) continue;
     if(iso>=l.from && iso<=leaveEnd(l)) return l;
   }
   return null;
@@ -4534,7 +4567,7 @@ function buildReport(from,to){
   // حارس: مدة مقلوبة تُنتج صفراً من أيام العمل ورواتب كاملة للجميع.
   // الواجهة تمنعها، لكن المحرك لا يعتمد على ذلك.
   if(!from||!to||from>to) return { from:from||"", to:to||"", days:[], gaps:[], rows:[],
-    tot:{present:0,absent:0,misc:0,leave:0,off:0,excused:0,excusedDed:0,salary:0,
+    tot:{present:0,absent:0,misc:0,leave:0,off:0,timedHours:0,excused:0,excusedDed:0,salary:0,
       absDeduction:0,extraDed:0,extraAdd:0,penDed:0,penCount:0,achAdd:0,achCount:0,
       deduction:0,net:0,rate:1,days:0},
     totalDays:0, invalid:true };
@@ -4553,6 +4586,7 @@ function buildReport(from,to){
   const achIdx=indexByWorker(c.achievements||[]);
   const rows=c.workers.map(w=>{
     const myLeaves=leaveIdx.get(w.id)||null;
+    const timedHours=timedHoursIn(myLeaves,from,to);   // ساعات زمنية — بلا استقطاع
     let present=0,absent=0,misc=0,leave=0,off=0,eligible=0;
     // أيام الإجازة مصنّفة حسب سياسة كل وصل
     const leaveBy={none:0,half:0,full:0};
@@ -4619,7 +4653,7 @@ function buildReport(from,to){
     return { id:w.id, name:w.name, section:sec?sec.name:"—", zone:z?(z.short||z.name):"",
       status:getWorkerStatus(w), statusChangedAt:w.statusChangedAt||"",
       eligible, totalDays, paidDays, svcDays, missedDays, monthDays,
-      present, misc, absent, leave, off, leaveBy,
+      present, misc, absent, leave, off, timedHours, leaveBy,
       excused, excusedDed, leavePolicy:pol, dailyRate, fullService,
       startDate:svcS, svcEnd:svcE, ended: !!(svcE && svcE < to),
       deductDays, fullSalary:fullSal, salary:gross, partial, dayDed:ded,
@@ -4635,14 +4669,14 @@ function buildReport(from,to){
   });
   const tot=rows.reduce((a,r)=>({
     present:a.present+r.present, absent:a.absent+r.absent, misc:a.misc+r.misc,
-    leave:a.leave+r.leave, off:a.off+r.off,
+    leave:a.leave+r.leave, off:a.off+r.off, timedHours:a.timedHours+r.timedHours,
     excused:a.excused+r.excused, excusedDed:a.excusedDed+r.excusedDed,
     salary:a.salary+r.salary, absDeduction:a.absDeduction+r.absDeduction,
     extraDed:a.extraDed+r.extraDed, extraAdd:a.extraAdd+r.extraAdd,
     penDed:a.penDed+r.penDed, penCount:a.penCount+r.penCount,
     achAdd:a.achAdd+r.achAdd, achCount:a.achCount+r.achCount,
     deduction:a.deduction+r.deduction, net:a.net+r.net
-  }),{present:0,absent:0,misc:0,leave:0,off:0,excused:0,excusedDed:0,salary:0,
+  }),{present:0,absent:0,misc:0,leave:0,off:0,timedHours:0,excused:0,excusedDed:0,salary:0,
       absDeduction:0,extraDed:0,extraAdd:0,penDed:0,penCount:0,achAdd:0,achCount:0,
       deduction:0,net:0});
   ["salary","absDeduction","extraDed","extraAdd","penDed","achAdd","deduction","net"].forEach(k=>{ tot[k]=money(tot[k]); });
@@ -4734,7 +4768,7 @@ function renderReport(){
   let rows=RP.rows;
   if(q) rows=rows.filter(r=>r.name.indexOf(q)!==-1);
   let h='<thead><tr><th>ت</th><th>الاسم</th><th>القسم</th><th>أيام</th><th>حضور</th><th>غياب</th>'+
-        '<th>متفرقة</th><th>إجازة</th><th>أوف</th><th>مستقطع منها</th>'+
+        '<th>متفرقة</th><th>إجازة</th><th>ساعات زمنية</th><th>أوف</th><th>مستقطع منها</th>'+
         '<th>النسبة</th><th>الراتب المستحق</th><th>استقطاع الغياب</th>'+
         '<th>استقطاع خاص</th><th>عقوبات</th><th>إضافات</th><th>مكافآت</th><th>الصافي</th></tr></thead><tbody>';
   rows.forEach((r,i)=>{
@@ -4746,6 +4780,7 @@ function renderReport(){
       '<td style="color:var(--absent);font-weight:700">'+fmtNum(r.absent)+'</td>'+
       '<td style="color:var(--misc)">'+fmtNum(r.misc)+'</td>'+
       '<td style="color:var(--misc)">'+fmtNum(r.leave)+'</td>'+
+      '<td class="mini">'+(r.timedHours?fmtNum(r.timedHours):fmtNum(0))+'</td>'+
       '<td style="color:var(--present)">'+fmtNum(r.off)+'</td>'+
       '<td style="font-weight:700">'+fmtNum(r.excusedDed)+
         (r.excused?' <span class="mini">من '+fmtNum(r.excused)+'</span>':'')+'</td>'+
@@ -4766,7 +4801,8 @@ function renderReport(){
   });
   h+='</tbody><tfoot><tr><td colspan="4">المجموع ('+fmtNum(rows.length)+' عامل)</td>'+
     '<td>'+fmtNum(RP.tot.present)+'</td><td>'+fmtNum(RP.tot.absent)+'</td>'+
-    '<td>'+fmtNum(RP.tot.misc)+'</td><td>'+fmtNum(RP.tot.leave)+'</td><td>'+fmtNum(RP.tot.off)+'</td>'+
+    '<td>'+fmtNum(RP.tot.misc)+'</td><td>'+fmtNum(RP.tot.leave)+'</td>'+
+    '<td>'+fmtNum(RP.tot.timedHours)+'</td><td>'+fmtNum(RP.tot.off)+'</td>'+
     '<td>'+fmtNum(RP.tot.excusedDed)+'</td><td></td>'+
     '<td>'+fmtMoney(RP.tot.salary)+'</td><td>-'+fmtMoney(RP.tot.absDeduction)+'</td>'+
     '<td>-'+fmtMoney(RP.tot.extraDed)+'</td><td>-'+fmtMoney(RP.tot.penDed)+
@@ -5085,25 +5121,26 @@ el("rpXls").onclick=()=>{
   if(!RP.rows.length){ alert("ماكو عمال بالتقرير."); return; }
   const st=S(), cur=st.currency||"";
   const head=["ت","الاسم","حالة العمل","القسم","أيام مجرودة له","أيام العمل بالمدة","أيام خدمته بالتقويم",
-    "حضور","غياب","متفرقة","إجازة","أوف",
+    "حضور","غياب","متفرقة","إجازة","ساعات زمنية","أوف",
     "مجموع المتفرقة والإجازات","أيام مستقطعة منها","نسبة الحضور %",
     "الراتب الكامل ("+cur+")","الراتب المستحق","أجر اليوم","استقطاع اليوم",
     "استقطاع الغياب","استقطاع خاص","عدد العقوبات","استقطاع العقوبات","إضافات","عدد المكافآت","مبلغ المكافآت","الصافي"];
   const n2=v=>Math.round((Number(v)||0)*100)/100;
   const rows=[head];
   RP.rows.forEach((r,i)=>rows.push([i+1,r.name,r.status,r.section,r.eligible,r.totalDays,r.svcDays,
-    r.present,r.absent,r.misc,r.leave,r.off,r.excused,r.excusedDed,Math.round(r.rate*100),
+    r.present,r.absent,r.misc,r.leave,r.timedHours,r.off,r.excused,r.excusedDed,Math.round(r.rate*100),
     n2(r.fullSalary),n2(r.salary),n2(r.dailyRate),n2(r.dayDed),
     n2(r.absDeduction),n2(r.extraDed),r.penCount,n2(r.penDed),n2(r.extraAdd),
     r.achCount,n2(r.achAdd),n2(r.net)]));
   const t=RP.tot;
-  rows.push(["","المجموع ("+RP.rows.length+" عامل)","","","","","",t.present,t.absent,t.misc,t.leave,t.off,
+  rows.push(["","المجموع ("+RP.rows.length+" عامل)","","","","","",t.present,t.absent,t.misc,t.leave,
+    t.timedHours,t.off,
     t.excused,t.excusedDed,Math.round(t.rate*100),"",n2(t.salary),"","",
     n2(t.absDeduction),n2(t.extraDed),t.penCount,n2(t.penDed),n2(t.extraAdd),
     t.achCount,n2(t.achAdd),n2(t.net)]);
   try{
     saveXlsx(buildXlsx(rows,{sheet:"كشف الرواتب",
-      widths:[5,26,16,18,12,12,12,9,9,9,9,9,14,14,12,16,16,12,12,14,14,12,16,12,16,12,16]}),
+      widths:[5,26,16,18,12,12,12,9,9,9,9,12,9,14,14,12,16,16,12,12,14,14,12,16,12,16,12,16]}),
       "كشف-الرواتب-"+RP.from+"_"+RP.to+".xlsx");
   }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
@@ -5143,7 +5180,8 @@ function drawReportPage(rows, pageNo, pages, k){
   const cols=[
     {t:"ت",w:40,a:"c"},{t:"الاسم",w:214,a:"r"},{t:"القسم",w:120,a:"r"},
     {t:"أيام",w:56,a:"c"},{t:"حضور",w:62,a:"c"},{t:"غياب",w:58,a:"c"},
-    {t:"متفرقة",w:56,a:"c"},{t:"إجازة",w:50,a:"c"},{t:"أوف",w:44,a:"c"},{t:"مستقطع",w:60,a:"c"},
+    {t:"متفرقة",w:56,a:"c"},{t:"إجازة",w:50,a:"c"},{t:"ساعات",w:52,a:"c"},
+    {t:"أوف",w:44,a:"c"},{t:"مستقطع",w:60,a:"c"},
     {t:"الراتب",w:100,a:"l"},{t:"استقطاع غياب",w:104,a:"l"},
     {t:"استقطاع خاص",w:92,a:"l"},{t:"عقوبات",w:92,a:"l"},
     {t:"إضافات",w:76,a:"l"},{t:"مكافآت",w:82,a:"l"},{t:"الصافي",w:106,a:"l"}
@@ -5172,7 +5210,8 @@ function drawReportPage(rows, pageNo, pages, k){
     let x=R;
     const vals=[ fmtNum(r.idx), r.name+(r.status!==WS_ACTIVE?" ("+r.status+")":""),
       r.section, fmtNum(r.eligible), fmtNum(r.present),
-      fmtNum(r.absent), fmtNum(r.misc), fmtNum(r.leave), fmtNum(r.off), fmtNum(r.excusedDed),
+      fmtNum(r.absent), fmtNum(r.misc), fmtNum(r.leave), fmtNum(r.timedHours),
+      fmtNum(r.off), fmtNum(r.excusedDed),
       fmtMoney(r.salary)+(r.partial?" *":""),
       (r.absDeduction?"-"+fmtMoney(r.absDeduction):fmtNum(0)),
       (r.extraDed?"-"+fmtMoney(r.extraDed):fmtNum(0)),
@@ -5183,10 +5222,10 @@ function drawReportPage(rows, pageNo, pages, k){
     const LAST=vals.length-1;
     vals.forEach((v,ci)=>{
       const c2=cols[ci];
-      ctx.fillStyle = (ci===5&&r.absent>0)||ci===11||ci===12||ci===13 ? CLR.absent
+      ctx.fillStyle = (ci===5&&r.absent>0)||ci===12||ci===13||ci===14 ? CLR.absent
         : (ci===LAST?CLR.purpleDeep:CLR.ink);
-      if(ci===14 && r.extraAdd>0) ctx.fillStyle="#2C6E49";
-      if(ci===15 && r.achAdd>0) ctx.fillStyle="#2C6E49";
+      if(ci===15 && r.extraAdd>0) ctx.fillStyle="#2C6E49";
+      if(ci===16 && r.achAdd>0) ctx.fillStyle="#2C6E49";
       const wt = (ci===LAST)?700:(ci===1?600:400);
       let sz=16; ctx.font=f(wt,sz);
       while(ctx.measureText(v).width>c2.px-14 && sz>10){ sz--; ctx.font=f(wt,sz); }
@@ -5760,9 +5799,9 @@ function payrollDocx(){
     "المدة من "+dateNumeric(RP.from)+" إلى "+dateNumeric(RP.to)+
     "  ·  أيام معتمدة: "+fmtNum(RP.days.length));
 
-  const heads=["ت","الاسم","القسم","أيام","حضور","غياب","متفرقة","إجازة","أوف","مستقطع",
+  const heads=["ت","الاسم","القسم","أيام","حضور","غياب","متفرقة","إجازة","ساعات","أوف","مستقطع",
     "الراتب","استقطاع غياب","استقطاع خاص","عقوبات","إضافات","مكافآت","الصافي"];
-  const grid=[340,1820,1180,450,490,450,520,490,410,560,980,980,980,940,790,860,1020];
+  const grid=[340,1600,1100,440,470,440,500,470,450,400,540,960,960,960,920,780,840,1000];
   const headRow=wRow(heads.map((h,i)=>
     wCell(h,{bold:true,size:8,color:"#FFFFFF",shade:CLR.purpleDeep,width:grid[i]})),{header:true});
 
@@ -5776,7 +5815,7 @@ function payrollDocx(){
       [fmtNum(r.eligible),{}],
       [fmtNum(r.present),{color:CLR.present}],
       [fmtNum(r.absent),{color:r.absent?CLR.absent:null,bold:!!r.absent}],
-      [fmtNum(r.misc),{}],[fmtNum(r.leave),{}],[fmtNum(r.off),{}],
+      [fmtNum(r.misc),{}],[fmtNum(r.leave),{}],[fmtNum(r.timedHours),{}],[fmtNum(r.off),{}],
       [fmtNum(r.excusedDed),{}],
       [fmtMoney(r.salary),{}],
       [r.absDeduction?"-"+fmtMoney(r.absDeduction):"0",{color:r.absDeduction?CLR.absent:null}],
@@ -5792,7 +5831,8 @@ function payrollDocx(){
   // صف المجموع
   const t=RP.tot;
   const totals=["","المجموع ("+fmtNum(RP.rows.length)+" عامل)","",
-    "",fmtNum(t.present),fmtNum(t.absent),fmtNum(t.misc),fmtNum(t.leave),fmtNum(t.off),
+    "",fmtNum(t.present),fmtNum(t.absent),fmtNum(t.misc),fmtNum(t.leave),
+    fmtNum(t.timedHours),fmtNum(t.off),
     fmtNum(t.excusedDed),fmtMoney(t.salary),
     t.absDeduction?"-"+fmtMoney(t.absDeduction):fmtNum(0),
     t.extraDed?"-"+fmtMoney(t.extraDed):fmtNum(0),
