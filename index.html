@@ -2583,14 +2583,31 @@ function syncSaveBtn(id, editing, newText){
   const b=el(id);
   if(b && b.textContent!==undefined) b.textContent = editing ? "حفظ التعديل" : newText;
 }
+/* ---- تاريخ إصدار الوثيقة ----
+   وثيقة محفوظة تُعاد طباعتها تحمل تاريخ إصدارها الأصلي لا تاريخ الجهاز،
+   وإن كانت معدّلة يظهر معها تاريخ التعديل. */
+function recOf(list, id){ return id ? (list||[]).find(x=>x.id===id)||null : null; }
+function docIssued(rec){ return (rec && rec.issued) ? rec.issued : todayISO(); }
+function docEdited(rec){ return (rec && rec.editedAt) ? rec.editedAt : ""; }
+function editedLine(rec){
+  const d=docEdited(rec);
+  return d ? "عُدّل بتاريخ "+dateTextOf(d) : "";
+}
+/* سنة الترقيم تؤخذ من تاريخ الوثيقة نفسها لا من تاريخ الجهاز */
+function docYear(iso){
+  const s=String(iso||"");
+  return /^\d{4}-/.test(s) ? s.slice(0,4) : String(new Date().getFullYear());
+}
 
 /* ==================== الإجازات ==================== */
 let lvEditId=null;
 function lvSyncSave(){ syncSaveBtn("lvSave", !!lvEditId, "حفظ الإجازة"); }
-function nextLeaveNo(){
+function nextLeaveNo(d){
   const n=(C().leaveSeq||0)+1;
-  return "إ-"+new Date().getFullYear()+"-"+String(n).padStart(3,"0");
+  return "إ-"+docYear(d||el("lvFrom").value)+"-"+String(n).padStart(3,"0");
 }
+/* الوثيقة المفتوحة حالياً بنموذج الإجازة */
+function lvRec(){ return recOf(C().leaves, lvEditId); }
 function initLeaveView(){
   const c=C(), sel=el("lvWorker"), keep=sel.value;
   sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
@@ -2635,6 +2652,8 @@ el("lvType").addEventListener("change",()=>{
   el("lvPolicy").value=defaultLeavePolicy(el("lvType").value);
   lvSyncType(); drawLeave(); lvHint(); });
 el("lvPolicy").addEventListener("change",lvHint);
+/* سنة الترقيم تتبع تاريخ الوثيقة — تتحدّث للوصل الجديد فقط، لا للمفتوح */
+el("lvFrom").addEventListener("change",()=>{ if(!lvEditId) el("lvNo").value=nextLeaveNo(); });
 ["lvDays","lvFrom"].forEach(id=>el(id).addEventListener("input",lvHint));
 el("lvWorker").addEventListener("change",lvHint);
 /* حصيلة أيام المتفرقة والإجازات للعامل داخل شهر معيّن، مصنّفة حسب السياسة.
@@ -2794,7 +2813,8 @@ function drawDocHeader(ctx,o){
   ctxCenter(ctx,o.title,LV_W/2,hTop+(hasLogo?90:62));
   ctx.fillStyle=CLR.ink2; ctx.font=f(600,15);
   ctx.fillText("\u0631\u0642\u0645: "+(o.no||""),R-14,hTop+26);
-  ctx.textAlign="left"; ctx.direction="ltr"; ctx.fillText(dateNumeric(todayISO()),L+14,hTop+26);
+  ctx.textAlign="left"; ctx.direction="ltr";
+  ctx.fillText(dateNumeric(o.date||todayISO()),L+14,hTop+26);
   ctx.direction="rtl"; ctx.textAlign="right";
   return hTop+hH;
 }
@@ -2814,9 +2834,11 @@ function drawLeave(target,k){
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
   ctx.strokeStyle=CLR.line; ctx.lineWidth=2; ctx.strokeRect(16,16,LV_W-32,LV_H-32);
 
-  let y=drawDocHeader(ctx,{title:"وصل إجازة",accent:CLR.gold,no:el("lvNo").value})+34;
+  const lvR=lvRec(), lvIss=docIssued(lvR), lvEd=editedLine(lvR);
+  let y=drawDocHeader(ctx,{title:"وصل إجازة",accent:CLR.gold,no:el("lvNo").value,date:lvIss})+34;
   ctx.font=f(500,15); ctx.fillStyle=CLR.ink2;
-  ctx.fillText("اليوم: "+dayNameOf(todayISO())+"   —   تاريخ التحرير: "+dateTextOf(todayISO()),R,y);
+  ctx.fillText("اليوم: "+dayNameOf(lvIss)+"   —   تاريخ التحرير: "+dateTextOf(lvIss)+
+    (lvEd?"   —   "+lvEd:""),R,y);
   y+=30;
 
   const rowH=46;
@@ -2897,10 +2919,11 @@ el("lvPrint").onclick=()=>{
    وقت الحساب — لا وقت الإصدار — حتى يبقى الخصم مطابقاً لراتبه الفعلي. */
 const PN_TYPES=["لفت نظر","إنذار أول","إنذار أخير","عقوبة انضباطية","استقطاع من الراتب","إنهاء الخدمات"];
 
-function nextPenaltyNo(){
+function nextPenaltyNo(d){
   const n=(C().penSeq||0)+1;
-  return "ع-"+new Date().getFullYear()+"-"+String(n).padStart(3,"0");
+  return "ع-"+docYear(d||el("pnDate").value)+"-"+String(n).padStart(3,"0");
 }
+function pnRec(){ return recOf(C().penalties, pnEditId); }
 /* الأثر الافتراضي حسب النوع — يُقترح فقط ويبقى قابلاً للتغيير */
 function defaultPenKind(type){
   const t=String(type||"");
@@ -3055,7 +3078,9 @@ el("pnType").addEventListener("change",()=>{
   el("pnKind").value=defaultPenKind(el("pnType").value);
   pnSyncTermNote(); pnSyncKind(); drawPenalty(); pnHintRender(); });
 el("pnKind").addEventListener("change",()=>{ pnKindManual=true; pnSyncKind(); drawPenalty(); pnHintRender(); });
-el("pnDate").addEventListener("change",pnHintRender);
+el("pnDate").addEventListener("change",()=>{
+  if(!pnEditId) el("pnNo").value=nextPenaltyNo();
+  pnHintRender(); });
 el("pnAmount").addEventListener("input",()=>{ drawPenalty(); pnHintRender(); });
 
 el("pnNew").onclick=()=>{
@@ -3191,10 +3216,13 @@ function drawPenalty(target,k){
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
   ctx.strokeStyle=CLR.line; ctx.lineWidth=2; ctx.strokeRect(16,16,LV_W-32,LV_H-32);
 
+  const pnR=pnRec(), pnIss=docIssued(pnR), pnEd=editedLine(pnR);
   let y=drawDocHeader(ctx,{title:isTerminationType(el("pnType").value)?"قرار إنهاء خدمات":"إشعار عقوبة",
-    accent:RED,no:el("pnNo").value})+34;
+    accent:RED,no:el("pnNo").value,date:pnIss})+34;
   ctx.font=f(500,15); ctx.fillStyle=CLR.ink2;
-  ctx.fillText("تاريخ التحرير: "+dateTextOf(todayISO())+"   —   يُنفّذ ضمن راتب "+monthNameOf(el("pnDate").value||curDate),R,y);
+  ctx.fillText("تاريخ التحرير: "+dateTextOf(pnIss)+
+    (pnEd?"   —   "+pnEd:"")+
+    "   —   يُنفّذ ضمن راتب "+monthNameOf(el("pnDate").value||curDate),R,y);
   y+=30;
 
   const rowH=46;
@@ -3281,10 +3309,11 @@ el("pnPrint").onclick=()=>{
    وتُضاف إلى راتب المدة التي يقع فيها تاريخها، لكن بالموجب لا بالسالب. */
 const AC_TYPES=["أفضل عامل بالشهر","مكافأة التزام ودوام","مكافأة جهد إضافي","مكافأة إنتاجية","مكافأة استثنائية","شهادة تقديرية"];
 
-function nextAchNo(){
+function nextAchNo(d){
   const n=(C().achSeq||0)+1;
-  return "م-"+new Date().getFullYear()+"-"+String(n).padStart(3,"0");
+  return "م-"+docYear(d||el("acDate").value)+"-"+String(n).padStart(3,"0");
 }
+function acRec(){ return recOf(C().achievements, acEditId); }
 function defaultAchKind(type){
   const t=String(type||"");
   if(t.indexOf("شهادة")>=0) return "none";
@@ -3374,6 +3403,7 @@ el("acWorker").addEventListener("change",()=>{
 });
 ["acSection","acDate","acReason","acAdmin"].forEach(id=>
   el(id).addEventListener("input",()=>{ drawAchievement(); }));
+el("acDate").addEventListener("change",()=>{ if(!acEditId) el("acNo").value=nextAchNo(); });
 el("acType").addEventListener("change",()=>{
   acKindManual=false;
   el("acKind").value=defaultAchKind(el("acType").value);
@@ -3471,9 +3501,12 @@ function drawAchievement(target,k){
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
   ctx.strokeStyle=CLR.line; ctx.lineWidth=2; ctx.strokeRect(16,16,LV_W-32,LV_H-32);
 
-  let y=drawDocHeader(ctx,{title:"إشعار مكافأة وتقدير",accent:GRN,no:el("acNo").value})+34;
+  const acR=acRec(), acIss=docIssued(acR), acEd=editedLine(acR);
+  let y=drawDocHeader(ctx,{title:"إشعار مكافأة وتقدير",accent:GRN,no:el("acNo").value,date:acIss})+34;
   ctx.font=f(500,15); ctx.fillStyle=CLR.ink2;
-  ctx.fillText("تاريخ التحرير: "+dateTextOf(todayISO())+"   —   تُصرف ضمن راتب "+monthNameOf(el("acDate").value||curDate),R,y);
+  ctx.fillText("تاريخ التحرير: "+dateTextOf(acIss)+
+    (acEd?"   —   "+acEd:"")+
+    "   —   تُصرف ضمن راتب "+monthNameOf(el("acDate").value||curDate),R,y);
   y+=30;
 
   const rowH=46;
@@ -3559,10 +3592,11 @@ function defaultMaterials(){
     {id:uid(),name:"دلو بلاستيك",unit:"قطعة",qty:1}
   ];
 }
-function nextIssueNo(){
+function nextIssueNo(d){
   const n=(C().issueSeq||0)+1;
-  return "ت-"+new Date().getFullYear()+"-"+String(n).padStart(3,"0");
+  return "ت-"+docYear(d||el("mtFrom").value)+"-"+String(n).padStart(3,"0");
 }
+function mtRec(){ return recOf(C().issues, mtEditId); }
 function periodName(d){
   d=Number(d)||0;
   return d===7?"أسبوع" : d===14?"أسبوعين" : d===30?"شهر"
@@ -3726,7 +3760,9 @@ el("mtWorker").addEventListener("change",()=>{
 ["mtSection","mtNotes","mtAdmin"].forEach(id=>
   el(id).addEventListener("input",()=>{ drawIssue(); }));
 el("mtPeriod").addEventListener("change",()=>{ mtRecalc(); mtStatusRender(); drawIssue(); });
-el("mtFrom").addEventListener("change",()=>{ mtRecalc(); mtStatusRender(); drawIssue(); });
+el("mtFrom").addEventListener("change",()=>{
+  if(!mtEditId) el("mtNo").value=nextIssueNo();
+  mtRecalc(); mtStatusRender(); drawIssue(); });
 el("mtTo").addEventListener("change",()=>{
   el("mtPeriod").value="custom"; mtRecalc(); mtStatusRender(); drawIssue(); });
 
@@ -3835,7 +3871,9 @@ function drawIssue(target,k){
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
   ctx.strokeStyle=CLR.line; ctx.lineWidth=2; ctx.strokeRect(16,16,LV_W-32,H-32);
 
-  let y=drawDocHeader(ctx,{title:"\u0648\u0635\u0644 \u0635\u0631\u0641 \u0645\u0648\u0627\u062f",accent:GOLD,no:el("mtNo").value})+32;
+  const mtR=mtRec(), mtIss=docIssued(mtR);
+  let y=drawDocHeader(ctx,{title:"\u0648\u0635\u0644 \u0635\u0631\u0641 \u0645\u0648\u0627\u062f",
+    accent:GOLD,no:el("mtNo").value,date:mtIss})+32;
 
   const rowH=46;
   function row(label,value){
@@ -6184,7 +6222,8 @@ function receiptCopyXml(o){
         {width:H2,raw:true,valign:"center"}),
       wCell(
         wPara("العدد: "+(o.no||"—"),{size:9,bold:true,align:"left",after:30})+
-        wPara("التاريخ: "+dateNumeric(todayISO()),{size:9,align:"left",after:60})+
+        wPara("التاريخ: "+dateNumeric(o.date||todayISO()),{size:9,align:"left",after:(o.edited?20:60)})+
+        (o.edited?wPara(o.edited,{size:8,color:CLR.ink2,align:"left",after:40}):"")+
         wPara(o.label,{size:9,bold:true,color:"#FFFFFF",shade:accent,align:"center",after:0}),
         {width:H3,raw:true,valign:"center"})
     ],{height:HEAD}),
@@ -6297,8 +6336,10 @@ function leaveCopyXml(label, sigRid, logoRid){
     : [["اعتباراً من يوم", dateTextOf(from)],
        ["إلى نهاية يوم", dateTextOf(to)]];
 
+  const rec=lvRec();
   return receiptCopyXml({
     title:"طلب إجازة", no:el("lvNo").value, label:label, accent:CLR.purple, logoRid:logoRid,
+    date:docIssued(rec), edited:editedLine(rec),
     rows:[
       [["اسم العامل", w?w.name:"—"],["القسم / مكان العمل", el("lvSection").value]],
       [["نوع الإجازة", typeBoxes(LV_TYPES,el("lvType").value), 9]],
@@ -6353,6 +6394,7 @@ function penaltyCopyXml(label, sigRid, logoRid){
     title: term ? "\u0642\u0631\u0627\u0631 \u0625\u0646\u0647\u0627\u0621 \u062e\u062f\u0645\u0627\u062a" : "\u0625\u0634\u0639\u0627\u0631 \u0639\u0642\u0648\u0628\u0629",
     sub:"\u0625\u062c\u0631\u0627\u0621 \u0627\u0646\u0636\u0628\u0627\u0637\u064a \u0635\u0627\u062f\u0631 \u0639\u0646 \u0644\u062c\u0646\u0629 \u0627\u0644\u0627\u0646\u0636\u0628\u0627\u0637",
     no:el("pnNo").value, label:label, accent:RED, hideAddress:true, logoRid:logoRid,
+    date:docIssued(pnRec()), edited:editedLine(pnRec()),
     rows:rows,
     reasonLabel:"\u0648\u0635\u0641 \u0627\u0644\u0645\u062e\u0627\u0644\u0641\u0629", reason:el("pnReason").value,
     sigs:committeeSigsDoc(sigRid),
@@ -6378,6 +6420,7 @@ function achievementCopyXml(label, sigRid, logoRid){
     title:"\u0625\u0634\u0639\u0627\u0631 \u0645\u0643\u0627\u0641\u0623\u0629 \u0648\u062a\u0642\u062f\u064a\u0631",
     sub:"\u0643\u062a\u0627\u0628 \u0634\u0643\u0631 \u0635\u0627\u062f\u0631 \u0639\u0646 \u0644\u062c\u0646\u0629 \u062a\u0642\u064a\u064a\u0645 \u0627\u0644\u0623\u062f\u0627\u0621",
     no:el("acNo").value, label:label, accent:GRN, hideAddress:true, logoRid:logoRid,
+    date:docIssued(acRec()), edited:editedLine(acRec()),
     rows:[
       [["\u0627\u0633\u0645 \u0627\u0644\u0639\u0627\u0645\u0644", w?w.name:"\u2014"],["\u0627\u0644\u0642\u0633\u0645 / \u0645\u0643\u0627\u0646 \u0627\u0644\u0639\u0645\u0644", el("acSection").value]],
       [["\u0646\u0648\u0639 \u0627\u0644\u0625\u0646\u062c\u0627\u0632", el("acType").value, 12]],
@@ -6427,6 +6470,7 @@ function issueCopyXml(label,sigRid,logoRid,B,items){
   const n=items.length;
   const P=issueLayout(n,!!logoRid,B);
   const w=mtWorkerObj(), from=mtFromDate(), to=mtToDate();
+  const mtR=mtRec(), mtIssued=docIssued(mtR), mtEd=editedLine(mtR);
 
   /* \u0627\u0644\u062a\u0631\u0648\u064a\u0633\u0629 */
   const H1=Math.round(LV_FULL*0.31), H2=LV_FULL-2*Math.round(LV_FULL*0.31), H3=Math.round(LV_FULL*0.31);
@@ -6444,7 +6488,8 @@ function issueCopyXml(label,sigRid,logoRid,B,items){
         {width:H2,raw:true,valign:"center"}),
       wCell(
         wPara("\u0627\u0644\u0639\u062f\u062f: "+(el("mtNo").value||"\u2014"),{size:9,bold:true,align:"left",after:30})+
-        wPara("\u0627\u0644\u062a\u0627\u0631\u064a\u062e: "+dateNumeric(todayISO()),{size:9,align:"left",after:60})+
+        wPara("\u0627\u0644\u062a\u0627\u0631\u064a\u062e: "+dateNumeric(mtIssued),{size:9,align:"left",after:(mtEd?20:60)})+
+        (mtEd?wPara(mtEd,{size:8,color:CLR.ink2,align:"left",after:40}):"")+
         wPara(label,{size:9,bold:true,color:"#FFFFFF",shade:GOLD,align:"center",after:0}),
         {width:H3,raw:true,valign:"center"})
     ],{height:P.HEAD}),
