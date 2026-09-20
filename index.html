@@ -232,6 +232,7 @@ tr.rowout td{background:#FBF7F8;opacity:.85}
   display:inline-block;line-height:1.55}
 .wst.s-on{background:var(--present-bg);color:var(--present)}
 .wst.s-end{background:var(--misc-bg);color:var(--misc)}
+.wst.s-move{background:#E4ECF7;color:#1D4E89}
 .wst.s-cut{background:var(--ground);color:var(--brand-deep);box-shadow:inset 0 0 0 1px var(--line)}
 .wst.s-fire{background:var(--absent-bg);color:var(--absent)}
 .wsel{min-width:132px}
@@ -1128,13 +1129,23 @@ const ZONE_COLORS=["#4B2E83","#B8912E","#2C6E49","#9B1C31","#1D6A8C","#7A3E9D","
 /* ==================== حالات العمل ====================
    مصدر واحد للحقيقة: أي نص حالة بالبرنامج يخرج من هنا، فلا تتكرّر
    السلاسل النصية بعشرة أماكن وتنحرف إحداها بحرف فينكسر الفلتر. */
-const WS_ACTIVE="مستمر", WS_END="إنهاء خدمات", WS_CUT="انقطاع عن العمل", WS_FIRE="مفصول";
-const WSTATUSES=[WS_ACTIVE,WS_END,WS_CUT,WS_FIRE];
-/* العمال غير المستمرين — هم من يظهرون بتبويب المتغيرات */
-const WS_VARIABLE=[WS_END,WS_CUT,WS_FIRE];
+const WS_ACTIVE="مستمر", WS_MOVE="منقول", WS_END="إنهاء خدمات",
+      WS_CUT="انقطاع عن العمل", WS_FIRE="مفصول";
+/* الترتيب هنا هو ترتيب الحالات المعتمد بالفرز والبطاقات والقوائم */
+const WSTATUSES=[WS_ACTIVE,WS_MOVE,WS_END,WS_CUT,WS_FIRE];
+/* العمال غير المستمرين — هم من يظهرون بتبويب حالات العمال */
+const WS_VARIABLE=[WS_MOVE,WS_END,WS_CUT,WS_FIRE];
 const WS_CLASS={};
-WS_CLASS[WS_ACTIVE]="s-on"; WS_CLASS[WS_END]="s-end";
-WS_CLASS[WS_CUT]="s-cut";   WS_CLASS[WS_FIRE]="s-fire";
+WS_CLASS[WS_ACTIVE]="s-on";  WS_CLASS[WS_MOVE]="s-move"; WS_CLASS[WS_END]="s-end";
+WS_CLASS[WS_CUT]="s-cut";    WS_CLASS[WS_FIRE]="s-fire";
+/* كلمة واحدة لكل حالة: الشارة الطويلة كانت تمدّ عمود الاسم وتكسر
+   هيكل الجدول بالوورد والإكسل والطباعة. النص الكامل يبقى في title. */
+const WS_SHORT={};
+WS_SHORT[WS_ACTIVE]="مستمر"; WS_SHORT[WS_MOVE]="منقول"; WS_SHORT[WS_END]="منتهي";
+WS_SHORT[WS_CUT]="منقطع";    WS_SHORT[WS_FIRE]="مفصول";
+function statusShort(v){ return WS_SHORT[normStatus(v)]||WS_SHORT[WS_ACTIVE]; }
+/* رتبة الحالة للفرز: مستمر ، منقول ، إنهاء خدمات ، انقطاع ، مفصول */
+function statusRank(v){ const i=WSTATUSES.indexOf(normStatus(v)); return i<0?99:i; }
 /* أي قيمة غير معروفة أو فارغة أو null ترجع «مستمر» — لا تُحفظ حالة خارج القائمة */
 function normStatus(v){
   const t=String(v==null?"":v).trim();
@@ -1142,9 +1153,20 @@ function normStatus(v){
 }
 function getWorkerStatus(w){ return normStatus(w && w.status); }
 function isActiveWorker(w){ return getWorkerStatus(w)===WS_ACTIVE; }
+/* النص الكامل للحالة مع تاريخها — يظهر عند وقوف الفأرة على الشارة */
+function statusFullText(st,date){
+  const t=normStatus(st);
+  if(t===WS_ACTIVE) return t;
+  return t+(date?" — آخر يوم عمل "+dateSlash(date):"");
+}
+/* شارة مختصرة بكلمة واحدة، والنص الكامل والتاريخ في title */
+function statusChip(st,date){
+  const t=normStatus(st);
+  return '<span class="wst '+WS_CLASS[t]+'" title="'+esc(statusFullText(t,date))+'">'+
+    esc(WS_SHORT[t])+'</span>';
+}
 function statusBadge(w){
-  const st=getWorkerStatus(w);
-  return '<span class="wst '+WS_CLASS[st]+'">'+esc(st)+'</span>';
+  return statusChip(getWorkerStatus(w), w && (w.endDate||w.statusChangedAt));
 }
 /* نص حر: التولد قد يكون سنة فقط أو تاريخاً كاملاً — لا نفرض صيغة */
 function normDob(v){ return String(v==null?"":v).trim().replace(/\s+/g," "); }
@@ -1366,6 +1388,11 @@ function dayNameOf(iso){ try{ return new Intl.DateTimeFormat("ar-IQ",{weekday:"l
 function dateTextOf(iso){ const l=S().numerals==="arab"?"ar-IQ":"ar-IQ-u-nu-latn";
   try{ return new Intl.DateTimeFormat(l,{day:"numeric",month:"long",year:"numeric"}).format(parseISO(iso)); }catch(e){ return iso; } }
 function dateNumeric(iso){ const p=String(iso).split("-"); return fmtNum(p[0])+"/"+fmtNum(+p[1])+"/"+fmtNum(+p[2]); }
+/* تاريخ بخانتين ثابتتين للشهر واليوم: ٢٠٢٦/٠٩/١٥ — لا يلتبس على القارئ */
+function dateSlash(iso){
+  const p=String(iso||"").split("-");
+  return p.length<3 ? "" : fmtNum(p[0])+"/"+fmtNum(p[1])+"/"+fmtNum(p[2]);
+}
 
 /* ==================== الحسابات ==================== */
 function dayRec(iso){ const c=C(); if(!c.days[iso]) c.days[iso]={states:{},notes:""}; return c.days[iso]; }
@@ -3727,14 +3754,23 @@ function statusNoteText(w){ return (w && w.statusNote) ? String(w.statusNote) : 
 /* لون الحالة داخل وورد والطباعة — يتبع لوحة الشركة الحالية */
 function statusDocColor(st){
   const CLR=CL(), t=normStatus(st);
-  return t===WS_ACTIVE ? CLR.present : (t===WS_END ? CLR.gold : (t===WS_CUT ? CLR.purple : CLR.absent));
+  if(t===WS_ACTIVE) return CLR.present;
+  if(t===WS_MOVE)   return isMono()?CLR.ink2:"#1D4E89";
+  if(t===WS_END)    return CLR.gold;
+  if(t===WS_CUT)    return CLR.purple;
+  return CLR.absent;
 }
 function statusPrintClass(st){
   const t=normStatus(st);
-  return t===WS_ACTIVE ? "st-on" : (t===WS_END ? "st-end" : (t===WS_CUT ? "st-cut" : "st-fire"));
+  if(t===WS_ACTIVE) return "st-on";
+  if(t===WS_MOVE)   return "st-move";
+  if(t===WS_END)    return "st-end";
+  if(t===WS_CUT)    return "st-cut";
+  return "st-fire";
 }
 const STATUS_PRINT_CSS=
-  '.st-on{color:#2C6E49;font-weight:700}.st-end{color:#9A7420;font-weight:700}'+
+  '.st-on{color:#2C6E49;font-weight:700}.st-move{color:#1D4E89;font-weight:700}'+
+  '.st-end{color:#9A7420;font-weight:700}'+
   '.st-cut{color:#3E2C73;font-weight:700}.st-fire{color:#9B1C31;font-weight:700}';
 function sectionLabel(w){
   const sc=sectionOf(w.sectionId); if(!sc) return "بدون قسم";
@@ -4552,8 +4588,7 @@ function renderReport(){
         '<th>عقوبات</th><th>مكافآت</th><th>الصافي</th></tr></thead><tbody>';
   rows.forEach((r,i)=>{
     h+='<tr'+(r.net<0?' style="background:#fbe9ec"':'')+'><td>'+fmtNum(i+1)+'</td><td>'+esc(r.name)+
-      (r.ended?' <span class="stag out">منقول</span>':'')+
-      (r.status!==WS_ACTIVE?' <span class="wst '+WS_CLASS[r.status]+'">'+esc(r.status)+'</span>':'')+
+      (r.status!==WS_ACTIVE?' '+statusChip(r.status,r.endDate||r.statusChangedAt):'')+
       '</td><td>'+esc(r.section)+'</td>'+
       '<td>'+fmtNum(r.eligible)+'</td><td style="color:var(--present)">'+fmtNum(r.present)+'</td>'+
       '<td style="color:var(--absent);font-weight:700">'+fmtNum(r.absent)+'</td>'+
@@ -4871,26 +4906,27 @@ el("rpXls").onclick=()=>{
   if(!RP){ alert("احسب التقرير أول."); return; }
   if(!RP.rows.length){ alert("ماكو عمال بالتقرير."); return; }
   const st=S(), cur=st.currency||"";
-  const head=["ت","الاسم","حالة العمل","القسم","أيام مجرودة له","أيام العمل بالمدة","أيام خدمته بالتقويم",
+  const head=["ت","الاسم","حالة العمل","آخر يوم عمل","القسم","أيام مجرودة له","أيام العمل بالمدة","أيام خدمته بالتقويم",
     "حضور","غياب","متفرقة","إجازة","أوف",
     "مجموع المتفرقة والإجازات","أيام مستقطعة منها","نسبة الحضور %",
     "الراتب الكامل ("+cur+")","الراتب المستحق","أجر اليوم","استقطاع اليوم",
     "استقطاع الغياب","عدد العقوبات","استقطاع العقوبات","عدد المكافآت","مبلغ المكافآت","الصافي"];
   const n2=v=>Math.round((Number(v)||0)*100)/100;
   const rows=[head];
-  RP.rows.forEach((r,i)=>rows.push([i+1,r.name,r.status,r.section,r.eligible,r.totalDays,r.svcDays,
+  RP.rows.forEach((r,i)=>rows.push([i+1,r.name,r.status,r.endDate?dateTextOf(r.endDate):"",
+    r.section,r.eligible,r.totalDays,r.svcDays,
     r.present,r.absent,r.misc,r.leave,r.off,r.excused,r.excusedDed,Math.round(r.rate*100),
     n2(r.fullSalary),n2(r.salary),n2(r.dailyRate),n2(r.dayDed),
     n2(r.absDeduction),r.penCount,n2(r.penDed),
     r.achCount,n2(r.achAdd),n2(r.net)]));
   const t=RP.tot;
-  rows.push(["","المجموع ("+RP.rows.length+" عامل)","","","","","",t.present,t.absent,t.misc,t.leave,t.off,
+  rows.push(["","المجموع ("+RP.rows.length+" عامل)","","","","","","",t.present,t.absent,t.misc,t.leave,t.off,
     t.excused,t.excusedDed,Math.round(t.rate*100),"",n2(t.salary),"","",
     n2(t.absDeduction),t.penCount,n2(t.penDed),
     t.achCount,n2(t.achAdd),n2(t.net)]);
   try{
     saveXlsx(buildXlsx(rows,{sheet:"كشف الرواتب",
-      widths:[5,26,16,18,12,12,12,9,9,9,9,9,14,14,12,16,16,12,12,14,12,16,12,16,16]}),
+      widths:[5,26,16,18,18,12,12,12,9,9,9,9,9,14,14,12,16,16,12,12,14,12,16,12,16,16]}),
       "كشف-الرواتب-"+RP.from+"_"+RP.to+".xlsx");
   }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
@@ -4926,13 +4962,26 @@ function drawReportPage(rows, pageNo, pages, k){
   ctx.textAlign="right";
   y+=22;
 
-  // رأس الجدول
+  // رأس الجدول — كل عمود يحمل مفتاحه، والقيمة واللون يُطلبان بالمفتاح.
+  // كانت الألوان مربوطة بفهرس رقمي (ci===12 وأخواتها) فتنكسر بصمت مع
+  // أي تغيير بترتيب الأعمدة أو عددها.
   const cols=[
-    {t:"ت",w:40,a:"c"},{t:"الاسم",w:214,a:"r"},{t:"القسم",w:120,a:"r"},
-    {t:"أيام",w:56,a:"c"},{t:"حضور",w:62,a:"c"},{t:"غياب",w:58,a:"c"},
-    {t:"متفرقة",w:56,a:"c"},{t:"إجازة",w:50,a:"c"},{t:"أوف",w:44,a:"c"},{t:"مستقطع",w:60,a:"c"},
-    {t:"الراتب",w:118,a:"l"},{t:"استقطاع غياب",w:118,a:"l"},
-    {t:"عقوبات",w:104,a:"l"},{t:"مكافآت",w:104,a:"l"},{t:"الصافي",w:116,a:"l"}
+    {k:"idx",     t:"ت",w:38,a:"c"},
+    {k:"name",    t:"الاسم",w:186,a:"r"},
+    {k:"status",  t:"الحالة",w:70,a:"c"},
+    {k:"section", t:"القسم",w:106,a:"r"},
+    {k:"eligible",t:"أيام",w:50,a:"c"},
+    {k:"present", t:"حضور",w:56,a:"c"},
+    {k:"absent",  t:"غياب",w:52,a:"c"},
+    {k:"misc",    t:"متفرقة",w:52,a:"c"},
+    {k:"leave",   t:"إجازة",w:48,a:"c"},
+    {k:"off",     t:"أوف",w:42,a:"c"},
+    {k:"excused", t:"مستقطع",w:56,a:"c"},
+    {k:"salary",  t:"الراتب",w:116,a:"l"},
+    {k:"absDed",  t:"استقطاع غياب",w:116,a:"l"},
+    {k:"penDed",  t:"عقوبات",w:100,a:"l"},
+    {k:"achAdd",  t:"مكافآت",w:100,a:"l"},
+    {k:"net",     t:"الصافي",w:114,a:"l"}
   ];
   const tw=cols.reduce((a,c2)=>a+c2.w,0);
   const scale=W/tw;
@@ -4951,26 +5000,41 @@ function drawReportPage(rows, pageNo, pages, k){
   }
   y=drawHead(y);
 
+  /* خلية واحدة = معلومة واحدة: الاسم وحده، والحالة بكلمة واحدة بعمود مستقل */
+  function payCell(r,k,CLR){
+    switch(k){
+      case "idx":     return {v:fmtNum(r.idx)};
+      case "name":    return {v:r.name, weight:600};
+      case "status":  return r.status===WS_ACTIVE ? {v:""}
+                        : {v:statusShort(r.status), color:statusDocColor(r.status), weight:700};
+      case "section": return {v:r.section};
+      case "eligible":return {v:fmtNum(r.eligible)};
+      case "present": return {v:fmtNum(r.present)};
+      case "absent":  return {v:fmtNum(r.absent), color:r.absent>0?CLR.absent:null};
+      case "misc":    return {v:fmtNum(r.misc)};
+      case "leave":   return {v:fmtNum(r.leave)};
+      case "off":     return {v:fmtNum(r.off)};
+      case "excused": return {v:fmtNum(r.excusedDed)};
+      case "salary":  return {v:fmtMoney(r.salary)+(r.partial?" *":"")};
+      case "absDed":  return {v:r.absDeduction?"-"+fmtMoney(r.absDeduction):fmtNum(0),
+                              color:r.absDeduction?CLR.absent:null};
+      case "penDed":  return {v:r.penDed?"-"+fmtMoney(r.penDed):fmtNum(0),
+                              color:r.penDed?CLR.absent:null};
+      case "achAdd":  return {v:r.achAdd?"+"+fmtMoney(r.achAdd):fmtNum(0),
+                              color:r.achAdd?(isMono()?CLR.ink:"#2C6E49"):null};
+      case "net":     return {v:fmtMoney(r.net), color:CLR.purpleDeep, weight:700};
+    }
+    return {v:""};
+  }
   rows.forEach((r,i)=>{
     if(i%2===1){ ctx.fillStyle=tint(CLR.purple,.955); ctx.fillRect(L,y,W,rowH); }
     ctx.strokeStyle=tint(CLR.purple,.85); ctx.lineWidth=1;
     line(ctx,L,y+rowH,R,y+rowH);
     let x=R;
-    const vals=[ fmtNum(r.idx), r.name+(r.status!==WS_ACTIVE?" ("+r.status+")":""),
-      r.section, fmtNum(r.eligible), fmtNum(r.present),
-      fmtNum(r.absent), fmtNum(r.misc), fmtNum(r.leave), fmtNum(r.off), fmtNum(r.excusedDed),
-      fmtMoney(r.salary)+(r.partial?" *":""),
-      (r.absDeduction?"-"+fmtMoney(r.absDeduction):fmtNum(0)),
-      (r.penDed?"-"+fmtMoney(r.penDed):fmtNum(0)),
-      (r.achAdd?"+"+fmtMoney(r.achAdd):fmtNum(0)),
-      fmtMoney(r.net) ];
-    const LAST=vals.length-1;
-    vals.forEach((v,ci)=>{
-      const c2=cols[ci];
-      ctx.fillStyle = (ci===5&&r.absent>0)||ci===11||ci===12 ? CLR.absent
-        : (ci===LAST?CLR.purpleDeep:CLR.ink);
-      if(ci===13 && r.achAdd>0) ctx.fillStyle="#2C6E49";
-      const wt = (ci===LAST)?700:(ci===1?600:400);
+    cols.forEach(c2=>{
+      const cell=payCell(r,c2.k,CLR), v=String(cell.v==null?"":cell.v);
+      ctx.fillStyle = cell.color || CLR.ink;
+      const wt = cell.weight || 400;
       let sz=16; ctx.font=f(wt,sz);
       while(ctx.measureText(v).width>c2.px-14 && sz>10){ sz--; ctx.font=f(wt,sz); }
       if(c2.a==="c") ctxCenter(ctx,v,x-c2.px/2,y+27);
@@ -5377,15 +5441,17 @@ function saveDocx(bytes,name){
 /* ============ مستندات وورد: ورقة الجرد وكشف الرواتب ============ */
 
 /* ترويسة موحّدة: اسم الشركة على خلفية بلون الشركة ثم عنوان المستند */
-function docHeader(title, sub){
+function docHeader(title, sub, full){
   const s=S(), CLR=CL(), SOFT=isMono()?"#F2F2F2":"#F5F3F8";
+  /* عرض صريح بالتويب حتى يطابق مجموعه عرض الصفحة تماماً مثل بقية الجداول */
+  const W1=full||10440;
   const rows=[
     wRow([wCell(s.company||"اسم الشركة",{size:20,bold:true,color:"#FFFFFF",
-      shade:CLR.purple,align:"center"})]),
-    wRow([wCell(title,{size:13,bold:true,color:"#FFFFFF",shade:CLR.purpleDeep,align:"center"})])
+      shade:CLR.purple,align:"center",width:W1})]),
+    wRow([wCell(title,{size:13,bold:true,color:"#FFFFFF",shade:CLR.purpleDeep,align:"center",width:W1})])
   ];
-  if(sub) rows.push(wRow([wCell(sub,{size:10,color:CLR.ink2,shade:SOFT,align:"center"})]));
-  return wTable(rows,{border:CLR.purple,borderSize:8})+wPara("",{after:120});
+  if(sub) rows.push(wRow([wCell(sub,{size:10,color:CLR.ink2,shade:SOFT,align:"center",width:W1})]));
+  return wTable(rows,{border:CLR.purple,borderSize:8,grid:[W1]})+wPara("",{after:120});
 }
 
 /* توقيع: صورة التوقيع المحفوظة إن وُجدت، ثم الاسم والصفة */
@@ -5535,13 +5601,20 @@ function payrollDocx(){
   docReset();
   const s=S(), CLR=CL(), cur=s.currency||"";
   const media=[];
+  const PAY_FULL=16838-560*2;
   let b=docHeader("كشف الحضور والرواتب",
     "المدة من "+dateNumeric(RP.from)+" إلى "+dateNumeric(RP.to)+
-    "  ·  أيام معتمدة: "+fmtNum(RP.days.length));
+    "  ·  أيام معتمدة: "+fmtNum(RP.days.length), PAY_FULL);
 
-  const heads=["ت","الاسم","القسم","أيام","حضور","غياب","متفرقة","إجازة","أوف","مستقطع",
+  /* عمود «الحالة» مستقل بين الاسم والقسم: كلمة واحدة ملوّنة، وخلية
+     المستمر تبقى فارغة حتى يلفت غير المستمر النظر. خلية الاسم لا
+     تحمل أي نص إضافي، فلا يلتفّ الاسم على سطرين ولا يمتدّ العمود. */
+  const heads=["ت","الاسم","الحالة","القسم","أيام","حضور","غياب","متفرقة","إجازة","أوف","مستقطع",
     "الراتب","استقطاع غياب","عقوبات","مكافآت","الصافي"];
-  const grid=[340,1820,1180,450,490,450,520,490,410,560,1100,1100,1040,1000,1120];
+  /* مجموع الشبكة = عرض الصفحة المتاح بالضبط (A4 عرضي ١٦٨٣٨ − هامشين ٥٦٠).
+     آخر عمود يأخذ الباقي المحسوب، فلا يختلّ المجموع مع أي تعديل. */
+  const grid=[420,2300,900,1500,520,560,520,620,560,480,700,1300,1360,1220,1220,0];
+  grid[grid.length-1]=PAY_FULL-grid.reduce((a,b)=>a+b,0);
   const headRow=wRow(heads.map((h,i)=>
     wCell(h,{bold:true,size:8,color:"#FFFFFF",shade:CLR.purpleDeep,width:grid[i]})),{header:true});
 
@@ -5550,7 +5623,9 @@ function payrollDocx(){
     const zebra=i%2?(isMono()?"#F2F2F2":"#F5F3F8"):null;
     const vals=[
       [fmtNum(i+1),{}],
-      [r.name+(r.status!==WS_ACTIVE?"  ("+r.status+")":""),{align:"right",bold:true}],
+      [r.name,{align:"right",bold:true}],
+      [r.status===WS_ACTIVE?"":statusShort(r.status),
+        {bold:true,color:r.status===WS_ACTIVE?null:statusDocColor(r.status)}],
       [r.section,{align:"right",size:8}],
       [fmtNum(r.eligible),{}],
       [fmtNum(r.present),{color:CLR.present}],
@@ -5564,11 +5639,11 @@ function payrollDocx(){
       [fmtMoney(r.net),{bold:true,color:r.net<0?CLR.absent:CLR.purpleDeep}]
     ];
     rows.push(wRow(vals.map((v,ci)=>
-      wCell(v[0],Object.assign({size:8,width:grid[ci],shade:zebra,ltr:ci!==1&&ci!==2},v[1])))));
+      wCell(v[0],Object.assign({size:8,width:grid[ci],shade:zebra,ltr:ci!==1&&ci!==2&&ci!==3},v[1])))));
   });
   // صف المجموع
   const t=RP.tot;
-  const totals=["","المجموع ("+fmtNum(RP.rows.length)+" عامل)","",
+  const totals=["","المجموع ("+fmtNum(RP.rows.length)+" عامل)","","",
     "",fmtNum(t.present),fmtNum(t.absent),fmtNum(t.misc),fmtNum(t.leave),fmtNum(t.off),
     fmtNum(t.excusedDed),fmtMoney(t.salary),
     t.absDeduction?"-"+fmtMoney(t.absDeduction):fmtNum(0),
@@ -5578,8 +5653,21 @@ function payrollDocx(){
     wCell(v,{size:8,bold:true,width:grid[ci],shade:CLR.goldLite,ltr:ci!==1,
       align:ci===1?"right":"center",color:CLR.purpleDeep}))));
 
-  b+=wTable(rows,{border:CLR.line,width:5000,widthType:"pct",grid:grid});
+  b+=wTable(rows,{border:CLR.line,grid:grid});
   b+=wPara("",{after:160});
+
+  /* فقرة العمال غير المستمرين — سطر لكل واحد، وتُحذف كلها إن لم يوجد أحد */
+  const offList=RP.rows.filter(r=>r.status!==WS_ACTIVE);
+  if(offList.length){
+    b+=wPara("العمال غير المستمرين خلال المدة",
+      {size:12,bold:true,color:CLR.purpleDeep,after:60});
+    offList.forEach(r=>{
+      const d=r.endDate||r.statusChangedAt;
+      b+=wPara(r.name+" — "+r.status+(d?" — آخر يوم عمل "+dateSlash(d):""),
+        {size:10,color:CLR.ink,after:30});
+    });
+    b+=wPara("",{after:120});
+  }
 
   b+=wPara("إجمالي الرواتب: "+fmtMoney(t.salary)+" "+cur+
     "   ·   استقطاع الغياب: "+fmtMoney(t.absDeduction)+" "+cur+
