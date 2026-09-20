@@ -2648,7 +2648,7 @@ function lvSyncType(){
 el("lvType").addEventListener("change",()=>{
   el("lvPolicy").value=defaultLeavePolicy(el("lvType").value);
   lvSyncType(); drawLeave(); lvHint(); });
-el("lvPolicy").addEventListener("change",lvHint);
+el("lvPolicy").addEventListener("change",()=>{ lvHint(); drawLeave(); });
 ["lvDays","lvFrom"].forEach(id=>el(id).addEventListener("input",lvHint));
 el("lvWorker").addEventListener("change",lvHint);
 /* حصيلة أيام المتفرقة والإجازات للعامل داخل شهر معيّن، مصنّفة حسب السياسة.
@@ -2805,9 +2805,13 @@ function drawLeave(target,k){
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
   ctx.strokeStyle=CLR.line; ctx.lineWidth=2; ctx.strokeRect(16,16,LV_W-32,LV_H-32);
 
-  let y=drawDocHeader(ctx,{title:"وصل إجازة",accent:CLR.gold,no:el("lvNo").value})+34;
+  /* اللون المميّز للإجازة: لون الشركة الأساسي — مقابل الأحمر للعقوبة
+     والأخضر للمكافأة. والتخطيط نفسه حرفاً بحرف. */
+  const PUR=isMono()?CLR.ink:CLR.purple;
+  let y=drawDocHeader(ctx,{title:"وصل إجازة",accent:PUR,no:el("lvNo").value})+34;
   ctx.font=f(500,15); ctx.fillStyle=CLR.ink2;
-  ctx.fillText("اليوم: "+dayNameOf(todayISO())+"   —   تاريخ التحرير: "+dateTextOf(todayISO()),R,y);
+  ctx.fillText("تاريخ التحرير: "+dateTextOf(todayISO())+
+    "   —   استقطاع الراتب: "+leavePolicyText(el("lvPolicy").value),R,y);
   y+=30;
 
   const rowH=46;
@@ -2831,21 +2835,28 @@ function drawLeave(target,k){
   ctx.fillStyle=CLR.purple; ctx.font=f(700,16); ctx.fillText("سبب الإجازة",R,y);
   y+=10;
   const rbH=78;
-  ctx.fillStyle=tint(CLR.gold,.93); roundRect(ctx,L,y,W,rbH,6); ctx.fill();
-  ctx.strokeStyle=tint(CLR.gold,.62); ctx.lineWidth=1; roundRect(ctx,L,y,W,rbH,6); ctx.stroke();
+  ctx.fillStyle=isMono()?"#F2F2F2":tint(PUR,.93); roundRect(ctx,L,y,W,rbH,6); ctx.fill();
+  ctx.strokeStyle=tint(PUR,.62); ctx.lineWidth=1; roundRect(ctx,L,y,W,rbH,6); ctx.stroke();
   ctx.fillStyle=CLR.ink; ctx.font=f(600,18);
   const rl=wrapLines(ctx,el("lvReason").value||"",W-28);
   let ry=y+28;
   for(let i=0;i<rl.length&&ry<y+rbH-6;i++){ ctx.fillText(rl[i],R-14,ry); ry+=27; }
   y+=rbH+40;
 
-  ctx.strokeStyle=tint(CLR.purple,.60); ctx.lineWidth=1;
-  drawSignature(ctx, R-260, y, 240, 46);
-  line(ctx,R-260,y,R-20,y);
-  line(ctx,L+20,y,L+260,y);
-  ctx.fillStyle=CLR.ink2; ctx.font=f(600,15);
-  ctxCenter(ctx,"توقيع الإداري"+(el("lvAdmin").value?" — "+el("lvAdmin").value:""),R-140,y+24);
-  ctxCenter(ctx,"توقيع العامل",L+140,y+24);
+  /* ثلاث خانات ثابتة — لا لجنة عقوبات ثلاثية:
+     توقيع العامل (يمين) بلا اسم مطبوع، المسؤول المباشر (وسط) باسم
+     حقل «اسم الإداري»، ويعتمد (يسار) بالاسم والصفة من الإعدادات
+     وعليه التوقيع المرسوم. نفس ترتيب وصل الوورد بالضبط. */
+  drawCommittee(ctx,L,R,W,y,CLR,leaveSeats());
+}
+/* خانات توقيع وصل الإجازة — مصدر واحد للمعاينة والوورد */
+function leaveSeats(){
+  const s=S();
+  return [
+    {title:"توقيع العامل", name:""},
+    {title:"توقيع المسؤول المباشر", name:el("lvAdmin").value||""},
+    {title:"يعتمد ، ، ،", name:(s.signer||"")+(s.role?" — "+s.role:""), sig:true}
+  ];
 }
 el("lvWord").onclick=()=>{
   if(!el("lvWorker").value){ alert("اختر العامل أولاً."); return; }
@@ -6299,12 +6310,6 @@ el("bkForget").onclick=async()=>{
 const LV_MARGIN=567;                       // ١ سم
 const LV_FULL=11906-LV_MARGIN*2-6;         // عرض المحتوى
 const LV_BUDGET=7250;                      // ارتفاع النسخة الواحدة
-const LV_TYPES=["اعتيادية","مرضية","زمنية","سفر","وفاة","زواج","بدون راتب"];
-
-/* خانات الاختيار — المربع الممتلئ هو النوع المختار */
-function typeBoxes(list,sel){
-  return list.map(t=>(t===sel?"\u25A0 ":"\u25A1 ")+t).join("\u2002 ");
-}
 
 /* مولّد نسخة واحدة من الوصل.
    o = {title, sub, no, label, accent, rows, boxSize, reasonLabel, reason, sigs[3], footer} */
@@ -6436,6 +6441,14 @@ function twoCopyDocx(build){
 }
 
 /* ---- وصل الإجازة ---- */
+/* وصل الإجازة: نفس تخطيط إشعار العقوبة والمكافأة بالضبط —
+   نفس الترويسة والشريط الملوّن والتذييل، ونوع الإجازة قيمة نصية
+   بخلية عادية لا خانات اختيار، وصفوف الحقول بنفس الترتيب.
+   اللون المميّز هنا هو لون الشركة الأساسي (بنفسجي)، مقابل الأحمر
+   للعقوبة والأخضر للمكافأة. */
+function leavePolicyText(p){
+  return p==="none" ? "بلا استقطاع" : (p==="half" ? "نصف الأيام" : "كل الأيام");
+}
 function leaveCopyXml(label, sigRid, logoRid){
   const s=S(), CLR=CL();
   const from=el("lvFrom").value||curDate;
@@ -6443,34 +6456,27 @@ function leaveCopyXml(label, sigRid, logoRid){
   const days=lvDaysCount(), hours=lvHoursCount();
   const to=addDays(from,days-1);
   const w=C().workers.find(x=>x.id===el("lvWorker").value);
-  const pol=el("lvPolicy").value;
-  const polTxt = pol==="none" ? "بلا استقطاع"
-               : pol==="half" ? "نصف الأيام"
-               : "كل الأيام";
-  const DOTS="\u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7    إلى    \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7";
+  const polTxt=leavePolicyText(el("lvPolicy").value);
 
   const r4 = timed
-    ? [["بتاريخ يوم", dateTextOf(from)],
-       ["من الساعة — إلى الساعة", DOTS]]
-    : [["اعتباراً من يوم", dateTextOf(from)],
-       ["إلى نهاية يوم", dateTextOf(to)]];
+    ? [["بتاريخ", dateTextOf(from)],
+       ["المدة بالساعات", fmtNum(hours)]]
+    : [["من تاريخ", dateTextOf(from)],
+       ["إلى تاريخ", dateTextOf(to)]];
 
   return receiptCopyXml({
-    title:"طلب إجازة", no:el("lvNo").value, label:label, accent:CLR.purple, logoRid:logoRid,
+    title:"وصل إجازة",
+    sub:"إجازة معتمدة صادرة عن إدارة الشركة",
+    no:el("lvNo").value, label:label, accent:CLR.purple, hideAddress:true, logoRid:logoRid,
     rows:[
       [["اسم العامل", w?w.name:"—"],["القسم / مكان العمل", el("lvSection").value]],
-      [["نوع الإجازة", typeBoxes(LV_TYPES,el("lvType").value), 9]],
-      [[timed?"مدة الإجازة (ساعات)":"مدة الإجازة",
-        timed?hoursText(hours):daysText(days)],
+      [["نوع الإجازة", el("lvType").value, 12]],
+      [["المدة", timed?hoursText(hours):daysText(days)],
        ["استقطاع الراتب", polTxt]],
       r4
     ],
     reasonLabel:"سبب الإجازة", reason:el("lvReason").value,
-    sigs:[
-      {title:"توقيع العامل", name:""},
-      {title:"توقيع المسؤول المباشر", name:el("lvAdmin").value||""},
-      {title:"يعتمد ، ، ،", name:(s.signer||"")+(s.role?" — "+s.role:""), rid:sigRid}
-    ],
+    sigs:leaveSeats().map(x=>({title:x.title, name:x.name, rid:(x.sig?sigRid:null)})),
     footer:"تُحفظ نسخة في ملف العامل ونسخة لدى الإدارة · لا يُعمل بالوصل ما لم يحمل التوقيع والمصادقة"
   });
 }
