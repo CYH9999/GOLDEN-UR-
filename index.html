@@ -776,35 +776,6 @@ tr.rowvar td{background:#FCFAFE}
     </div>
   </div>
 
-  <div class="panel" id="pnAdj">
-    <div class="panel-head"><h2>استقطاعات وإضافات خاصة</h2></div>
-    <div class="panel-body">
-      <p class="hint" style="margin-top:0">مبالغ خارج حساب الغياب: غرامة، كسر أداة، عقوبة، أو مكافأة وأجر إضافي.
-        تدخل تلقائياً في كشف الرواتب للمدة التي يقع فيها تاريخها.</p>
-      <div class="row3">
-        <label class="field"><span>العامل</span><select id="adjWorker"></select></label>
-        <label class="field"><span>النوع</span>
-          <select id="adjType"><option value="deduct">استقطاع (−)</option><option value="add">إضافة (+)</option></select></label>
-        <label class="field"><span>التاريخ</span><input type="date" id="adjDate"></label>
-      </div>
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-        <label class="field" style="margin:0;min-width:140px"><span>المبلغ</span>
-          <input type="number" id="adjAmount" min="0" step="250" placeholder="0"></label>
-        <label class="field" style="flex:1;min-width:200px;margin:0"><span>السبب</span>
-          <input type="text" id="adjReason" placeholder="مثال: كسر ماكنة تنظيف"></label>
-        <button class="btn primary" id="addAdj">إضافة</button>
-      </div>
-      <div style="margin-top:14px">
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px">
-          <span class="fieldlbl" style="flex:1">السجل</span>
-          <label class="field" style="margin:0"><span>عرض من</span><input type="date" id="adjFrom"></label>
-          <label class="field" style="margin:0"><span>إلى</span><input type="date" id="adjTo"></label>
-        </div>
-        <div id="adjList"></div>
-      </div>
-    </div>
-  </div>
-
   <div class="panel" id="pnHol">
     <div class="panel-head"><h2>العطل وأيام الراحة</h2></div>
     <div class="panel-body">
@@ -1147,6 +1118,11 @@ async function writeFile(){ if(!fileHandle)return false; try{
 /* (أُزيلت verifyPerm — الفحص يتم مباشرة عند الإقلاع) */
 
 /* ==================== نموذج البيانات ==================== */
+/* رقم الوثيقة بصيغة واحدة لكل الوصولات: بادئة ، سنة ، تسلسل من ثلاث خانات.
+   مُستقلّ عن C() حتى يقدر الترحيل يولّد أرقاماً قبل تهيئة الشركة الحالية. */
+function docNo(prefix,n){
+  return prefix+"-"+new Date().getFullYear()+"-"+String(Math.max(1,n|0)).padStart(3,"0");
+}
 const ZONE_COLORS=["#4B2E83","#B8912E","#2C6E49","#9B1C31","#1D6A8C","#7A3E9D","#B5651D","#3E5C76"];
 
 /* ==================== حالات العمل ====================
@@ -1240,9 +1216,9 @@ function blankCompany(name){
       defNote:"سار العمل بشكل اعتيادي، ولا توجد ملاحظات تُذكر لهذا اليوم." },
     zones:[ {id:z1,name:"داخل البناية القديمة",short:"داخلي",color:"#4B2E83"},
             {id:z2,name:"الأقسام الخارجية",short:"خارجي",color:"#B8912E"} ],
-    sections:[], workers:[], days:{}, leaves:[], leaveSeq:0, adjustments:[],
+    sections:[], workers:[], days:{}, leaves:[], leaveSeq:0,
     penalties:[], penSeq:0, achievements:[], achSeq:0,
-    materials:defaultMaterials(), issues:[], issueSeq:0, matSeeded:true, payV3:true
+    materials:defaultMaterials(), issues:[], issueSeq:0, matSeeded:true, payV3:true, payV5:true
   };
 }
 function defaultState(){ const c=blankCompany("شركتي"); return { v:2, companies:[c], active:c.id }; }
@@ -1270,7 +1246,6 @@ function ensureFields(st){
     if(!S2.proRate) S2.proRate="yes";
     if(!Array.isArray(S2.weekendDays)) S2.weekendDays=[5];
     if(!Array.isArray(S2.holidays)) S2.holidays=[];
-    if(!Array.isArray(c.adjustments)) c.adjustments=[];
     if(!Array.isArray(c.penalties)) c.penalties=[];
     if(typeof c.penSeq!=="number") c.penSeq=0;
     if(!S2.exportDPI) S2.exportDPI="300";
@@ -1299,6 +1274,45 @@ function ensureFields(st){
       c.workers.forEach(w=>{ if(w) w.deduct=null; });
       (c.leaves||[]).forEach(l=>{ if(l && !l.policy) l.policy=defaultLeavePolicy(l.type); });
       c.payV3=true;
+    }
+    /* ترحيل ٥: خانة «استقطاعات وإضافات خاصة» أُلغيت، وبديلها صار
+       العقوبة بمبلغ للاستقطاع والمكافأة بمبلغ للإضافة. لا يُحذف أي مبلغ:
+       كل سجل قديم يتحوّل إلى وثيقته المقابلة بنفس المبلغ ونفس التاريخ
+       ونفس السبب، برقم متصل بتسلسل الشركة. ينفَّذ مرة واحدة بعلم payV5،
+       وتكراره لا يغيّر شيئاً لأن c.adjustments تُحذف بعده. */
+    if(!c.payV5){
+      const oldAdj=Array.isArray(c.adjustments)?c.adjustments:[];
+      const usedP={}, usedA={};
+      (c.penalties||[]).forEach(x=>{ if(x&&x.no) usedP[x.no]=1; });
+      (c.achievements||[]).forEach(x=>{ if(x&&x.no) usedA[x.no]=1; });
+      /* رقم جديد لا يصطدم برقم موجود، والتسلسل يتقدّم معه */
+      const freshNo=(prefix,used,seqKey)=>{
+        let n=(Number(c[seqKey])||0)+1, no=docNo(prefix,n);
+        while(used[no]){ n++; no=docNo(prefix,n); }
+        c[seqKey]=n; used[no]=1; return no;
+      };
+      oldAdj.forEach(a=>{
+        if(!a || typeof a!=="object") return;
+        const amt=Math.max(0,Number(a.amount)||0);
+        const date=String(a.date||a.issued||"").slice(0,10)||todayISO();
+        const why=String(a.reason||"").trim()||"مرحَّل من الاستقطاعات الخاصة";
+        const w=(c.workers||[]).find(x=>x && x.id===a.workerId);
+        const base={ id:a.id||uid(), workerId:a.workerId||"", name:w?(w.name||""):"",
+          section:"", kind:"amount", amount:amt, days:0, dayRate:null,
+          date:date, reason:why, admin:"", issued:a.issued||date, migrated:true };
+        if(a.type==="add"){
+          base.no=freshNo("م",usedA,"achSeq");
+          base.type="مكافأة استثنائية";
+          c.achievements.push(base);
+        }else{
+          base.no=freshNo("ع",usedP,"penSeq");
+          base.type="استقطاع من الراتب";
+          base.terminates=false;
+          c.penalties.push(base);
+        }
+      });
+      delete c.adjustments;
+      c.payV5=true;
     }
     (c.zones||[]).forEach((z,i)=>{ if(!z.color) z.color=ZONE_COLORS[i%ZONE_COLORS.length]; });
     /* ترحيل ٤: التولد واسم الأم وحالة العمل.
@@ -2090,25 +2104,22 @@ el("wTable").addEventListener("click",e=>{
   const pn=(c.penalties||[]).filter(l=>l.workerId===w.id).length+
            (c.achievements||[]).filter(l=>l.workerId===w.id).length;
   const iss=(c.issues||[]).filter(l=>l.workerId===w.id).length;
-  const aj=(c.adjustments||[]).filter(l=>l.workerId===w.id).length;
   let msg="يتحذف «"+w.name+"» نهائياً من الكشف؟";
-  if(days||lv||pn||aj||iss){
+  if(days||lv||pn||iss){
     msg+="\n\nراح يختفي من:";
     if(days) msg+="\n· "+fmtNum(days)+" يوم مؤشّر بالجرد";
     if(lv)   msg+="\n· "+fmtNum(lv)+" وصل إجازة";
     if(pn)   msg+="\n· "+fmtNum(pn)+" إشعار عقوبة أو مكافأة";
-    if(aj)   msg+="\n· "+fmtNum(aj)+" استقطاع أو إضافة خاصة";
     if(iss)  msg+="\n· "+fmtNum(iss)+" وصل صرف مواد";
     msg+="\n\nإذا الغرض تصحيح الاسم فقط، استعمل «تعديل الاسم» — يحافظ على كل سجله.";
   }
   if(confirm(msg)){
     c.workers=c.workers.filter(x=>x.id!==w.id);
-    // لا نترك وصولاً ولا استقطاعات تشير لعامل ما عاد موجوداً
+    // لا نترك وصلاً يشير لعامل ما عاد موجوداً
     c.leaves=(c.leaves||[]).filter(l=>l.workerId!==w.id);
     c.penalties=(c.penalties||[]).filter(l=>l.workerId!==w.id);
     c.achievements=(c.achievements||[]).filter(l=>l.workerId!==w.id);
     c.issues=(c.issues||[]).filter(l=>l.workerId!==w.id);
-    c.adjustments=(c.adjustments||[]).filter(l=>l.workerId!==w.id);
     Object.keys(c.days).forEach(k=>{ if(c.days[k]&&c.days[k].states) delete c.days[k].states[w.id]; });
     queueSave(); refresh(); renderPeople(); renderVariables(); if(RP) runReport(); }
 });
@@ -2360,7 +2371,7 @@ el("coTable").addEventListener("click",e=>{
     const copy=JSON.parse(JSON.stringify(c));
     copy.id=uid(); copy.name=c.name+" — نسخة"; copy.settings.company=copy.name;
     copy.days={}; copy.leaves=[]; copy.leaveSeq=0;
-    copy.adjustments=[]; copy.penalties=[]; copy.penSeq=0;
+    copy.penalties=[]; copy.penSeq=0;
     copy.achievements=[]; copy.achSeq=0;
     copy.issues=[]; copy.issueSeq=0;
     copy.zones.forEach(z=>{ const old=z.id; z.id=uid();
@@ -2431,10 +2442,7 @@ el("wipeAll").onclick=async()=>{
 };
 
 /* ==================== الإجازات ==================== */
-function nextLeaveNo(){
-  const n=(C().leaveSeq||0)+1;
-  return "إ-"+new Date().getFullYear()+"-"+String(n).padStart(3,"0");
-}
+function nextLeaveNo(){ return docNo("إ",(C().leaveSeq||0)+1); }
 function initLeaveView(){
   const c=C(), sel=el("lvWorker"), keep=sel.value;
   sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
@@ -2710,10 +2718,7 @@ el("lvPrint").onclick=()=>{
    وقت الحساب — لا وقت الإصدار — حتى يبقى الخصم مطابقاً لراتبه الفعلي. */
 const PN_TYPES=["لفت نظر","إنذار أول","إنذار أخير","عقوبة انضباطية","استقطاع من الراتب","إنهاء الخدمات"];
 
-function nextPenaltyNo(){
-  const n=(C().penSeq||0)+1;
-  return "ع-"+new Date().getFullYear()+"-"+String(n).padStart(3,"0");
-}
+function nextPenaltyNo(){ return docNo("ع",(C().penSeq||0)+1); }
 /* الأثر الافتراضي حسب النوع — يُقترح فقط ويبقى قابلاً للتغيير */
 function defaultPenKind(type){
   const t=String(type||"");
@@ -3049,10 +3054,7 @@ el("pnPrint").onclick=()=>{
    وتُضاف إلى راتب المدة التي يقع فيها تاريخها، لكن بالموجب لا بالسالب. */
 const AC_TYPES=["أفضل عامل بالشهر","مكافأة التزام ودوام","مكافأة جهد إضافي","مكافأة إنتاجية","مكافأة استثنائية","شهادة تقديرية"];
 
-function nextAchNo(){
-  const n=(C().achSeq||0)+1;
-  return "م-"+new Date().getFullYear()+"-"+String(n).padStart(3,"0");
-}
+function nextAchNo(){ return docNo("م",(C().achSeq||0)+1); }
 function defaultAchKind(type){
   const t=String(type||"");
   if(t.indexOf("شهادة")>=0) return "none";
@@ -3311,10 +3313,7 @@ function defaultMaterials(){
     {id:uid(),name:"دلو بلاستيك",unit:"قطعة",qty:1}
   ];
 }
-function nextIssueNo(){
-  const n=(C().issueSeq||0)+1;
-  return "ت-"+new Date().getFullYear()+"-"+String(n).padStart(3,"0");
-}
+function nextIssueNo(){ return docNo("ت",(C().issueSeq||0)+1); }
 function periodName(d){
   d=Number(d)||0;
   return d===7?"أسبوع" : d===14?"أسبوعين" : d===30?"شهر"
@@ -4378,7 +4377,7 @@ function buildReport(from,to){
   // الواجهة تمنعها، لكن المحرك لا يعتمد على ذلك.
   if(!from||!to||from>to) return { from:from||"", to:to||"", days:[], gaps:[], rows:[],
     tot:{present:0,absent:0,misc:0,leave:0,off:0,excused:0,excusedDed:0,salary:0,
-      absDeduction:0,extraDed:0,extraAdd:0,penDed:0,penCount:0,achAdd:0,achCount:0,
+      absDeduction:0,penDed:0,penCount:0,achAdd:0,achCount:0,
       deduction:0,net:0,rate:1,days:0},
     totalDays:0, invalid:true };
   const days=recordedDays(from,to);          // أيام العمل المعتمدة (بلا عطل)
@@ -4386,7 +4385,6 @@ function buildReport(from,to){
   const gaps=missingDays(from,to);           // أيام عمل مرّت ولم تُعتمد
   const proRate = st.proRate!=="no";
   const leaveIdx=indexByWorker(c.leaves||[]);
-  const adjIdx=indexByWorker(c.adjustments||[]);
   const penIdx=indexByWorker(c.penalties||[]);
   const achIdx=indexByWorker(c.achievements||[]);
   const rows=c.workers.map(w=>{
@@ -4433,11 +4431,6 @@ function buildReport(from,to){
     const deductDays = absent + excusedDed;        // الغياب بلا حجة يُستقطع كاملاً
     const absDeduction = deductDays*ded;
 
-    // ── الاستقطاعات والإضافات الخاصة (غرامة، كسر أداة، مكافأة…) ──
-    const adjs=(adjIdx.get(w.id)||[]).filter(a=>a.date>=from && a.date<=to);
-    const extraDed=adjs.filter(a=>a.type==="deduct").reduce((s,a)=>s+(Number(a.amount)||0),0);
-    const extraAdd=adjs.filter(a=>a.type==="add").reduce((s,a)=>s+(Number(a.amount)||0),0);
-
     // ــ العقوبات المسجّلة بتبويب العقوبات ــ
     // إشعار بلا استقطاع (إنذار) يُعدّ ويُوثّق لكن لا يمسّ الراتب.
     const pens=(penIdx.get(w.id)||[]).filter(a=>a.date>=from && a.date<=to);
@@ -4450,7 +4443,7 @@ function buildReport(from,to){
     const achAdd=achs.reduce((sum,a)=>sum+achAmount(a,w),0);
     const achCount=achs.length;
 
-    const deduction=absDeduction+extraDed+penDed;
+    const deduction=absDeduction+penDed;
     const sec=sectionOf(w.sectionId), z=sec?zoneOf(sec.zoneId):null;
     const workSlots=eligible-off-leave;             // الأيام التي كان مطالباً بالحضور فيها
     return { id:w.id, name:w.name, section:sec?sec.name:"—", zone:z?(z.short||z.name):"",
@@ -4459,9 +4452,9 @@ function buildReport(from,to){
       excused, excusedDed, leavePolicy:pol, dailyRate, fullService,
       startDate:svcS, endDate:svcE, ended: !!(svcE && svcE < to),
       deductDays, fullSalary:fullSal, salary:gross, partial, dayDed:ded,
-      absDeduction, extraDed, extraAdd, adjs, penDed, penDays, penCount, pens,
+      absDeduction, penDed, penDays, penCount, pens,
       achAdd, achCount, achs, deduction,
-      net:gross-deduction+extraAdd+achAdd,
+      net:gross-deduction+achAdd,
       rate: workSlots>0 ? (workSlots-absent)/workSlots : 1 };
   });
   const tot=rows.reduce((a,r)=>({
@@ -4469,14 +4462,13 @@ function buildReport(from,to){
     leave:a.leave+r.leave, off:a.off+r.off,
     excused:a.excused+r.excused, excusedDed:a.excusedDed+r.excusedDed,
     salary:a.salary+r.salary, absDeduction:a.absDeduction+r.absDeduction,
-    extraDed:a.extraDed+r.extraDed, extraAdd:a.extraAdd+r.extraAdd,
     penDed:a.penDed+r.penDed, penCount:a.penCount+r.penCount,
     achAdd:a.achAdd+r.achAdd, achCount:a.achCount+r.achCount,
     deduction:a.deduction+r.deduction, net:a.net+r.net
   }),{present:0,absent:0,misc:0,leave:0,off:0,excused:0,excusedDed:0,salary:0,
-      absDeduction:0,extraDed:0,extraAdd:0,penDed:0,penCount:0,achAdd:0,achCount:0,
+      absDeduction:0,penDed:0,penCount:0,achAdd:0,achCount:0,
       deduction:0,net:0});
-  ["salary","absDeduction","extraDed","extraAdd","penDed","achAdd","deduction","net"].forEach(k=>{ tot[k]=money(tot[k]); });
+  ["salary","absDeduction","penDed","achAdd","deduction","net"].forEach(k=>{ tot[k]=money(tot[k]); });
   const slots=rows.reduce((a,r)=>a+Math.max(0,r.eligible-r.off-r.leave),0);
   tot.rate = slots? (slots-tot.absent)/slots : 1;
   tot.days = totalDays;
@@ -4501,11 +4493,6 @@ function runReport(manual){
     return;
   }
   RP=buildReport(from,to);
-  // سجل الاستقطاعات الخاصة يتبع مدة الكشف نفسها حتى لا يعرض مدة ثانية
-  if(el("adjFrom").value!==from || el("adjTo").value!==to){
-    el("adjFrom").value=from; el("adjTo").value=to;
-  }
-  renderAdjList();
   renderReport();
 }
 function renderReport(){
@@ -4520,10 +4507,10 @@ function renderReport(){
     ['<div class="card"><div class="k">متفرقة + إجازات</div><div class="v">'+fmtNum(RP.tot.excused)+
       '</div><div class="k">مستقطع منها '+fmtNum(RP.tot.excusedDed)+' يوم</div></div>'],
     ['<div class="card"><div class="k">إجمالي الاستقطاع</div><div class="v">'+fmtMoney(RP.tot.deduction)+
-      '</div><div class="k">غياب '+fmtMoney(RP.tot.absDeduction)+' · خاص '+fmtMoney(RP.tot.extraDed)+
+      '</div><div class="k">غياب '+fmtMoney(RP.tot.absDeduction)+
       ' · عقوبات '+fmtMoney(RP.tot.penDed)+'</div></div>'],
-    ['<div class="card good"><div class="k">إضافات ومكافآت</div><div class="v">'+fmtMoney(RP.tot.extraAdd+RP.tot.achAdd)+
-      '</div><div class="k">خاص '+fmtMoney(RP.tot.extraAdd)+' · إنجازات '+fmtMoney(RP.tot.achAdd)+'</div></div>'],
+    ['<div class="card good"><div class="k">المكافآت</div><div class="v">'+fmtMoney(RP.tot.achAdd)+
+      '</div><div class="k">من إشعارات الإنجاز</div></div>'],
     ['<div class="card"><div class="k">إجمالي الرواتب</div><div class="v">'+fmtMoney(RP.tot.salary)+'</div></div>']
   ].map(x=>x[0]).join("");
 
@@ -4555,7 +4542,7 @@ function renderReport(){
   let h='<thead><tr><th>ت</th><th>الاسم</th><th>القسم</th><th>أيام</th><th>حضور</th><th>غياب</th>'+
         '<th>متفرقة</th><th>إجازة</th><th>أوف</th><th>مستقطع منها</th>'+
         '<th>النسبة</th><th>الراتب المستحق</th><th>استقطاع الغياب</th>'+
-        '<th>استقطاع خاص</th><th>عقوبات</th><th>إضافات</th><th>مكافآت</th><th>الصافي</th></tr></thead><tbody>';
+        '<th>عقوبات</th><th>مكافآت</th><th>الصافي</th></tr></thead><tbody>';
   rows.forEach((r,i)=>{
     h+='<tr'+(r.net<0?' style="background:#fbe9ec"':'')+'><td>'+fmtNum(i+1)+'</td><td>'+esc(r.name)+
       (r.ended?' <span class="stag out">منقول</span>':'')+
@@ -4575,10 +4562,8 @@ function renderReport(){
       '</td>'+
       '<td style="color:var(--absent)">'+(r.absDeduction?"-"+fmtMoney(r.absDeduction):fmtNum(0))+
         (r.deductDays?'<div class="mini">'+fmtNum(r.deductDays)+' يوم × '+fmtMoney(r.dayDed)+'</div>':'')+'</td>'+
-      '<td style="color:var(--absent)">'+(r.extraDed?"-"+fmtMoney(r.extraDed):fmtNum(0))+'</td>'+
       '<td style="color:var(--absent)">'+(r.penDed?"-"+fmtMoney(r.penDed):fmtNum(0))+
         (r.penCount?'<div class="mini">'+fmtNum(r.penCount)+' إشعار'+(r.penDays?' · '+fmtNum(r.penDays)+' يوم':'')+'</div>':'')+'</td>'+
-      '<td style="color:var(--present)">'+(r.extraAdd?"+"+fmtMoney(r.extraAdd):fmtNum(0))+'</td>'+
       '<td style="color:var(--present)">'+(r.achAdd?"+"+fmtMoney(r.achAdd):fmtNum(0))+
         (r.achCount?'<div class="mini">'+fmtNum(r.achCount)+' إشعار</div>':'')+'</td>'+
       '<td style="font-weight:800'+(r.net<0?';color:var(--absent)':'')+'">'+fmtMoney(r.net)+'</td></tr>';
@@ -4588,8 +4573,7 @@ function renderReport(){
     '<td>'+fmtNum(RP.tot.misc)+'</td><td>'+fmtNum(RP.tot.leave)+'</td><td>'+fmtNum(RP.tot.off)+'</td>'+
     '<td>'+fmtNum(RP.tot.excusedDed)+'</td><td></td>'+
     '<td>'+fmtMoney(RP.tot.salary)+'</td><td>-'+fmtMoney(RP.tot.absDeduction)+'</td>'+
-    '<td>-'+fmtMoney(RP.tot.extraDed)+'</td><td>-'+fmtMoney(RP.tot.penDed)+
-    '</td><td>+'+fmtMoney(RP.tot.extraAdd)+'</td><td>+'+fmtMoney(RP.tot.achAdd)+'</td>'+
+    '<td>-'+fmtMoney(RP.tot.penDed)+'</td><td>+'+fmtMoney(RP.tot.achAdd)+'</td>'+
     '<td>'+fmtMoney(RP.tot.net)+'</td></tr></tfoot>';
   el("rpTable").innerHTML=h;
 }
@@ -4612,7 +4596,7 @@ function fillSalary(){
   Object.keys(salMap).forEach(id=>{ el(id).value=S()[salMap[id]]; });
   toggleDedMode(); updatePolicyHint();
   renderWeekdays(); renderHolidays(); renderOffAll();
-  renderSalTable(); renderAdjWorkers(); renderAdjList();
+  renderSalTable();
 }
 function toggleDedMode(){
   const auto=S().dedMode==="auto";
@@ -4750,58 +4734,6 @@ el("wTable").addEventListener("click",e=>{
     commitWorkerRename(sv.dataset.wsave, box?box.value:""); return; }
   if(e.target.closest("[data-wcancel]")){ editWorkerId=null; renderPeople(); return; }
 });
-function renderAdjWorkers(){
-  const c=C(), sel=el("adjWorker"), keep=sel.value;
-  sel.innerHTML='<option value="">— اختر العامل —</option>'+
-    c.workers.map(w=>'<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
-  if(keep) sel.value=keep;
-  if(!el("adjDate").value) el("adjDate").value=todayISO();
-}
-function adjRange(){
-  let a=el("adjFrom").value, b=el("adjTo").value;
-  if(!a||!b){ const r=RP?[RP.from,RP.to]:monthRange(0);
-    if(!a){ a=r[0]; el("adjFrom").value=a; } if(!b){ b=r[1]; el("adjTo").value=b; } }
-  return [a,b];
-}
-function renderAdjList(){
-  const c=C(), r=adjRange(), cur=S().currency||"";
-  const list=(c.adjustments||[]).filter(a=>a.date>=r[0]&&a.date<=r[1])
-    .sort((x,y)=>x.date<y.date?1:-1);
-  if(!list.length){ el("adjList").innerHTML='<p class="hint">ماكو استقطاعات أو إضافات بهذه المدة.</p>'; return; }
-  const nameOf=id=>{ const w=c.workers.find(x=>x.id===id); return w?w.name:"عامل محذوف"; };
-  let ded=0, add=0;
-  const h=list.map(a=>{
-    const v=Number(a.amount)||0;
-    if(a.type==="deduct") ded+=v; else add+=v;
-    return '<div class="adjrow"><div><b>'+esc(nameOf(a.workerId))+'</b>'+
-      '<div class="mini">'+dateNumeric(a.date)+(a.reason?" · "+esc(a.reason):"")+'</div></div>'+
-      '<div style="display:flex;gap:8px;align-items:center">'+
-      '<span class="amt '+(a.type==="deduct"?"ded":"add")+'">'+(a.type==="deduct"?"−":"+")+fmtMoney(v)+'</span>'+
-      '<button class="btn sm danger" data-adjdel="'+a.id+'">حذف</button></div></div>';
-  }).join("");
-  el("adjList").innerHTML=h+'<p class="hint">مجموع الاستقطاعات: <b>'+fmtMoney(ded)+'</b> '+esc(cur)+
-    ' · مجموع الإضافات: <b>'+fmtMoney(add)+'</b> '+esc(cur)+'</p>';
-}
-el("addAdj").onclick=()=>{
-  const c=C(), wid=el("adjWorker").value;
-  if(!wid){ alert("اختر العامل أولاً."); return; }
-  const amt=Number(el("adjAmount").value)||0;
-  if(amt<=0){ alert("اكتب مبلغاً أكبر من صفر."); return; }
-  const date=el("adjDate").value||todayISO();
-  c.adjustments.push({ id:uid(), workerId:wid, type:el("adjType").value,
-    amount:amt, reason:el("adjReason").value.trim(), date:date, issued:todayISO() });
-  el("adjAmount").value=""; el("adjReason").value="";
-  queueSave(); renderAdjList(); if(RP) runReport();
-  el("savedNote").textContent="انضافت ✓"; setTimeout(()=>el("savedNote").textContent="",1600);
-};
-el("adjList").addEventListener("click",e=>{
-  const b=e.target.closest("[data-adjdel]"); if(!b)return;
-  const c=C(); const a=c.adjustments.find(x=>x.id===b.dataset.adjdel); if(!a)return;
-  if(!confirm("يتحذف هذا المبلغ نهائياً؟")) return;
-  c.adjustments=c.adjustments.filter(x=>x.id!==a.id);
-  queueSave(); renderAdjList(); if(RP) runReport();
-});
-["adjFrom","adjTo"].forEach(id=>el(id).addEventListener("change",renderAdjList));
 
 /* ---- العطل وأيام الراحة ---- */
 function renderWeekdays(){
@@ -4936,22 +4868,22 @@ el("rpXls").onclick=()=>{
     "حضور","غياب","متفرقة","إجازة","أوف",
     "مجموع المتفرقة والإجازات","أيام مستقطعة منها","نسبة الحضور %",
     "الراتب الكامل ("+cur+")","الراتب المستحق","أجر اليوم","استقطاع اليوم",
-    "استقطاع الغياب","استقطاع خاص","عدد العقوبات","استقطاع العقوبات","إضافات","عدد المكافآت","مبلغ المكافآت","الصافي"];
+    "استقطاع الغياب","عدد العقوبات","استقطاع العقوبات","عدد المكافآت","مبلغ المكافآت","الصافي"];
   const n2=v=>Math.round((Number(v)||0)*100)/100;
   const rows=[head];
   RP.rows.forEach((r,i)=>rows.push([i+1,r.name,r.status,r.section,r.eligible,r.totalDays,r.svcDays,
     r.present,r.absent,r.misc,r.leave,r.off,r.excused,r.excusedDed,Math.round(r.rate*100),
     n2(r.fullSalary),n2(r.salary),n2(r.dailyRate),n2(r.dayDed),
-    n2(r.absDeduction),n2(r.extraDed),r.penCount,n2(r.penDed),n2(r.extraAdd),
+    n2(r.absDeduction),r.penCount,n2(r.penDed),
     r.achCount,n2(r.achAdd),n2(r.net)]));
   const t=RP.tot;
   rows.push(["","المجموع ("+RP.rows.length+" عامل)","","","","","",t.present,t.absent,t.misc,t.leave,t.off,
     t.excused,t.excusedDed,Math.round(t.rate*100),"",n2(t.salary),"","",
-    n2(t.absDeduction),n2(t.extraDed),t.penCount,n2(t.penDed),n2(t.extraAdd),
+    n2(t.absDeduction),t.penCount,n2(t.penDed),
     t.achCount,n2(t.achAdd),n2(t.net)]);
   try{
     saveXlsx(buildXlsx(rows,{sheet:"كشف الرواتب",
-      widths:[5,26,16,18,12,12,12,9,9,9,9,9,14,14,12,16,16,12,12,14,14,12,16,12,16,12,16]}),
+      widths:[5,26,16,18,12,12,12,9,9,9,9,9,14,14,12,16,16,12,12,14,12,16,12,16,16]}),
       "كشف-الرواتب-"+RP.from+"_"+RP.to+".xlsx");
   }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
@@ -4992,9 +4924,8 @@ function drawReportPage(rows, pageNo, pages, k){
     {t:"ت",w:40,a:"c"},{t:"الاسم",w:214,a:"r"},{t:"القسم",w:120,a:"r"},
     {t:"أيام",w:56,a:"c"},{t:"حضور",w:62,a:"c"},{t:"غياب",w:58,a:"c"},
     {t:"متفرقة",w:56,a:"c"},{t:"إجازة",w:50,a:"c"},{t:"أوف",w:44,a:"c"},{t:"مستقطع",w:60,a:"c"},
-    {t:"الراتب",w:100,a:"l"},{t:"استقطاع غياب",w:104,a:"l"},
-    {t:"استقطاع خاص",w:92,a:"l"},{t:"عقوبات",w:92,a:"l"},
-    {t:"إضافات",w:76,a:"l"},{t:"مكافآت",w:82,a:"l"},{t:"الصافي",w:106,a:"l"}
+    {t:"الراتب",w:118,a:"l"},{t:"استقطاع غياب",w:118,a:"l"},
+    {t:"عقوبات",w:104,a:"l"},{t:"مكافآت",w:104,a:"l"},{t:"الصافي",w:116,a:"l"}
   ];
   const tw=cols.reduce((a,c2)=>a+c2.w,0);
   const scale=W/tw;
@@ -5023,18 +4954,15 @@ function drawReportPage(rows, pageNo, pages, k){
       fmtNum(r.absent), fmtNum(r.misc), fmtNum(r.leave), fmtNum(r.off), fmtNum(r.excusedDed),
       fmtMoney(r.salary)+(r.partial?" *":""),
       (r.absDeduction?"-"+fmtMoney(r.absDeduction):fmtNum(0)),
-      (r.extraDed?"-"+fmtMoney(r.extraDed):fmtNum(0)),
       (r.penDed?"-"+fmtMoney(r.penDed):fmtNum(0)),
-      (r.extraAdd?"+"+fmtMoney(r.extraAdd):fmtNum(0)),
       (r.achAdd?"+"+fmtMoney(r.achAdd):fmtNum(0)),
       fmtMoney(r.net) ];
     const LAST=vals.length-1;
     vals.forEach((v,ci)=>{
       const c2=cols[ci];
-      ctx.fillStyle = (ci===5&&r.absent>0)||ci===11||ci===12||ci===13 ? CLR.absent
+      ctx.fillStyle = (ci===5&&r.absent>0)||ci===11||ci===12 ? CLR.absent
         : (ci===LAST?CLR.purpleDeep:CLR.ink);
-      if(ci===14 && r.extraAdd>0) ctx.fillStyle="#2C6E49";
-      if(ci===15 && r.achAdd>0) ctx.fillStyle="#2C6E49";
+      if(ci===13 && r.achAdd>0) ctx.fillStyle="#2C6E49";
       const wt = (ci===LAST)?700:(ci===1?600:400);
       let sz=16; ctx.font=f(wt,sz);
       while(ctx.measureText(v).width>c2.px-14 && sz>10){ sz--; ctx.font=f(wt,sz); }
@@ -5060,9 +4988,7 @@ function drawReportPage(rows, pageNo, pages, k){
     ctx.fillStyle=CLR.ink2; ctx.font=f(500,15);
     ctx.fillText("إجمالي الرواتب: "+fmtMoney(RP.tot.salary)+" "+cur+
       "   ·   استقطاع الغياب: "+fmtMoney(RP.tot.absDeduction)+" "+cur+
-      "   ·   استقطاع خاص: "+fmtMoney(RP.tot.extraDed)+" "+cur+
       "   ·   عقوبات: "+fmtMoney(RP.tot.penDed)+" "+cur+
-      "   ·   إضافات: "+fmtMoney(RP.tot.extraAdd)+" "+cur+
       "   ·   مكافآت: "+fmtMoney(RP.tot.achAdd)+" "+cur,R,y);
     y+=26;
     ctx.font=f(400,14);
@@ -5607,8 +5533,8 @@ function payrollDocx(){
     "  ·  أيام معتمدة: "+fmtNum(RP.days.length));
 
   const heads=["ت","الاسم","القسم","أيام","حضور","غياب","متفرقة","إجازة","أوف","مستقطع",
-    "الراتب","استقطاع غياب","استقطاع خاص","عقوبات","إضافات","مكافآت","الصافي"];
-  const grid=[340,1820,1180,450,490,450,520,490,410,560,980,980,980,940,790,860,1020];
+    "الراتب","استقطاع غياب","عقوبات","مكافآت","الصافي"];
+  const grid=[340,1820,1180,450,490,450,520,490,410,560,1100,1100,1040,1000,1120];
   const headRow=wRow(heads.map((h,i)=>
     wCell(h,{bold:true,size:8,color:"#FFFFFF",shade:CLR.purpleDeep,width:grid[i]})),{header:true});
 
@@ -5626,9 +5552,7 @@ function payrollDocx(){
       [fmtNum(r.excusedDed),{}],
       [fmtMoney(r.salary),{}],
       [r.absDeduction?"-"+fmtMoney(r.absDeduction):"0",{color:r.absDeduction?CLR.absent:null}],
-      [r.extraDed?"-"+fmtMoney(r.extraDed):"0",{color:r.extraDed?CLR.absent:null}],
       [r.penDed?"-"+fmtMoney(r.penDed):"0",{color:r.penDed?CLR.absent:null}],
-      [r.extraAdd?"+"+fmtMoney(r.extraAdd):"0",{color:r.extraAdd?CLR.present:null}],
       [r.achAdd?"+"+fmtMoney(r.achAdd):"0",{color:r.achAdd?CLR.present:null}],
       [fmtMoney(r.net),{bold:true,color:r.net<0?CLR.absent:CLR.purpleDeep}]
     ];
@@ -5641,9 +5565,7 @@ function payrollDocx(){
     "",fmtNum(t.present),fmtNum(t.absent),fmtNum(t.misc),fmtNum(t.leave),fmtNum(t.off),
     fmtNum(t.excusedDed),fmtMoney(t.salary),
     t.absDeduction?"-"+fmtMoney(t.absDeduction):fmtNum(0),
-    t.extraDed?"-"+fmtMoney(t.extraDed):fmtNum(0),
     t.penDed?"-"+fmtMoney(t.penDed):fmtNum(0),
-    t.extraAdd?"+"+fmtMoney(t.extraAdd):fmtNum(0),
     t.achAdd?"+"+fmtMoney(t.achAdd):fmtNum(0),fmtMoney(t.net)];
   rows.push(wRow(totals.map((v,ci)=>
     wCell(v,{size:8,bold:true,width:grid[ci],shade:CLR.goldLite,ltr:ci!==1,
@@ -5654,9 +5576,7 @@ function payrollDocx(){
 
   b+=wPara("إجمالي الرواتب: "+fmtMoney(t.salary)+" "+cur+
     "   ·   استقطاع الغياب: "+fmtMoney(t.absDeduction)+" "+cur+
-    "   ·   استقطاع خاص: "+fmtMoney(t.extraDed)+" "+cur+
     "   ·   عقوبات: "+fmtMoney(t.penDed)+" "+cur+
-    "   ·   إضافات: "+fmtMoney(t.extraAdd)+" "+cur+
     "   ·   مكافآت: "+fmtMoney(t.achAdd)+" "+cur,{size:10,color:CLR.ink2});
   b+=wPara("صافي الرواتب: "+fmtMoney(t.net)+" "+cur,{size:14,bold:true,color:CLR.purpleDeep});
   b+=wPara("متفرقة وإجازات: "+fmtNum(t.excused)+" يوم   ·   المستقطع منها: "+fmtNum(t.excusedDed)+
@@ -5701,7 +5621,6 @@ function makeFoldable(list){
 function initFolds(){
   makeFoldable([
     {id:"pnSalary",open:false},
-    {id:"pnAdj",open:false},
     {id:"pnHol",open:false},
     {id:"pnOff",open:false}
   ]);
