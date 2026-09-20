@@ -236,6 +236,13 @@ tr.rowout td{background:#FBF7F8;opacity:.85}
 .wst.s-cut{background:var(--ground);color:var(--brand-deep);box-shadow:inset 0 0 0 1px var(--line)}
 .wst.s-fire{background:var(--absent-bg);color:var(--absent)}
 .wsel{min-width:132px}
+.chkrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chkrow label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+  border-radius:20px;padding:4px 12px;font-size:13px;font-weight:600;background:#fff;cursor:pointer;
+  white-space:nowrap}
+.chkrow label.on{border-color:var(--brand);background:#F3EDFA;color:var(--brand-deep)}
+.chkrow input[type=checkbox]{width:auto;margin:0;accent-color:var(--brand)}
+.chkrow .n{font-variant-numeric:tabular-nums;color:var(--ink-2);font-weight:700}
 tr.rowvar td{background:#FCFAFE}
 .varbar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
 .varbar label.field{margin:0}
@@ -273,7 +280,7 @@ tr.rowvar td{background:#FCFAFE}
   <button role="tab" aria-selected="false" data-view="materials">المواد</button>
   <button role="tab" aria-selected="false" data-view="history">السجل</button>
   <button role="tab" aria-selected="false" data-view="people">العمال والأقسام</button>
-  <button role="tab" aria-selected="false" data-view="variables">المتغيرات</button>
+  <button role="tab" aria-selected="false" data-view="variables">حالات العمال</button>
   <button role="tab" aria-selected="false" data-view="report">التقارير والرواتب</button>
   <button role="tab" aria-selected="false" data-view="settings">الإعدادات</button>
 </nav>
@@ -683,16 +690,22 @@ tr.rowvar td{background:#FCFAFE}
 <section id="view-variables" class="hidden">
   <div class="panel">
     <div class="panel-head">
-      <h2>المتغيرات — العمال غير المستمرين</h2>
+      <h2>حالات العمال</h2>
       <span class="saved" id="varCount"></span>
     </div>
     <div class="panel-body">
-      <p class="hint" style="margin-top:0">هنا كل عامل تغيّرت حالته عن «مستمر»: إنهاء خدمات، انقطاع عن العمل، أو مفصول.
-        هؤلاء ما يظهرون بالجرد اليومي الجديد، وسجلهم القديم وأيامه ورواتبه تبقى محفوظة كما هي.</p>
+      <p class="hint" style="margin-top:0">كل عامل وحالته: مستمر، منقول، إنهاء خدمات، انقطاع عن العمل، مفصول.
+        أشّر الحالات اللي تريد تشوفها — اختيارك ينحفظ لهذه الشركة لوحدها.
+        العامل غير المستمر ما يظهر بالجرد اليومي الجديد، وسجله القديم وأيامه ورواتبه تبقى محفوظة كما هي.</p>
       <div class="varbar">
-        <label class="field"><span>حالة العمل</span>
-          <select id="varFilter" class="wsel"></select></label>
-        <label class="field grow"><span>بحث</span>
+        <div class="field" style="margin:0"><span>الحالات المعروضة</span>
+          <div id="varStatusBoxes" class="chkrow"></div></div>
+        <div class="field" style="margin:0"><span>&nbsp;</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" id="varAll">الكل</button>
+            <button class="btn sm ghost" id="varNone">إلغاء الكل</button>
+          </div></div>
+        <label class="field grow" style="margin:0"><span>بحث</span>
           <input type="text" id="varSearch" placeholder="اسم العامل أو اسم الأم أو القسم أو الهاتف أو العنوان…"></label>
       </div>
       <div id="varCards" class="cards" style="margin-bottom:14px"></div>
@@ -3958,31 +3971,60 @@ el("dirPrint").onclick=()=>{
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
 
-/* ==================== تبويب المتغيرات ====================
-   العمال غير المستمرين: إنهاء خدمات، انقطاع عن العمل، مفصول.
+/* ==================== تبويب حالات العمال ====================
+   كل الحالات الخمس: مستمر، منقول، إنهاء خدمات، انقطاع عن العمل، مفصول.
    هذا التبويب قراءة على سجل العمال نفسه — ما ينسخ بيانات ولا ينقلها،
    فأي تعديل هنا يرجع للعامل ذاته ويظهر فوراً بكل التبويبات الثانية. */
 function variableWorkers(){ return C().workers.filter(w=>!isActiveWorker(w)); }
-function filterWorkersByStatus(list,st){
-  const t=normStatus0(st);
-  return t ? list.filter(w=>getWorkerStatus(w)===t) : list.slice();
-}
-/* فلتر الحالة يقبل الفراغ بمعنى «الكل» — فلا نمرّره على normStatus
-   لأنها تحوّل الفراغ إلى «مستمر» وتقلب معنى الفلتر. */
+/* قيمة حالة صالحة أو فراغ — الفراغ لا يُمرَّر على normStatus لأنها
+   تحوّله إلى «مستمر» فتقلب معنى الفلتر. */
 function normStatus0(v){
   const t=String(v==null?"":v).trim();
   return WSTATUSES.indexOf(t)>=0 ? t : "";
 }
-function fillVarFilter(){
-  const sel=el("varFilter");
-  if(!sel||sel.innerHTML===undefined) return;
-  const keep=normStatus0(sel.value);
-  sel.innerHTML='<option value="">الكل</option>'+WS_VARIABLE.map(t=>
-    '<option value="'+esc(t)+'"'+(t===keep?" selected":"")+'>'+esc(t)+'</option>').join("");
+/* ---- الحالات المؤشّرة: تُحفظ لكل شركة على حدة ----
+   الافتراضي عند أول فتح هو الحالات الأربع غير المستمرة، حتى يبقى
+   السلوك المألوف لمن اعتاد التبويب القديم. */
+function varFilterKey(){ const c=C(); return "varStatus_"+(c?c.id:"none"); }
+let varSel=null;
+function loadVarSel(){
+  const raw=lsGet(varFilterKey());
+  if(raw){
+    try{
+      const a=JSON.parse(raw);
+      if(Array.isArray(a)) return a.map(normStatus0).filter(Boolean);
+    }catch(e){}
+  }
+  return WS_VARIABLE.slice();
+}
+function varSelected(){
+  if(!Array.isArray(varSel)) varSel=loadVarSel();
+  return varSel;
+}
+function setVarSel(a){
+  varSel=WSTATUSES.filter(t=>a.indexOf(t)>=0);     // بترتيب الحالات الثابت
+  try{ lsSet(varFilterKey(), JSON.stringify(varSel)); }catch(e){}
+}
+function varStatusOn(t){ return varSelected().indexOf(t)>=0; }
+function statusCounts(){
+  const n={}; WSTATUSES.forEach(t=>{ n[t]=0; });
+  C().workers.forEach(w=>{ n[getWorkerStatus(w)]++; });
+  return n;
+}
+function renderVarBoxes(){
+  const box=el("varStatusBoxes");
+  if(!box||box.innerHTML===undefined) return;
+  const n=statusCounts();
+  box.innerHTML=WSTATUSES.map(t=>{
+    const on=varStatusOn(t);
+    return '<label class="'+(on?"on":"")+'"><input type="checkbox" data-vst="'+esc(t)+'"'+
+      (on?" checked":"")+'><span>'+esc(t)+'</span><span class="n">'+fmtNum(n[t])+'</span></label>';
+  }).join("");
 }
 function varList(){
   const q=String(el("varSearch").value||"").trim();
-  let list=filterWorkersByStatus(variableWorkers(), el("varFilter").value);
+  const sel=varSelected();
+  let list=C().workers.filter(w=>sel.indexOf(getWorkerStatus(w))>=0);
   if(q) list=list.filter(w=>workerMatches(w,q));
   return list;
 }
@@ -3990,7 +4032,8 @@ const VAR_HEAD=["ت","الاسم","اسم الأم","التولد","القسم",
   "حالة العمل","تاريخ تغيير الحالة","ملاحظة التغيير"];
 const VAR_LTR_COLS=[5];
 const VAR_STATUS_COL=7;
-const VAR_EMPTY_ROW=["—","ماكو عمال ضمن المتغيرات بهذا الفلتر","—","—","—","—","—","—","—","—"];
+/* صف «لا نتيجة» يُبنى من طول الترويسة نفسها، فلا ينحرف طوله عنها أبداً */
+const VAR_EMPTY_ROW=VAR_HEAD.map((h,i)=>i===1?"ماكو عمال بهذا الاختيار":"—");
 function varExportRows(raw){
   return varList().map((w,i)=>[i+1, w.name, w.motherName||"—", w.dob||"—", sectionLabel(w),
     (raw?normPhone(w.phone):fmtPhone(w.phone))||"—", w.address||"—",
@@ -3998,35 +4041,43 @@ function varExportRows(raw){
 }
 /* وصف المدى المصدَّر — يُطبع بترويسة الملف حتى يُعرف ما الذي صُدِّر */
 function varScopeText(){
-  const f=normStatus0(el("varFilter").value), q=String(el("varSearch").value||"").trim();
+  const sel=varSelected(), q=String(el("varSearch").value||"").trim();
   const parts=[];
-  parts.push("الحالة: "+(f||"الكل"));
+  parts.push("الحالات: "+(sel.length===0 ? "ماكو حالة مؤشّرة"
+    : (sel.length===WSTATUSES.length ? "كل الحالات الخمس" : sel.join("، "))));
   if(q) parts.push("بحث: "+q);
   return parts.join("  ·  ");
 }
 function renderVariables(){
   const box=el("variablesTable"); if(!box||box.innerHTML===undefined) return;
-  fillVarFilter();
-  const all=variableWorkers(), list=varList();
-
-  const cnt={};
-  WS_VARIABLE.forEach(t=>{ cnt[t]=0; });
-  all.forEach(w=>{ const k=getWorkerStatus(w); if(cnt[k]!==undefined) cnt[k]++; });
+  renderVarBoxes();
+  const c=C(), list=varList();
+  const cnt=statusCounts();
+  /* المجموع يتبع الاختيار الحالي، والبطاقات الخمس تعرض كل حالة دائماً */
+  const inSel=varSelected().reduce((a,t)=>a+cnt[t],0);
+  const CARD={};
+  CARD[WS_ACTIVE]="good"; CARD[WS_MOVE]=""; CARD[WS_END]="warn";
+  CARD[WS_CUT]="cut";     CARD[WS_FIRE]="bad";
   el("varCards").innerHTML=
-    '<div class="card hero"><div class="k">إجمالي المتغيرات</div><div class="v">'+fmtNum(all.length)+'</div></div>'+
-    '<div class="card warn"><div class="k">'+esc(WS_END)+'</div><div class="v">'+fmtNum(cnt[WS_END])+'</div></div>'+
-    '<div class="card cut"><div class="k">'+esc(WS_CUT)+'</div><div class="v">'+fmtNum(cnt[WS_CUT])+'</div></div>'+
-    '<div class="card bad"><div class="k">'+esc(WS_FIRE)+'</div><div class="v">'+fmtNum(cnt[WS_FIRE])+'</div></div>';
-  el("varCount").textContent = all.length
-    ? fmtNum(list.length)+" من "+fmtNum(all.length)+" عامل" : "";
+    '<div class="card hero"><div class="k">المؤشّر حالياً</div><div class="v">'+fmtNum(inSel)+
+      '</div><div class="k">من '+fmtNum(c.workers.length)+' عامل</div></div>'+
+    WSTATUSES.map(t=>'<div class="card '+CARD[t]+'"><div class="k">'+esc(t)+'</div><div class="v">'+
+      fmtNum(cnt[t])+'</div></div>').join("");
+  el("varCount").textContent = c.workers.length
+    ? fmtNum(list.length)+" من "+fmtNum(c.workers.length)+" عامل" : "";
 
-  if(!all.length){
-    box.innerHTML='<div class="empty"><h3>ماكو متغيرات</h3>'+
-      '<p>كل العمال المسجلين حالتهم «'+esc(WS_ACTIVE)+'». أي عامل تغيّر حالته يظهر هنا تلقائياً.</p></div>';
+  if(!c.workers.length){
+    box.innerHTML='<div class="empty"><h3>ماكو عمال مسجلين</h3>'+
+      '<p>سجّل العمال من تبويب «العمال والأقسام» وتظهر حالاتهم هنا.</p></div>';
+    return;
+  }
+  if(!varSelected().length){
+    box.innerHTML='<div class="empty"><h3>ماكو حالة مؤشّرة</h3>'+
+      '<p>أشّر حالة واحدة على الأقل فوق، أو اضغط «الكل».</p></div>';
     return;
   }
   if(!list.length){
-    box.innerHTML='<div class="empty"><p>ماكو نتيجة لهذا الفلتر أو البحث.</p></div>';
+    box.innerHTML='<div class="empty"><p>ماكو نتيجة لهذا الاختيار أو البحث.</p></div>';
     return;
   }
   let h='<table><thead><tr><th>ت</th><th>الاسم</th><th>اسم الأم</th><th>التولد</th><th>القسم</th>'+
@@ -4045,7 +4096,7 @@ function renderVariables(){
       '<td class="mini">'+(w.statusChangedAt?esc(dateTextOf(w.statusChangedAt)):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
       '<td class="mini">'+(w.statusNote?esc(w.statusNote):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
       '<td style="text-align:left;white-space:nowrap">'+
-        '<button class="btn sm primary" data-vrestore="'+w.id+'">استعادة إلى '+esc(WS_ACTIVE)+'</button> '+
+        (isActiveWorker(w)?"":'<button class="btn sm primary" data-vrestore="'+w.id+'">استعادة إلى '+esc(WS_ACTIVE)+'</button> ')+
         '<button class="btn sm" data-vedit="'+w.id+'">تعديل البيانات</button></td></tr>';
   });
   box.innerHTML=h+'</tbody></table>';
@@ -4064,7 +4115,15 @@ el("variablesTable").addEventListener("click",e=>{
   if(r){ changeWorkerStatus(r.dataset.vrestore, WS_ACTIVE); return; }
   if(ed){ openWorkerEditor(ed.dataset.vedit); }
 });
-el("varFilter").addEventListener("change",renderVariables);
+el("varStatusBoxes").addEventListener("change",e=>{
+  const b=e.target.closest("[data-vst]"); if(!b) return;
+  const t=normStatus0(b.dataset.vst); if(!t) return;
+  const cur=varSelected().slice(), i=cur.indexOf(t);
+  if(i>=0) cur.splice(i,1); else cur.push(t);
+  setVarSel(cur); renderVariables();
+});
+el("varAll").onclick=()=>{ setVarSel(WSTATUSES.slice()); renderVariables(); };
+el("varNone").onclick=()=>{ setVarSel([]); renderVariables(); };
 el("varSearch").addEventListener("input",renderVariables);
 
 /* ---- تصدير المتغيرات: يتبع الفلتر والبحث الحاليين ---- */
@@ -4076,13 +4135,13 @@ el("varXls").onclick=()=>{
   try{
     const body=varExportRows(true);
     const rows=[VAR_HEAD].concat(body.length?body:[VAR_EMPTY_ROW]);
-    saveXlsx(buildXlsx(rows,{sheet:"المتغيرات",widths:[5,26,24,14,22,16,32,18,18,30]}),
-      "المتغيرات-"+todayISO()+".xlsx");
+    saveXlsx(buildXlsx(rows,{sheet:"حالات العمال",widths:[5,26,24,14,22,16,32,18,18,30]}),
+      "حالات-العمال-"+todayISO()+".xlsx");
     varNote("انصدّر Excel ✓");
   }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
 el("varWord").onclick=()=>{
-  try{ saveDocx(variablesDocx(),"المتغيرات-"+todayISO()+".docx"); varNote("انصدّر Word ✓"); }
+  try{ saveDocx(variablesDocx(),"حالات-العمال-"+todayISO()+".docx"); varNote("انصدّر Word ✓"); }
   catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("varPrint").onclick=()=>{
@@ -4096,7 +4155,7 @@ el("varPrint").onclick=()=>{
     return '<td'+cls+'>'+esc(String(v))+'</td>';
   }).join("")+'</tr>').join("");
   w.document.write(
-    '<html dir="rtl"><head><meta charset="utf-8"><title>المتغيرات</title><style>'+
+    '<html dir="rtl"><head><meta charset="utf-8"><title>حالات العمال</title><style>'+
     '@page{size:A4 landscape;margin:10mm}'+
     'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
     'h1{font-size:16pt;margin:0 0 2mm;color:#4B2E83}'+
@@ -4109,7 +4168,7 @@ el("varPrint").onclick=()=>{
     '.ltr{direction:ltr;text-align:right;unicode-bidi:embed;white-space:nowrap}'+
     STATUS_PRINT_CSS+
     '</style></head><body>'+
-    '<h1>'+esc(s.company||"")+' — المتغيرات (العمال غير المستمرين)</h1>'+
+    '<h1>'+esc(s.company||"")+' — حالات العمال</h1>'+
     '<p class="sub">'+esc(varScopeText())+' · عدد النتائج: '+fmtNum(rows.length)+
       ' · تاريخ الطباعة: '+dateTextOf(todayISO())+
       ' · وثيقة داخلية تُحفظ لدى الإدارة</p>'+
@@ -4137,8 +4196,8 @@ function variablesDocx(){
       wPara("إدارة الموارد البشرية — الشعبة الإدارية",{size:9,color:CLR.ink2,align:"right",after:0}),
       {width:Math.round(FULL*0.34),raw:true,valign:"center"}),
     wCell(
-      wPara("المتغيرات",{size:20,bold:true,color:CLR.purple,align:"center",after:20})+
-      wPara("العمال غير المستمرين — "+varScopeText(),{size:9,color:CLR.ink2,align:"center",after:0}),
+      wPara("حالات العمال",{size:20,bold:true,color:CLR.purple,align:"center",after:20})+
+      wPara(varScopeText(),{size:9,color:CLR.ink2,align:"center",after:0}),
       {width:FULL-2*Math.round(FULL*0.34),raw:true,valign:"center"}),
     wCell(
       wPara("عدد النتائج: "+fmtNum(rows.length),{size:10,bold:true,align:"left",after:20})+
@@ -4151,7 +4210,7 @@ function variablesDocx(){
   const th=(t,wd)=>wCell(t,{bold:true,size:10,color:"#FFFFFF",shade:CLR.purple,align:"center",width:wd});
   const trs=[wRow(VAR_HEAD.map((h,i)=>th(h,G[i])),{header:true,height:380})];
   if(!rows.length){
-    trs.push(wRow([wCell("ماكو عمال ضمن المتغيرات بهذا الفلتر",
+    trs.push(wRow([wCell("ماكو عمال بهذا الاختيار",
       {size:10,align:"center",color:CLR.ink2,width:FULL,span:VAR_HEAD.length})],{height:420}));
   }
   rows.forEach((r,i)=>{
@@ -6395,6 +6454,7 @@ function resetReceiptForms(){
 }
 function bootView(){
   RP=null;   // إلغاء تقرير الشركة السابقة عند التبديل
+  varSel=null;   // اختيار الحالات محفوظ لكل شركة على حدة
   resetReceiptForms();
   applyTheme();
   el("tbCompany").textContent=S().company;
