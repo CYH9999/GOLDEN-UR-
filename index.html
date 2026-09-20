@@ -250,6 +250,27 @@ tr.rowvar td{background:#FCFAFE}
 .card.warn .v{color:var(--misc)}
 .card.cut .v{color:var(--brand-deep)}
 
+/* ---- نوافذ داخل الصفحة: بديل prompt/confirm ---- */
+.ovl{position:fixed;inset:0;background:rgba(36,22,51,.55);display:flex;align-items:center;
+  justify-content:center;padding:18px;z-index:60}
+.ovlbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(700px,100%);
+  max-height:92vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.34)}
+.ovlhead{display:flex;align-items:center;gap:10px;padding:12px 16px;
+  border-bottom:2px solid var(--gold);background:#F8F4FC}
+.ovlhead h3{margin:0;font-size:15px;font-weight:700;color:var(--brand-deep)}
+.ovlhead .x{margin-inline-start:auto}
+.ovlbody{padding:14px 16px;overflow:auto}
+.ovlfoot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+  padding:12px 16px;border-top:1px solid var(--line);background:#FAF7FD}
+.chkcol{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:6px}
+.chkcol label{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:6px;
+  padding:6px 10px;font-size:13px;font-weight:600;background:#fff;cursor:pointer}
+.chkcol label.on{border-color:var(--brand);background:#F3EDFA}
+.chkcol label.risk{border-color:#E4B7BE;background:#FDF6F7}
+.chkcol label.risk.on{border-color:var(--absent);background:#F7E5E8}
+.chkcol input[type=checkbox]{width:auto;margin:0;accent-color:var(--brand)}
+.chkcol .rk{margin-inline-start:auto;font-size:10px;font-weight:800;color:var(--absent);white-space:nowrap}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.topbar,.tabs,.tally,.reminder,.actions{display:none!important}}
 </style>
@@ -718,6 +739,7 @@ tr.rowvar td{background:#FCFAFE}
         <button class="btn primary" id="varWord">تصدير Word</button>
         <button class="btn" id="varXls">تصدير Excel</button>
         <button class="btn" id="varPrint">طباعة / PDF</button>
+        <button class="btn gold" id="varExt">كشف خارجي — بلا معلومات شخصية</button>
         <span class="saved" id="varNote"></span>
       </div>
       <div id="variablesTable" class="tblwrap"></div>
@@ -1011,6 +1033,30 @@ tr.rowvar td{background:#FCFAFE}
   </div>
 </section>
 
+</div>
+
+<!-- ===== نافذة الكشف الخارجي ===== -->
+<div class="ovl hidden" id="extBack">
+  <div class="ovlbox">
+    <div class="ovlhead"><h3>كشف خارجي — بلا معلومات شخصية</h3>
+      <button class="btn sm ghost x" id="extClose">إغلاق</button></div>
+    <div class="ovlbody">
+      <p class="hint" style="margin-top:0">كشف يُسلَّم لجهة خارجية. معلومات العامل الشخصية ملك الشركة
+        ولا تُسلَّم لأحد — الأعمدة المؤشّرة بالأحمر ممنوعة افتراضياً، وما تنطي إلا بطلب رسمي.</p>
+      <label class="field"><span>الجهة المستلمة</span>
+        <input type="text" id="extTo" placeholder="مثال: مكتب الاستعلامات"></label>
+      <div id="extWarn"></div>
+      <span class="fieldlbl" style="margin-top:12px">أعمدة الكشف</span>
+      <div id="extCols" class="chkcol"></div>
+      <p class="hint" id="extScope"></p>
+    </div>
+    <div class="ovlfoot">
+      <button class="btn primary" id="extWord">تصدير Word</button>
+      <button class="btn" id="extXls">تصدير Excel</button>
+      <button class="btn" id="extPrint">طباعة / PDF</button>
+      <span class="saved" id="extNote"></span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -4263,6 +4309,250 @@ el("varPrint").onclick=()=>{
     '<tbody>'+body+'</tbody></table></body></html>');
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
+/* ==================== الكشف الخارجي ====================
+   مكتب الاستعلامات وغيره يطلب أسماء من لم يعودوا موظفين. معلومات
+   العامل الشخصية ملك الشركة ولا تُسلَّم لجهة خارجية، فالأعمدة
+   الشخصية ممنوعة افتراضياً وتحتاج تأشيراً واعياً بتحذير أحمر.
+   الكشف يتبع الحالات المؤشّرة والترتيب الحاليين في تبويب حالات العمال. */
+const EXT_COLS=[
+  {k:"idx",    t:"ت",                 def:true},
+  {k:"name",   t:"الاسم",              def:true},
+  {k:"dob",    t:"التولد",             def:true},
+  {k:"status", t:"حالة العمل",         def:true},
+  {k:"last",   t:"تاريخ آخر يوم عمل",  def:true},
+  {k:"mother", t:"اسم الأم",           def:false, risk:true},
+  {k:"section",t:"القسم",              def:false, risk:true},
+  {k:"phone",  t:"رقم الهاتف",         def:false, risk:true},
+  {k:"phone2", t:"رقم الطوارئ",        def:false, risk:true},
+  {k:"addr",   t:"العنوان",            def:false, risk:true},
+  {k:"note",   t:"ملاحظة تغيير الحالة",def:false, risk:true}
+];
+const EXT_LTR={phone:1,phone2:1};
+let extSel=null;
+function extDefaults(){ return EXT_COLS.filter(c=>c.def).map(c=>c.k); }
+function extCols(){
+  if(!Array.isArray(extSel)) extSel=extDefaults();
+  return EXT_COLS.filter(c=>extSel.indexOf(c.k)>=0);
+}
+function extValue(w,k,i,raw){
+  switch(k){
+    case "idx":     return i+1;
+    case "name":    return w.name||"—";
+    case "dob":     return w.dob||"—";
+    case "status":  return getWorkerStatus(w);
+    case "last":    return lastDayText(w);
+    case "mother":  return w.motherName||"—";
+    case "section": return sectionLabel(w);
+    case "phone":   return (raw?normPhone(w.phone):fmtPhone(w.phone))||"—";
+    case "phone2":  return (raw?normPhone(w.phone2):fmtPhone(w.phone2))||"—";
+    case "addr":    return w.address||"—";
+    case "note":    return statusNoteText(w);
+  }
+  return "";
+}
+function extHead(){ return extCols().map(c=>c.t); }
+function extRows(raw){
+  const cs=extCols();
+  return varList().map((w,i)=>cs.map(c=>{
+    const v=extValue(w,c.k,i,raw);
+    return (c.k==="idx" && !raw) ? fmtNum(v) : v;
+  }));
+}
+function extTitleText(){ return "كشف بأسماء العمال غير المستمرين"; }
+function extToText(){ return String(el("extTo").value||"").trim() || "—"; }
+const EXT_FOOT="هذا الكشف يقتصر على ما ورد أعلاه، ولا تُمنح معلومات إضافية إلا بطلب رسمي.";
+
+function renderExt(){
+  const box=el("extCols");
+  if(box && box.innerHTML!==undefined){
+    const on=extCols().map(c=>c.k);
+    box.innerHTML=EXT_COLS.map(c=>{
+      const sel=on.indexOf(c.k)>=0;
+      return '<label class="'+(c.risk?"risk ":"")+(sel?"on":"")+'">'+
+        '<input type="checkbox" data-extc="'+c.k+'"'+(sel?" checked":"")+'>'+
+        '<span>'+esc(c.t)+'</span>'+
+        (c.risk?'<span class="rk">معلومة شخصية — ممنوعة</span>':'')+'</label>';
+    }).join("");
+  }
+  const w=el("extWarn");
+  if(w && w.innerHTML!==undefined){
+    let h="";
+    if(varStatusOn(WS_ACTIVE))
+      h+='<div class="errbox">الكشف يتضمّن عمالاً مستمرين بالخدمة — تأكد أن هذا مقصود.</div>';
+    const risky=extCols().filter(c=>c.risk);
+    if(risky.length)
+      h+='<div class="warnbox">راح تنطي معلومات شخصية: <b>'+esc(risky.map(c=>c.t).join("، "))+
+        '</b>. تأكد أن عندك طلب رسمي يخوّلك.</div>';
+    if(!varSelected().length)
+      h+='<div class="errbox">ماكو حالة مؤشّرة بتبويب حالات العمال — الكشف راح يطلع فارغ.</div>';
+    w.innerHTML=h;
+  }
+  const sc=el("extScope");
+  if(sc && sc.textContent!==undefined)
+    sc.textContent=varScopeText()+"  ·  عدد الأسماء: "+fmtNum(varList().length);
+}
+function openExt(){
+  extSel=extDefaults();          // كل فتحة ترجع للأعمدة الآمنة
+  if(!el("extTo").value) el("extTo").value="";
+  el("extBack").classList.remove("hidden");
+  renderExt();
+  const t=el("extTo"); if(t.focus) t.focus();
+}
+function closeExt(){ el("extBack").classList.add("hidden"); }
+el("varExt").onclick=openExt;
+el("extClose").onclick=closeExt;
+el("extBack").addEventListener("click",e=>{ if(e.target===el("extBack")) closeExt(); });
+el("extCols").addEventListener("change",e=>{
+  const b=e.target.closest("[data-extc]"); if(!b) return;
+  const k=b.dataset.extc;
+  if(!Array.isArray(extSel)) extSel=extDefaults();
+  const i=extSel.indexOf(k);
+  if(i>=0) extSel.splice(i,1); else extSel.push(k);
+  renderExt();
+});
+el("extTo").addEventListener("input",renderExt);
+function extNote(t){
+  el("extNote").textContent=t;
+  setTimeout(()=>{ el("extNote").textContent=""; },2200);
+}
+function extGuard(){
+  if(!varList().length){ alert("ماكو أسماء بهذا الاختيار. أشّر حالة واحدة على الأقل."); return false; }
+  if(!extCols().length){ alert("أشّر عموداً واحداً على الأقل."); return false; }
+  return true;
+}
+el("extXls").onclick=()=>{
+  if(!extGuard()) return;
+  try{
+    saveXlsx(buildXlsx([extHead()].concat(extRows(true)),
+      {sheet:"كشف خارجي", widths:extCols().map(c=>c.k==="name"?28:(c.k==="idx"?5:18))}),
+      "كشف-خارجي-"+todayISO()+".xlsx");
+    extNote("انصدّر Excel ✓");
+  }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
+};
+el("extWord").onclick=()=>{
+  if(!extGuard()) return;
+  try{ saveDocx(externalDocx(),"كشف-خارجي-"+todayISO()+".docx"); extNote("انصدّر Word ✓"); }
+  catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+};
+el("extPrint").onclick=()=>{
+  if(!extGuard()) return;
+  const s2=S(), head=extHead(), rows=extRows(false), cs=extCols();
+  const w=window.open("","_blank");
+  if(!w){ alert("المتصفح منع فتح النافذة."); return; }
+  const stCol=cs.findIndex(c=>c.k==="status");
+  const body=rows.map(r=>'<tr>'+r.map((v,i)=>{
+    const cls = EXT_LTR[cs[i].k] ? ' class="ltr"'
+      : (i===stCol ? ' class="'+statusPrintClass(v)+'"' : '');
+    return '<td'+cls+'>'+esc(String(v))+'</td>';
+  }).join("")+'</tr>').join("");
+  w.document.write(
+    '<html dir="rtl"><head><meta charset="utf-8"><title>'+esc(extTitleText())+'</title><style>'+
+    '@page{size:A4 portrait;margin:14mm}'+
+    'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
+    'h1{font-size:15pt;margin:0 0 1mm;color:#4B2E83}'+
+    'h2{font-size:12pt;margin:0 0 3mm;color:#333;font-weight:700}'+
+    '.sub{font-size:9.5pt;color:#555;margin:0 0 6mm;line-height:1.9}'+
+    'table{width:100%;border-collapse:collapse}'+
+    'thead{display:table-header-group}'+
+    'th,td{border:1px solid #bbb;padding:5px 7px;font-size:10pt;vertical-align:top}'+
+    'th{background:#EFEAF6;color:#33205C;font-weight:700}'+
+    'tr:nth-child(even) td{background:#FAF8FC}'+
+    '.ltr{direction:ltr;text-align:right;unicode-bidi:embed;white-space:nowrap}'+
+    '.sig{margin-top:14mm;width:70mm}'+
+    '.sig .ln{border-top:1px solid #444;margin-bottom:2mm}'+
+    '.sig b{display:block;font-size:11pt}'+
+    '.sig span{font-size:9.5pt;color:#555}'+
+    '.foot{margin-top:10mm;font-size:9.5pt;color:#555;border-top:1px dashed #bbb;padding-top:3mm}'+
+    STATUS_PRINT_CSS+
+    '</style></head><body>'+
+    '<h1>'+esc(s2.company||"")+'</h1>'+
+    '<h2>'+esc(extTitleText())+'</h2>'+
+    '<p class="sub">الجهة المستلمة: <b>'+esc(extToText())+'</b><br>'+
+      'تاريخ التحرير: '+dateTextOf(todayISO())+'<br>'+
+      'عدد الأسماء: '+fmtNum(rows.length)+'</p>'+
+    '<table><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead>'+
+    '<tbody>'+body+'</tbody></table>'+
+    '<div class="sig"><div class="ln"></div><b>'+esc(s2.signer||"المسؤول الإداري")+'</b>'+
+      '<span>'+esc(s2.role||"")+'</span></div>'+
+    '<p class="foot">'+esc(EXT_FOOT)+'</p>'+
+    '</body></html>');
+  w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
+  extNote("انفتحت الطباعة ✓");
+};
+/* ---- الكشف الخارجي بالوورد (طولي) ---- */
+function externalDocx(){
+  docReset();
+  const s2=S(), CLR=CL();
+  const SOFT=isMono()?"#F2F2F2":"#F5F3F8";
+  const m=receiptMedia();
+  const head=extHead(), rows=extRows(false), cs=extCols();
+  const FULL=11906-720*2;
+  /* الاسم يأخذ الحصة الأكبر، والتسلسل ضيّق، والباقي بالتساوي،
+     وآخر عمود يستوعب الكسر فيبقى المجموع = عرض الصفحة بالضبط. */
+  const wt=cs.map(c=>c.k==="idx"?0.45:(c.k==="name"?2.4:1.15));
+  const tw=wt.reduce((a,b)=>a+b,0);
+  const G=wt.map(x=>Math.floor(FULL*x/tw));
+  G[G.length-1]=FULL-G.slice(0,-1).reduce((a,b)=>a+b,0);
+
+  const H1=Math.round(FULL*0.32), H3=Math.round(FULL*0.32), H2=FULL-H1-H3;
+  const ld=logoDims(0.95,0.42);
+  let b=wTable([wRow([
+    wCell(
+      (m.logoRid?wImage(m.logoRid,ld.w,ld.h,"right"):"")+
+      wPara(s2.company||"اسم الشركة",{size:13,bold:true,color:CLR.purpleDeep,align:"right",after:20})+
+      wPara("إدارة الموارد البشرية — الشعبة الإدارية",{size:8,color:CLR.ink2,align:"right",after:0}),
+      {width:H1,raw:true,valign:"center"}),
+    wCell(
+      wPara(extTitleText(),{size:16,bold:true,color:CLR.purple,align:"center",after:20})+
+      wPara("الجهة المستلمة: "+extToText(),{size:9,bold:true,color:CLR.ink2,align:"center",after:0}),
+      {width:H2,raw:true,valign:"center"}),
+    wCell(
+      wPara("عدد الأسماء: "+fmtNum(rows.length),{size:10,bold:true,align:"left",after:20})+
+      wPara("تاريخ التحرير: "+dateTextOf(todayISO()),{size:9,align:"left",after:0}),
+      {width:H3,raw:true,valign:"center"})
+  ],{height:1000})],{border:CLR.purple,borderSize:8,grid:[H1,H2,H3]});
+  b+=wGap(160);
+
+  const th=(t,wd)=>wCell(t,{bold:true,size:10,color:"#FFFFFF",shade:CLR.purple,align:"center",width:wd});
+  const trs=[wRow(head.map((h,i)=>th(h,G[i])),{header:true,height:380})];
+  if(!rows.length){
+    trs.push(wRow([wCell("ماكو أسماء بهذا الاختيار",
+      {size:10,align:"center",color:CLR.ink2,width:FULL,span:head.length})],{height:420}));
+  }
+  rows.forEach((r,i)=>{
+    const zebra=(i%2===1)?(isMono()?"#F7F7F7":"#FAF8FC"):null;
+    trs.push(wRow(r.map((v,ci)=>{
+      const c=cs[ci];
+      const o={size:10,width:G[ci],shade:zebra,align:"center"};
+      if(c.k==="name"){ o.align="right"; o.bold=true; o.size=11; }
+      if(c.k==="addr"||c.k==="note"||c.k==="section"||c.k==="mother"){ o.align="right"; }
+      if(EXT_LTR[c.k]){ o.ltr=true; o.color=CLR.purpleDeep; o.bold=true; }
+      if(c.k==="status"){ o.bold=true; o.color=statusDocColor(v); }
+      return wCell(String(v),o);
+    }),{height:340}));
+  });
+  b+=wTable(trs,{border:CLR.line,borderSize:6,grid:G});
+  b+=wGap(400);
+
+  /* خانة توقيع واحدة: المسؤول الإداري المعتمد بالإعدادات */
+  const SW=Math.round(FULL*0.42), SW2=FULL-SW;
+  const DOT="\u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7";
+  let sig = m.sigRid ? wImage(m.sigRid,1.45,0.47,"center") : wGap(420);
+  sig += wPara(DOT,{align:"center",size:10,color:CLR.ink2,after:20});
+  sig += wPara(s2.signer||"المسؤول الإداري",{align:"center",size:11,bold:true,color:CLR.purpleDeep,after:10});
+  sig += wPara(s2.role||"",{align:"center",size:9,color:CLR.ink2,after:0});
+  b+=wTable([wRow([
+    wCell("",{width:SW2}),
+    wCell(sig,{width:SW,raw:true,valign:"bottom"})
+  ],{height:1400})],{border:CLR.line,borderSize:6,grid:[SW2,SW]});
+  b+=wGap(200);
+
+  b+=wTable([wRow([wCell(EXT_FOOT+" · "+(s2.company||"")+" · "+dateTextOf(todayISO()),
+    {size:9,color:CLR.ink2,shade:SOFT,align:"center",width:FULL})],{height:360})],
+    {border:CLR.line,borderSize:4,grid:[FULL]});
+  return buildDocx(b,{media:m.media,margin:720});
+}
+
 /* ---- المتغيرات بالوورد (عرضي — عشرة أعمدة) ---- */
 function variablesDocx(){
   docReset();
