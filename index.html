@@ -658,7 +658,9 @@ tr.rowvar td{background:#FCFAFE}
           <textarea id="bulk" rows="5" placeholder="أحمد كاظم جاسم&#10;علي عبد الحسين"></textarea>
         </label>
         <button class="btn" id="addBulk">إضافة الأسماء للقسم المختار</button>
-        <div class="tblwrap tight" style="margin-top:16px">
+        <label class="field" style="margin-top:16px;margin-bottom:0"><span>ترتيب الجدول</span>
+          <select id="wSort" class="wsel" style="width:auto"></select></label>
+        <div class="tblwrap tight" style="margin-top:10px">
           <table>
             <thead><tr><th>الاسم</th><th>اسم الأم</th><th>التولد</th><th>القسم</th><th>حالة العمل</th><th></th></tr></thead>
             <tbody id="wTable"></tbody>
@@ -671,6 +673,7 @@ tr.rowvar td{background:#FCFAFE}
   <div class="panel" style="margin-top:14px">
     <div class="panel-head">
       <h2>دليل العمال — الهواتف والعناوين</h2>
+      <select id="dirSort" class="wsel" style="width:auto" title="الترتيب"></select>
       <input type="text" id="dirSearch" placeholder="بحث بالاسم أو الرقم أو العنوان…" style="flex:1;min-width:180px;width:auto">
       <span class="saved" id="dirCount"></span>
     </div>
@@ -705,6 +708,8 @@ tr.rowvar td{background:#FCFAFE}
             <button class="btn sm" id="varAll">الكل</button>
             <button class="btn sm ghost" id="varNone">إلغاء الكل</button>
           </div></div>
+        <label class="field" style="margin:0"><span>الترتيب</span>
+          <select id="varSort" class="wsel"></select></label>
         <label class="field grow" style="margin:0"><span>بحث</span>
           <input type="text" id="varSearch" placeholder="اسم العامل أو اسم الأم أو القسم أو الهاتف أو العنوان…"></label>
       </div>
@@ -743,6 +748,7 @@ tr.rowvar td{background:#FCFAFE}
   <div class="panel">
     <div class="panel-head">
       <h2>كشف الرواتب</h2>
+      <select id="rpSort" class="wsel" style="width:auto" title="الترتيب"></select>
       <input type="text" id="rpSearch" placeholder="بحث باسم…" style="flex:1;min-width:150px;width:auto">
       <button class="btn primary" id="rpWord">تصدير Word</button>
       <button class="btn" id="rpPdf">طباعة / PDF</button>
@@ -783,7 +789,9 @@ tr.rowvar td{background:#FCFAFE}
       </div>
       <p class="hint">المتفرقة والإجازات الرسمية تُجمع سوا ثم تُطبّق عليها السياسة. أما الغياب بلا حجة (غ) فيُستقطع يوماً كاملاً دائماً.</p>
       <p class="hint">هذه القيم افتراضية لكل العمال. تقدر تعدّل راتب أي عامل بمفرده من الجدول تحت.</p>
-      <div class="actions"><button class="btn" id="applyAllSalary">تطبيق الراتب الافتراضي على كل العمال</button></div>
+      <div class="actions"><button class="btn" id="applyAllSalary">تطبيق الراتب الافتراضي على كل العمال</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);font-weight:600">
+          الترتيب <select id="salSort" class="wsel" style="width:auto"></select></label></div>
       <div style="overflow-x:auto;margin-top:14px">
         <table id="salTable"><tbody></tbody></table>
       </div>
@@ -1189,6 +1197,82 @@ function workerOptionLabel(w){
   return isActiveWorker(w) ? String(w.name||"") : String(w.name||"")+" — "+getWorkerStatus(w);
 }
 function normName(v){ return String(v==null?"":v).trim().replace(/\s+/g," "); }
+
+/* ==================== الترتيب الأبجدي العربي ====================
+   الترتيب الافتراضي لجافاسكربت يقارن رموز يونيكود، فيطلع «آلاء» قبل
+   «إبراهيم» و«ىوسف» بعد «ياسر» — انحراف واضح على ورقة رسمية.
+   Intl.Collator("ar") يرتّب بقواعد العربية، ومفتاح الفرز يُطبَّع قبله:
+   تُحذف «ال» التعريف من البداية، وتُوحَّد الهمزات والألف المقصورة
+   والتاء المربوطة. التطبيع في المفتاح فقط — الاسم المعروض لا يتغيّر. */
+const AR_COLL=(function(){
+  try{ return new Intl.Collator("ar",{numeric:true}); }
+  catch(e){ return { compare:function(a,b){ return a<b?-1:(a>b?1:0); } }; }
+})();
+function sortKeyAr(v){
+  let t=String(v==null?"":v).trim().replace(/\s+/g," ");
+  t=t.replace(/^\u0627\u0644(?=.)/,"");                  /* «ال» التعريف */
+  t=t.replace(/[\u0623\u0625\u0622\u0671]/g,"\u0627")   /* أ إ آ ٱ ← ا */
+     .replace(/\u0649/g,"\u064A")                        /* ى ← ي */
+     .replace(/\u0629/g,"\u0647")                        /* ة ← ه */
+     .replace(/[\u064B-\u0652\u0640]/g,"");             /* تشكيل وتطويل */
+  return t;
+}
+function cmpAr(a,b){ return AR_COLL.compare(sortKeyAr(a),sortKeyAr(b)); }
+/* الأحدث أولاً، وبلا تاريخ ينزل آخر القائمة */
+function cmpDateDesc(a,b){
+  const x=String(a||""), y=String(b||"");
+  if(x===y) return 0;
+  if(!x) return 1;
+  if(!y) return -1;
+  return x<y?1:-1;
+}
+const SORT_OPTS=[
+  ["name","الاسم (أ ← ي)"],
+  ["name-d","الاسم (ي ← أ)"],
+  ["status","حالة العمل، ثم الاسم"],
+  ["changed","تاريخ تغيير الحالة (الأحدث أولاً)"],
+  ["section","القسم، ثم الاسم"]
+];
+const PAY_SORT_OPTS=SORT_OPTS.concat([
+  ["net-d","الصافي (تنازلياً)"],
+  ["abs-d","عدد الغياب (تنازلياً)"]
+]);
+/* مُحوِّل يقرأ الحقول من كائن العامل أو من صف كشف الرواتب */
+const WSORT={ name:function(w){ return w.name; }, status:function(w){ return getWorkerStatus(w); },
+  changed:function(w){ return w.statusChangedAt||w.endDate||""; },
+  section:function(w){ return sectionLabel(w); } };
+const RSORT={ name:function(r){ return r.name; }, status:function(r){ return r.status; },
+  changed:function(r){ return r.endDate||r.statusChangedAt||""; },
+  section:function(r){ return r.section||""; },
+  net:function(r){ return Number(r.net)||0; }, absent:function(r){ return Number(r.absent)||0; } };
+function sortBy(list,mode,a){
+  const by={
+    "name":    function(x,y){ return cmpAr(a.name(x),a.name(y)); },
+    "name-d":  function(x,y){ return cmpAr(a.name(y),a.name(x)); },
+    "status":  function(x,y){ return (statusRank(a.status(x))-statusRank(a.status(y)))||cmpAr(a.name(x),a.name(y)); },
+    "changed": function(x,y){ return cmpDateDesc(a.changed(x),a.changed(y))||cmpAr(a.name(x),a.name(y)); },
+    "section": function(x,y){ return cmpAr(a.section(x),a.section(y))||cmpAr(a.name(x),a.name(y)); },
+    "net-d":   function(x,y){ return ((a.net?a.net(y):0)-(a.net?a.net(x):0))||cmpAr(a.name(x),a.name(y)); },
+    "abs-d":   function(x,y){ return ((a.absent?a.absent(y):0)-(a.absent?a.absent(x):0))||cmpAr(a.name(x),a.name(y)); }
+  };
+  return list.slice().sort(by[mode]||by.name);
+}
+function sortWorkers(list,mode){ return sortBy(list,mode,WSORT); }
+function sortRows(list,mode){ return sortBy(list,mode,RSORT); }
+/* قائمة العمال مرتّبة أبجدياً دائماً — لكل قائمة منسدلة بالنماذج */
+function workersAZ(list){ return sortWorkers(list||C().workers,"name"); }
+/* قائمة الترتيب: تُعبّأ مرة واحدة وتحتفظ باختيار المستخدم */
+function fillSort(id,opts){
+  const n=el(id);
+  if(!n || n.innerHTML===undefined) return "name";
+  const list=opts||SORT_OPTS;
+  if(!n.innerHTML){
+    n.innerHTML=list.map(o=>'<option value="'+o[0]+'">'+esc(o[1])+'</option>').join("");
+    n.value="name";
+  }
+  const v=String(n.value||"name");
+  return list.some(o=>o[0]===v) ? v : "name";
+}
 function dobText(w){ return (w && w.dob) ? String(w.dob) : "—"; }
 function motherText(w){ return (w && w.motherName) ? String(w.motherName) : "—"; }
 
@@ -2042,7 +2126,7 @@ function renderPeople(){
     const keepSt=normStatus(wsSel.value||WS_ACTIVE);
     wsSel.innerHTML=statusOptions(keepSt);
   }
-  el("wTable").innerHTML=c.workers.map(w=>{
+  el("wTable").innerHTML=sortWorkers(c.workers, fillSort("wSort")).map(w=>{
     const nameCell = (editWorkerId===w.id)
       ? '<td><input class="renameBox" id="wRenameBox" type="text" value="'+esc(w.name)+'"></td>'
       : '<td>'+esc(w.name)+'</td>';
@@ -2485,7 +2569,7 @@ el("wipeAll").onclick=async()=>{
 function nextLeaveNo(){ return docNo("إ",(C().leaveSeq||0)+1); }
 function initLeaveView(){
   const c=C(), sel=el("lvWorker"), keep=sel.value;
-  sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
+  sel.innerHTML='<option value="">— اختر العامل —</option>'+workersAZ().map(w=>
     '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("lvFrom").value) el("lvFrom").value=curDate;
@@ -2877,7 +2961,7 @@ function pnHintRender(){
 
 function initPenView(){
   const c=C(), sel=el("pnWorker"), keep=sel.value;
-  sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
+  sel.innerHTML='<option value="">— اختر العامل —</option>'+workersAZ().map(w=>
     '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("pnDate").value) el("pnDate").value=curDate;
@@ -3164,7 +3248,7 @@ function acHintRender(){
 
 function initAchView(){
   const c=C(), sel=el("acWorker"), keep=sel.value;
-  sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
+  sel.innerHTML='<option value="">— اختر العامل —</option>'+workersAZ().map(w=>
     '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("acDate").value) el("acDate").value=curDate;
@@ -3497,7 +3581,7 @@ el("catList").addEventListener("click",e=>{
 /* ---- التبويب ---- */
 function initMatView(){
   const c=C(), sel=el("mtWorker"), keep=sel.value;
-  sel.innerHTML='<option value="">— اختر العامل —</option>'+c.workers.map(w=>
+  sel.innerHTML='<option value="">— اختر العامل —</option>'+workersAZ().map(w=>
     '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("mtFrom").value) el("mtFrom").value=curDate;
@@ -3806,7 +3890,7 @@ function dirList(){
   const c=C(), q=String(el("dirSearch").value||"").trim();
   let list=c.workers.slice();
   if(q) list=list.filter(w=>workerMatches(w,q));
-  return list;
+  return sortWorkers(list, fillSort("dirSort"));
 }
 function renderDirectory(){
   const box=el("dirTable"); if(!box||box.innerHTML===undefined) return;
@@ -3898,6 +3982,7 @@ function dirSave(id){
   setTimeout(()=>el("dirNote").textContent="",2200);
 }
 el("dirSearch").addEventListener("input",renderDirectory);
+el("dirSort").addEventListener("change",renderDirectory);
 el("dirTable").addEventListener("click",e=>{
   const ed=e.target.closest("[data-dedit]"), sv=e.target.closest("[data-dsave]");
   if(ed){ editDirId=ed.dataset.dedit; renderDirectory(); return; }
@@ -4026,7 +4111,8 @@ function varList(){
   const sel=varSelected();
   let list=C().workers.filter(w=>sel.indexOf(getWorkerStatus(w))>=0);
   if(q) list=list.filter(w=>workerMatches(w,q));
-  return list;
+  /* كل تصدير يقرأ من هنا، فيتبع نفس الترتيب المعروض على الشاشة */
+  return sortWorkers(list, fillSort("varSort"));
 }
 const VAR_HEAD=["ت","الاسم","اسم الأم","التولد","القسم","رقم الهاتف","العنوان",
   "حالة العمل","تاريخ تغيير الحالة","ملاحظة التغيير"];
@@ -4122,6 +4208,7 @@ el("varStatusBoxes").addEventListener("change",e=>{
   if(i>=0) cur.splice(i,1); else cur.push(t);
   setVarSel(cur); renderVariables();
 });
+el("varSort").addEventListener("change",renderVariables);
 el("varAll").onclick=()=>{ setVarSel(WSTATUSES.slice()); renderVariables(); };
 el("varNone").onclick=()=>{ setVarSel([]); renderVariables(); };
 el("varSearch").addEventListener("input",renderVariables);
@@ -4595,10 +4682,17 @@ function runReport(manual){
     return;
   }
   RP=buildReport(from,to);
+  applyPaySort();
   renderReport();
 }
+/* ترتيب صفوف كشف الرواتب داخل RP نفسه، فتتبعه الشاشة وWord
+   وExcel وPDF بلا أن يعيد أي تصدير ترتيبه بنفسه */
+function applyPaySort(){
+  if(!RP || !RP.rows) return;
+  RP.rows=sortRows(RP.rows, fillSort("rpSort",PAY_SORT_OPTS));
+}
 function renderReport(){
-  if(!RP){ const r=monthRange(0); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; RP=buildReport(r[0],r[1]); }
+  if(!RP){ const r=monthRange(0); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; RP=buildReport(r[0],r[1]); applyPaySort(); }
   const st=S(), cur=st.currency||"";
   const d=RP.days.length;
   el("rpCards").innerHTML=[
@@ -4680,6 +4774,7 @@ function renderReport(){
 }
 el("rpRun").onclick=()=>runReport(true);
 el("rpSearch").addEventListener("input",()=>{ if(RP) renderReport(); });
+el("rpSort").addEventListener("change",()=>{ if(RP){ applyPaySort(); renderReport(); } });
 document.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>{
   const k=b.dataset.quick;
   let r;
@@ -4730,7 +4825,7 @@ function renderSalTable(){
   const today=todayISO();
   let h='<thead><tr><th>العامل</th><th>الحالة</th><th>القسم</th><th>الراتب الشهري</th><th>استقطاع اليوم</th>'+
         '<th>المباشرة</th><th>انتهاء الخدمة</th><th>استقطاع المتفرقة والإجازات</th></tr></thead><tbody>';
-  c.workers.forEach(w=>{
+  sortWorkers(c.workers, fillSort("salSort")).forEach(w=>{
     const sec=sectionOf(w.sectionId);
     const p=w.leavePolicy||"";
     /* نهاية الخدمة قد تأتي من تاريخ يدوي أو من تغيير حالة العمل — نقرأ الاثنين */
@@ -4793,6 +4888,7 @@ el("salTable").addEventListener("change",e=>{
   if(p){ const w=find(p.dataset.lpol); if(w) w.leavePolicy=p.value||null; }
   if(s||d||t||p||en){ queueSave(); if(RP) runReport(); }
 });
+el("salSort").addEventListener("change",renderSalTable);
 el("applyAllSalary").onclick=()=>{
   if(!confirm("تطبيق الإعداد الافتراضي على كل العمال وإلغاء أي راتب أو استقطاع أو سياسة خاصة؟"))return;
   C().workers.forEach(w=>{ w.salary=null; w.deduct=null; w.leavePolicy=null; });
@@ -4894,7 +4990,7 @@ function currentOffWorker(){
 function renderOffWorkerList(){
   const sel=el("offWorker"), keep=sel.value, c=C();
   sel.innerHTML='<option value="">— اختر العامل —</option>'+
-    c.workers.map(w=>'<option value="'+w.id+'">'+esc(workerOptionLabel(w))+(hasOffConfig(w)?" ✓":"")+'</option>').join("");
+    workersAZ().map(w=>'<option value="'+w.id+'">'+esc(workerOptionLabel(w))+(hasOffConfig(w)?" ✓":"")+'</option>').join("");
   if(keep) sel.value=keep;
   el("offPanel").classList.toggle("hidden",!sel.value);
 }
