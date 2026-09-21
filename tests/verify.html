@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>فحص نظام الجرد اليومي</title>
+<style>
+:root{--ink:#241633;--ok:#2C6E49;--bad:#9B1C31;--line:#D3C9DE;--brand:#4B2E83}
+body{font:15px/1.7 "Dubai","Segoe UI","Noto Naskh Arabic",Tahoma,Arial,sans-serif;
+  background:#E7E2ED;color:var(--ink);margin:0;padding:20px}
+.wrap{max-width:1100px;margin:0 auto}
+h1{font-size:20px;color:var(--brand);margin:0 0 4px}
+p.sub{margin:0 0 16px;font-size:13px;color:#5C4E6B}
+.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:14px}
+h2{font-size:15px;color:var(--brand);margin:0 0 10px;border-bottom:2px solid var(--brand);padding-bottom:4px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:right;padding:6px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#F3EDFA;color:var(--brand);font-size:12px}
+td.r{font-variant-numeric:tabular-nums;white-space:nowrap}
+.ok{color:var(--ok);font-weight:700}
+.bad{color:var(--bad);font-weight:700}
+tr.fail td{background:#FBF0F2}
+.sum{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.sum div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 16px;min-width:130px}
+.sum .k{font-size:11px;color:#5C4E6B}
+.sum .v{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums}
+.sum .v.ok{color:var(--ok)} .sum .v.bad{color:var(--bad)}
+#frames{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
+code{font-family:ui-monospace,monospace;font-size:12px;direction:ltr;display:inline-block}
+.note{font-size:12px;color:#5C4E6B}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>فحص نظام الجرد اليومي</h1>
+  <p class="sub">يستخرج شيفرة <code>../index.html</code> ويشغّلها داخل إطار معزول (تخزين وهمي، بلا قاعدة بيانات)،
+    ثم يشغّل دوال الحساب والتصدير على حالات محدّدة. <b>لا يضيف أي اعتماد إلى ملف الإنتاج، ولا يلمس بياناتك المحفوظة.</b><br>
+    التشغيل: من مجلد المشروع شغّل خادماً محلياً — <code>python3 -m http.server 8000</code> — ثم افتح
+    <code>http://localhost:8000/tests/verify.html</code>. (فتح الملف مباشرة بـ<code>file://</code> ما يشتغل
+    لأن المتصفح يمنع قراءة index.html.)</p>
+  <div class="sum" id="sum"></div>
+  <div id="out"></div>
+</div>
+<div id="frames"></div>
+<script>
+"use strict";
+/* ============ أدوات الفحص ============ */
+const groups=[]; let cur=null;
+function group(name){ cur={name:name, rows:[]}; groups.push(cur); return cur; }
+function check(desc, got, want, note){
+  const ok = (typeof want==="function") ? !!want(got) : Object.is(got,want);
+  cur.rows.push({desc:desc, got:fmt(got), want:(typeof want==="function"?(note||"شرط"):fmt(want)), ok:ok, note:ok?"":(note||"")});
+  return ok;
+}
+function fmt(v){
+  if(v===undefined) return "—";
+  if(typeof v==="number") return Number.isInteger(v)?String(v):String(Math.round(v*100)/100);
+  if(typeof v==="string") return v.length>90?v.slice(0,90)+"…":v;
+  return JSON.stringify(v);
+}
+function render(){
+  let pass=0, fail=0;
+  let h="";
+  groups.forEach(g=>{
+    h+='<div class="card"><h2>'+esc(g.name)+'</h2><table><thead><tr>'+
+      '<th style="width:44%">الحالة</th><th>الناتج</th><th>المتوقع</th><th style="width:70px">النتيجة</th>'+
+      '<th style="width:22%">ملاحظة</th></tr></thead><tbody>';
+    g.rows.forEach(r=>{
+      if(r.ok) pass++; else fail++;
+      h+='<tr'+(r.ok?"":' class="fail"')+'><td>'+esc(r.desc)+'</td>'+
+        '<td class="r">'+esc(r.got)+'</td><td class="r">'+esc(r.want)+'</td>'+
+        '<td class="'+(r.ok?"ok":"bad")+'">'+(r.ok?"ناجح":"فاشل")+'</td>'+
+        '<td class="note">'+esc(r.note||"")+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  });
+  document.getElementById("out").innerHTML=h;
+  document.getElementById("sum").innerHTML=
+    '<div><div class="k">المجموع</div><div class="v">'+(pass+fail)+'</div></div>'+
+    '<div><div class="k">ناجح</div><div class="v ok">'+pass+'</div></div>'+
+    '<div><div class="k">فاشل</div><div class="v '+(fail?"bad":"ok")+'">'+fail+'</div></div>';
+  document.title=(fail?"✗ ":"✓ ")+pass+"/"+(pass+fail)+" — فحص نظام الجرد";
+  window.__RESULT={pass:pass, fail:fail, total:pass+fail,
+    failures:groups.reduce((a,g)=>a.concat(g.rows.filter(r=>!r.ok).map(r=>g.name+" › "+r.desc+
+      " (ناتج "+r.got+" ، متوقع "+r.want+")")),[])};
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ============ تحميل شيفرة البرنامج داخل إطار معزول ============ */
+const PRELUDE = `<script>(function(){
+  var mem={};
+  try{ Object.defineProperty(window,'localStorage',{configurable:true,value:{
+    getItem:function(k){return mem[k]==null?null:mem[k];},
+    setItem:function(k,v){mem[k]=String(v);},
+    removeItem:function(k){delete mem[k];}, clear:function(){mem={};}
+  }}); }catch(e){}
+  try{ Object.defineProperty(window,'indexedDB',{configurable:true,
+    value:{open:function(){ throw new Error('لا قاعدة بيانات في الفحص'); }}}); }catch(e){}
+  window.__warns=[]; window.__errs=[]; window.__alerts=[]; window.__confirm=true;
+  var ow=console.warn.bind(console);
+  console.warn=function(){ window.__warns.push(Array.prototype.join.call(arguments,' ')); ow.apply(null,arguments); };
+  window.addEventListener('error',function(e){ window.__errs.push(String(e.message)); });
+  window.alert=function(m){ window.__alerts.push(String(m)); };
+  window.confirm=function(){ return window.__confirm; };
+  window.prompt=function(){ return null; };
+  window.print=function(){};
+  window.open=function(){ return null; };
+})();<\/script>`;
+
+let SRC=null;
+async function source(){
+  if(SRC) return SRC;
+  const txt=await (await fetch("../index.html",{cache:"no-store"})).text();
+  const at=txt.indexOf("<script>");
+  if(at<0) throw new Error("ما لقيت وسم script في index.html");
+  SRC=txt.slice(0,at)+PRELUDE+txt.slice(at);
+  return SRC;
+}
+let seq=0;
+function boot(){
+  window.__step="boot#"+(seq+1);
+  return source().then(html=>new Promise((res,rej)=>{
+    const f=document.createElement("iframe");
+    f.id="f"+(++seq); f.setAttribute("srcdoc",html);
+    f.onload=()=>{
+      const w=f.contentWindow;
+      /* init غير متزامنة — ننتظر اكتمالها.
+         stateLoaded معرّف بـ let فهو ارتباط معجمي لا خاصية على window،
+         فيُقرأ بـ eval داخل نفس النطاق. */
+      let n=0;
+      (function wait(){
+        let done=false;
+        try{ done = (w.eval("stateLoaded")===true); }catch(e){}
+        if(done || n++>300) return res(w);
+        setTimeout(wait,8);
+      })();
+    };
+    f.onerror=()=>rej(new Error("تعذّر تحميل الإطار"));
+    document.getElementById("frames").appendChild(f);
+  }));
+}
+/* حالة اختبار موحّدة */
+function fixture(o){
+  o=o||{};
+  const y=o.y||2026, m=o.m||9, last=o.last||30;
+  const mm=String(m).padStart(2,"0"), days={};
+  for(let d=1;d<=last;d++){
+    const iso=y+"-"+mm+"-"+String(d).padStart(2,"0");
+    days[iso]={states:Object.assign({},(o.states&&o.states[iso])||{}),notes:"",confirmed:true};
+  }
+  return {v:2, active:"co1", savedAt:1, companies:[{
+    id:"co1", name:"شركة الفحص", theme:"#4B2E83", accent:"#B8912E",
+    settings:{ company:"شركة الفحص", title:"الجرد اليومي", address:"البصرة", signer:"عبد الله",
+      role:"المسؤول الإداري", mark:"ج", numerals:"latn", miscInTotal:"no", secCount:"active",
+      signature:"", salary:335000, deduct:11166.67, dedMode:"auto", workDays:30, miscPaid:"yes",
+      currency:"د.ع", exportDPI:"300", printMode:"color", leavePolicy:"half", proRate:"yes",
+      weekendDays:[5], holidays:[], defNote:"" },
+    zones:[{id:"z1",name:"المنطقة",short:"م",color:"#4B2E83"}],
+    sections:[{id:"s1",name:"قسم الإنتاج",zoneId:"z1"}],
+    workers:o.workers||[], days:days,
+    leaves:o.leaves||[], leaveSeq:0,
+    adjustments:o.adjustments, penalties:o.penalties||[], penSeq:o.penSeq||0,
+    achievements:o.achievements||[], achSeq:o.achSeq||0,
+    materials:[{id:"m1",name:"منظّف",unit:"لتر",qty:2}], issues:[], issueSeq:0,
+    matSeeded:true, payV3:true }]};
+}
+function W(w,src){ w.__in=undefined; return w.eval(src); }
+function setState(w,obj){ w.__fx=obj; w.eval("state=migrate(__fx); curDate=todayISO();"); }
+const MONTH=["2026-09-01","2026-09-30"];
+function report(w,a,b){ return w.eval('buildReport("'+(a||MONTH[0])+'","'+(b||MONTH[1])+'")'); }
+function only(w,fx,a,b){ setState(w,fx); return report(w,a,b).rows[0]; }
+function set(w,id,v){ w.eval('el("'+id+'").value='+JSON.stringify(v)); }
+/* القوائم المنسدلة تُعبّأ عند فتح تبويبها؛ بدون ذلك ضبط value
+   على <select> بلا خيار مطابق يتركه فارغاً في متصفح حقيقي. */
+function initForms(w){ w.eval("initLeaveView(); initPenView(); initAchView(); initMatView();"); }
+
+/* ============ فحص بنية ZIP/OOXML ============ */
+const CRC=(function(){const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC[(c^b[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function unzipStore(bytes){
+  const dv=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  let eocd=-1;
+  for(let i=bytes.length-22;i>=0;i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
+  if(eocd<0) throw new Error("أرشيف بلا EOCD");
+  const count=dv.getUint16(eocd+10,true), cdSize=dv.getUint32(eocd+12,true), cdOff=dv.getUint32(eocd+16,true);
+  const out={}; let p=cdOff;
+  for(let n=0;n<count;n++){
+    if(dv.getUint32(p,true)!==0x02014b50) throw new Error("فهرس مركزي تالف");
+    const crc=dv.getUint32(p+16,true), csize=dv.getUint32(p+20,true), usize=dv.getUint32(p+24,true);
+    const nlen=dv.getUint16(p+28,true), elen=dv.getUint16(p+30,true), clen=dv.getUint16(p+32,true);
+    const lho=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(bytes.subarray(p+46,p+46+nlen));
+    if(dv.getUint32(lho,true)!==0x04034b50) throw new Error("ترويسة محلية تالفة: "+name);
+    const start=lho+30+dv.getUint16(lho+26,true)+dv.getUint16(lho+28,true);
+    const data=bytes.subarray(start,start+csize);
+    if(crc32(data)>>>0!==crc>>>0) throw new Error("CRC غير مطابق: "+name);
+    if(csize!==usize) throw new Error("ملف مضغوط لا store: "+name);
+    out[name]=data; p+=46+nlen+elen+clen;
+  }
+  if(p-cdOff!==cdSize) throw new Error("حجم الفهرس غير مطابق");
+  return out;
+}
+function xmlOK(txt){
+  const stack=[]; const re=/<([!?\/]?)([A-Za-z_:][\w.:-]*)([^>]*?)(\/?)>|<\?xml[^>]*\?>|<!--[\s\S]*?-->/g;
+  let m,last=0;
+  while((m=re.exec(txt))){
+    const text=txt.slice(last,m.index); last=re.lastIndex;
+    if(/&(?!(amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)/.test(text)) throw new Error("& غير مهروب");
+    if(text.indexOf("<")>=0) throw new Error("< داخل نص");
+    if(m[0].startsWith("<?xml")||m[0].startsWith("<!--")) continue;
+    const kind=m[1], name=m[2], attrs=m[3]||"", self=m[4];
+    if(kind==="?"||kind==="!") continue;
+    if(kind==="/"){ const t=stack.pop(); if(t!==name) throw new Error("إغلاق غير متطابق </"+name+">"); continue; }
+    const rest=attrs.replace(/([A-Za-z_:][\w.:-]*)\s*=\s*"[^"]*"/g,"").trim();
+    if(rest) throw new Error("خصائص غير صالحة في <"+name+">");
+    if(!self) stack.push(name);
+  }
+  if(stack.length) throw new Error("وسوم لم تُغلق: "+stack.join(","));
+  return true;
+}
+function tables(xml){
+  const out=[]; let i=0;
+  while(true){
+    const a=xml.indexOf("<w:tbl>",i); if(a<0) break;
+    let depth=0,j=a,end=-1;
+    while(j<xml.length){
+      const o=xml.indexOf("<w:tbl>",j), c=xml.indexOf("</w:tbl>",j);
+      if(c<0) throw new Error("جدول بلا إغلاق");
+      if(o>=0&&o<c){ depth++; j=o+7; } else { depth--; j=c+8; if(depth===0){ end=c+8; break; } }
+    }
+    const body=xml.slice(a,end);
+    const grid=[...body.matchAll(/<w:gridCol w:w="(\d+)"\/>/g)].map(x=>+x[1]);
+    const rows=[]; const rre=/<w:tr>([\s\S]*?)<\/w:tr>/g; let r;
+    while((r=rre.exec(body))){
+      let n=0;
+      [...r[1].matchAll(/<w:tc>([\s\S]*?)<\/w:tc>/g)].forEach(c=>{
+        const sp=/<w:gridSpan w:val="(\d+)"\/>/.exec(c[1]); n+= sp?+sp[1]:1; });
+      rows.push(n);
+    }
+    out.push({grid:grid,rows:rows}); i=end;
+  }
+  return out;
+}
+function bytesOf(v){ return v instanceof Uint8Array ? v : new Uint8Array(v); }
+
+/* ============ الاختبارات ============ */
+async function run(){
+try{
+  const base=await boot();
+
+  /* ---------- ٧-١ اختبارات حسابية ---------- */
+  group("٧-١ · اختبارات حسابية");
+  const WK=(o)=>Object.assign({id:"w1",name:"أحمد كاظم جاسم",sectionId:"s1",
+    createdAt:"2025-01-01",status:"مستمر"},o||{});
+
+  let w1=await boot();
+  check("١) مستمر، أيلول ٢٠٢٦ كامل، بلا غياب",
+    only(w1,fixture({workers:[WK()]})).net, 335000);
+
+  check("٢) نفسه بيومين غياب",
+    only(w1,fixture({workers:[WK()],states:{"2026-09-02":{w1:"absent"},"2026-09-03":{w1:"absent"}}})).net,
+    312750, "٣٣٥٬٠٠٠ − تقريب(٢×١١٬١٦٦٫٦٧)");
+
+  check("٣) بلا تاريخ مباشرة، أُدخل ١٥ أيلول",
+    only(w1,fixture({workers:[WK({createdAt:"2026-09-15"})]})).net, 335000);
+
+  const r4=only(w1,fixture({y:2026,m:2,last:28,
+    workers:[WK({createdAt:"2026-02-02",startDate:"2026-02-02"})]}),"2026-02-01","2026-02-28");
+  check("٤) باشر ٢ شباط ٢٠٢٦ (٢٨ يوم)", r4.net, 323750, "حسم يوم واحد = ١١٬٢٥٠");
+
+  const fx5=fixture({workers:[WK({status:"منقول",statusChangedAt:"2026-09-15"})]});
+  const r5=only(w1,fx5);
+  check("٥) «منقول» بتاريخ ١٥ أيلول — الراتب", r5.net, 167500);
+  check("٥) يبقى بالجرد يوم ١٥", w1.eval('inService(C().workers[0],"2026-09-15")'), true);
+  check("٥) يختفي من الجرد يوم ١٦", w1.eval('inService(C().workers[0],"2026-09-16")'), false);
+
+  const w6=await boot();
+  setState(w6,fixture({workers:[WK()]}));
+  initForms(w6);
+  ["pnWorker:w1","pnSection:قسم","pnType:إنهاء الخدمات","pnDate:2026-09-15",
+   "pnKind:none","pnAmount:0","pnNo:ع-2026-001","pnReason:سبب"].forEach(p=>{
+     const i=p.indexOf(":"); set(w6,p.slice(0,i),p.slice(i+1)); });
+  w6.eval('el("pnSave").onclick()');
+  check("٦) قرار إنهاء الخدمة انحفظ", w6.eval("C().penalties.length"), 1, (w6.__alerts[0]||""));
+  check("٦) بعد قرار إنهاء الخدمة — الحالة", w6.eval('getWorkerStatus(C().workers[0])'), "إنهاء خدمات");
+  check("٦) بعد القرار — الراتب نسبي", report(w6).rows[0].net, 167500);
+  w6.eval('(function(){ var c=C(), l=c.penalties[0];'+
+    'el("penaltiesList").innerHTML="";'+
+    'var w=c.workers.find(function(x){return x.id===l.workerId;});'+
+    'var u=l.terminates&&w&&getWorkerStatus(w)===WS_END&&w.statusChangedAt===l.date;'+
+    'c.penalties=c.penalties.filter(function(x){return x.id!==l.id;});'+
+    'if(u){ var p=l.prevStatus?normStatus(l.prevStatus):(l.prevEnd?WS_MOVE:WS_ACTIVE);'+
+    'w.status=p; w.statusChangedAt=(p===WS_ACTIVE)?"":(l.prevChangedAt||l.prevEnd||""); w.statusNote=l.prevNote||""; } })()');
+  check("٦) بعد حذف القرار — الحالة", w6.eval('getWorkerStatus(C().workers[0])'), "مستمر");
+  check("٦) بعد حذف القرار — الراتب كامل", report(w6).rows[0].net, 335000);
+
+  const w7=await boot();
+  setState(w7,fixture({workers:[WK()],
+    penalties:[{id:"p1",no:"ع-2026-001",workerId:"w1",name:"أحمد كاظم جاسم",
+      type:"استقطاع من الراتب",kind:"amount",amount:25000,days:0,dayRate:11166.67,
+      date:"2026-09-05",reason:"",issued:"2026-09-05"}],penSeq:1}));
+  const p7a=report(w7).rows[0];
+  check("٧) عقوبة ٢٥٬٠٠٠ — عدد العقوبات", p7a.penCount, 1);
+  check("٧) عقوبة ٢٥٬٠٠٠ — الاستقطاع", p7a.penDed, 25000);
+  w7.eval('C().penalties[0].amount=30000');
+  const p7b=report(w7).rows[0];
+  check("٧) بعد التعديل إلى ٣٠٬٠٠٠ — عدد العقوبات ثابت", p7b.penCount, 1);
+  check("٧) بعد التعديل — الاستقطاع", p7b.penDed, 30000);
+
+  const r8=only(w1,fixture({workers:[WK()],leaves:[
+    {id:"l1",no:"إ-1",workerId:"w1",name:"أحمد",type:"زمنية",from:"2026-09-08",days:1,hours:2,
+     to:"2026-09-08",policy:"none",reason:"",admin:"",issued:"2026-09-08"},
+    {id:"l2",no:"إ-2",workerId:"w1",name:"أحمد",type:"اعتيادية",from:"2026-09-20",days:1,hours:null,
+     to:"2026-09-20",policy:"half",reason:"",admin:"",issued:"2026-09-20"}]}));
+  check("٨) إجازة زمنية ساعتين — استقطاع صفر", r8.absDeduction, 0);
+  check("٨) إجازة زمنية — لا تُعدّ يوم إجازة", r8.leave, 1, "الاعتيادية وحدها");
+  check("٨) إجازة زمنية — الصافي كامل", r8.net, 335000);
+
+  const w9=await boot();
+  setState(w9,fixture({workers:[WK()],leaves:[
+    {id:"l1",no:"إ-1",workerId:"w1",name:"أحمد",type:"اعتيادية",from:"2026-09-10",days:3,hours:null,
+     to:"2026-09-12",policy:"half",reason:"",admin:"",issued:"2026-09-10"}]}));
+  initForms(w9);
+  ["lvWorker:w1","lvFrom:2026-09-11","lvDays:3","lvType:اعتيادية","lvPolicy:half","lvNo:إ-2026-009"]
+    .forEach(p=>{ const i=p.indexOf(":"); set(w9,p.slice(0,i),p.slice(i+1)); });
+  w9.__alerts.length=0;
+  w9.eval('el("lvSave").onclick()');
+  check("٩) إجازتان متداخلتان — الحفظ مرفوض", w9.eval("C().leaves.length"), 1);
+  check("٩) رسالة الرفض تذكر التداخل",
+    (w9.__alerts[0]||"").indexOf("تتداخل")>=0, true);
+
+  const w10=await boot();
+  setState(w10,fixture({workers:[WK()]}));
+  set(w10,"rpFrom","2026-08-01"); set(w10,"rpTo","2026-09-30");
+  w10.__alerts.length=0;
+  w10.eval("runReport(true)");
+  check("١٠) كشف من ١ آب إلى ٣٠ أيلول — الحساب مرفوض", w10.eval("RP")===null, true);
+  check("١٠) رسالة الرفض ظاهرة",
+    (w10.eval('el("rpWarn").innerHTML')||"").indexOf("أكثر من شهر")>=0, true);
+  set(w10,"rpFrom","2026-09-01"); set(w10,"rpTo","2026-09-30");
+  w10.eval("runReport(true)");
+  check("١٠) شهر واحد — الحساب يمشي", w10.eval("RP")!==null, true);
+
+  const w11=await boot();
+  setState(w11,fixture({workers:[
+    WK({id:"w1",name:"أحمد كاظم"}),
+    WK({id:"w2",name:"علي عبد الحسين"}),
+    WK({id:"w3",name:"حسين ناصر"})]}));
+  w11.eval('RP=buildReport("2026-09-01","2026-09-30"); applyPaySort();');
+  check("١١) بلا بحث — عدد الصفوف", w11.eval("rpRows().length"), 3);
+  set(w11,"rpSearch","علي");
+  check("١١) بحث باسم واحد — عدد الصفوف", w11.eval("rpRows().length"), 1);
+  check("١١) بحث باسم واحد — المجموع = ذلك الصف", w11.eval("rpTot().net"), 335000);
+
+  const w12=await boot();
+  const fxA=fixture({workers:[WK({id:"w1",name:"أحمد"}),WK({id:"w2",name:"علي"}),WK({id:"w3",name:"حسين"})],
+    adjustments:[
+      {id:"a1",workerId:"w1",type:"deduct",amount:25000,reason:"كسر أداة",date:"2026-09-05"},
+      {id:"a2",workerId:"w2",type:"deduct",amount:12500,reason:"",date:"2026-09-10"},
+      {id:"a3",workerId:"w3",type:"deduct",amount:7250,reason:"غرامة",date:"2026-09-12"},
+      {id:"a4",workerId:"w1",type:"add",amount:30000,reason:"جهد إضافي",date:"2026-09-20"},
+      {id:"a5",workerId:"w3",type:"add",amount:5000,reason:"",date:"2026-09-22"}]});
+  /* الصافي المتوقع قبل الترحيل = الراتب − الاستقطاع الخاص + الإضافة الخاصة */
+  const expect12={w1:335000-25000+30000, w2:335000-12500, w3:335000-7250+5000};
+  setState(w12,fxA);
+  const rows12=report(w12).rows;
+  check("١٢) ترحيل ٣ استقطاعات و٢ إضافات — أحمد",
+    rows12.find(r=>r.id==="w1").net, expect12.w1);
+  check("١٢) ترحيل — علي", rows12.find(r=>r.id==="w2").net, expect12.w2);
+  check("١٢) ترحيل — حسين", rows12.find(r=>r.id==="w3").net, expect12.w3);
+  check("١٢) مجموع الاستقطاعات المرحَّلة", report(w12).tot.penDed, 25000+12500+7250);
+  check("١٢) مجموع الإضافات المرحَّلة", report(w12).tot.achAdd, 30000+5000);
+  check("١٢) c.adjustments محذوفة", w12.eval('("adjustments" in C())'), false);
+  check("١٢) عدد العقوبات الناتجة", w12.eval("C().penalties.length"), 3);
+  check("١٢) عدد المكافآت الناتجة", w12.eval("C().achievements.length"), 2);
+  check("١٢) أرقام متصلة بلا تكرار",
+    w12.eval("new Set(C().penalties.map(function(p){return p.no;})).size"), 3);
+  w12.eval("ensureFields(state)");
+  check("١٢) تكرار الترحيل لا يغيّر شيئاً (عقوبات)", w12.eval("C().penalties.length"), 3);
+  check("١٢) تكرار الترحيل لا يغيّر شيئاً (الصافي)", report(w12).rows.find(r=>r.id==="w1").net, expect12.w1);
+
+  const w13=await boot();
+  /* الأسماء المطلوبة، ومعها «الزهراء» و«حسين» حتى يكون الاختبار
+     حسّاساً لحذف «ال» التعريف: بدونه تقفز «الزهراء» قبل «حسين». */
+  const names13=["أحمد","إبراهيم","آلاء","العباس","عباس","ياسر","ىوسف","الزهراء","حسين"];
+  setState(w13,fixture({workers:names13.map((n,i)=>WK({id:"x"+i,name:n}))}));
+  const sorted13=w13.eval('sortWorkers(C().workers,"name").map(function(w){return w.name;}).join("،")');
+  check("١٣) الترتيب العربي الأبجدي", sorted13,
+    "إبراهيم،أحمد،آلاء،حسين،الزهراء،العباس،عباس،ياسر،ىوسف", "بلا انحراف الهمزات و«ال»");
+  check("١٣) الترتيب الافتراضي لجافاسكربت مختلف (المشكلة حقيقية)",
+    names13.slice().sort().join("،")!==sorted13, true);
+  check("١٣) مفتاح الفرز يحذف «ال» ويوحّد الهمزة",
+    w13.eval('[sortKeyAr("العباس"),sortKeyAr("آلاء"),sortKeyAr("ىوسف"),sortKeyAr("حمزة")].join("|")'),
+    "عباس|الاء|يوسف|حمزه");
+
+  const w14=await boot();
+  setState(w14,fixture({workers:[WK({status:"إنهاء خدمات",statusChangedAt:"2026-09-15",
+    phone:"07701234567",phone2:"07809998888",address:"البصرة — محلة ٤٠٥",
+    motherName:"زينب حسن",dob:"1985",statusNote:"قرار رقم ٥"})]}));
+  w14.eval("extSel=extDefaults()");
+  const doc14=new TextDecoder().decode(unzipStore(bytesOf(w14.eval("externalDocx()")))["word/document.xml"]);
+  const xls14=new TextDecoder().decode(unzipStore(bytesOf(
+    w14.eval('buildXlsx([extHead()].concat(extRows(true)),{sheet:"خ",widths:[5,28,18,18,18]})')
+  ))["xl/worksheets/sheet1.xml"]);
+  const leak=t=>doc14.indexOf(t)>=0||xls14.indexOf(t)>=0;
+  check("١٤) الكشف الخارجي — لا رقم هاتف", leak("0770")||leak("0780"), false);
+  check("١٤) الكشف الخارجي — لا عنوان", leak("البصرة"), false);
+  check("١٤) الكشف الخارجي — لا اسم أم", leak("زينب"), false);
+  check("١٤) الكشف الخارجي — لا ملاحظة تغيير", leak("قرار رقم"), false);
+  check("١٤) الكشف الخارجي — الاسم موجود", doc14.indexOf("أحمد كاظم جاسم")>=0, true);
+  check("١٤) الكشف الخارجي — الجهة المستلمة وسطر التذييل",
+    doc14.indexOf("الجهة المستلمة")>=0 && doc14.indexOf("لا تُمنح معلومات إضافية")>=0, true);
+
+  const w15=await boot();
+  const r15=only(w15,fixture({workers:[WK({status:"منقول",statusChangedAt:"2027-03-01"})]}));
+  check("١٥) «منقول» بتاريخ لاحق — يبقى بالجرد اليوم",
+    w15.eval("inService(C().workers[0],todayISO())"), true);
+  check("١٥) «منقول» بتاريخ لاحق — راتبه كامل", r15.net, 335000);
+  check("١٥) يختفي بعد تاريخه", w15.eval('inService(C().workers[0],"2027-03-02")'), false);
+
+  /* ---------- ٧-٢ اختبارات البنية والتصدير ---------- */
+  group("٧-٢ · بنية ملفات التصدير");
+  const we=await boot();
+  setState(we,fixture({workers:[
+    WK({id:"w1",name:"أحمد كاظم جاسم",status:"إنهاء خدمات",statusChangedAt:"2026-09-15",
+        phone:"07701234567",address:"البصرة",motherName:"زينب",dob:"1985"}),
+    WK({id:"w2",name:"علي عبد الحسين",status:"منقول",statusChangedAt:"2026-09-18"}),
+    WK({id:"w3",name:"حسين ناصر عبد"})]}));
+  initForms(we);
+  [["lvWorker","w1"],["lvSection","قسم"],["lvType","اعتيادية"],["lvFrom","2026-09-10"],["lvDays","3"],
+   ["lvPolicy","half"],["lvReason","سبب"],["lvAdmin","إداري"],["lvNo","إ-2026-001"],
+   ["pnWorker","w2"],["pnSection","قسم"],["pnType","إنذار أول"],["pnDate","2026-09-05"],["pnKind","none"],
+   ["pnAmount","0"],["pnReason","مخالفة"],["pnAdmin","إداري"],["pnNo","ع-2026-005"],
+   ["acWorker","w3"],["acSection","قسم"],["acType","مكافأة إنتاجية"],["acDate","2026-09-07"],
+   ["acKind","amount"],["acAmount","5000"],["acReason","إنجاز"],["acAdmin","إداري"],["acNo","م-2026-005"],
+   ["mtWorker","w1"],["mtSection","قسم"],["mtFrom","2026-09-01"],["mtTo","2026-09-30"],
+   ["mtNotes","ملاحظة"],["mtAdmin","أمين"],["mtNo","ت-2026-001"]].forEach(p=>set(we,p[0],p[1]));
+  we.eval('mtSel={m1:2}; extSel=extDefaults(); RP=buildReport("2026-09-01","2026-09-30"); applyPaySort();');
+  const DOCS=[["payrollDocx",16838-1120],["directoryDocx",16838-1280],["variablesDocx",16838-1280],
+    ["externalDocx",11906-1440],["leaveDocx",11906-1134],["penaltyDocx",11906-1134],
+    ["achievementDocx",11906-1134],["issueDocx",11906-1134],["dailyDocx",11906-1440]];
+  DOCS.forEach(([fn,full])=>{
+    let gridOK=true, cellOK=true, zipOK=true, xOK=true, why="";
+    try{
+      const u=unzipStore(bytesOf(we.eval(fn+"()")));
+      const xml=new TextDecoder().decode(u["word/document.xml"]);
+      xmlOK(xml);
+      const ts=tables(xml);
+      if(!ts.length) throw new Error("لا جداول");
+      ts.forEach(t=>{
+        if(!t.grid.length || t.grid.reduce((a,b)=>a+b,0)!==full) gridOK=false;
+        const uq=[...new Set(t.rows)];
+        if(uq.length!==1 || uq[0]!==t.grid.length) cellOK=false;
+      });
+    }catch(e){ zipOK=false; xOK=false; gridOK=false; cellOK=false; why=e.message; }
+    check(fn+" — أرشيف ZIP صالح و XML سليم", zipOK&&xOK, true, why);
+    check(fn+" — مجموع grid = عرض الصفحة ("+full+")", gridOK, true, why);
+    check(fn+" — خلايا كل صف = الرأس = طول grid", cellOK, true, why);
+  });
+  const XLS=[["دليل العمال",'buildXlsx([DIR_HEAD].concat(dirExportRows(true)),{sheet:"د",widths:[5,26,24,14,22,16,16,34,16,16,18]})',11],
+             ["حالات العمال",'buildXlsx([VAR_HEAD].concat(varExportRows(true)),{sheet:"ح",widths:[5,26,24,14,22,16,32,18,18,30]})',10],
+             ["الكشف الخارجي",'buildXlsx([extHead()].concat(extRows(true)),{sheet:"خ",widths:[5,28,18,18,18]})',5]];
+  XLS.forEach(([name,code,wlen])=>{
+    let okCols=true, okInt=true, why="";
+    try{
+      const sx=new TextDecoder().decode(unzipStore(bytesOf(we.eval(code)))["xl/worksheets/sheet1.xml"]);
+      xmlOK(sx);
+      [...sx.matchAll(/<row r="\d+">([\s\S]*?)<\/row>/g)].forEach(r=>{
+        const cs=[...r[1].matchAll(/<c r="([A-Z]+)\d+"/g)];
+        const mx=cs.reduce((a,m)=>{ let n=0; for(const ch of m[1]) n=n*26+(ch.charCodeAt(0)-64); return Math.max(a,n); },0);
+        if(mx>wlen) okCols=false;
+      });
+      if([...sx.matchAll(/<v>([-\d.]+)<\/v>/g)].some(m=>m[1].indexOf(".")>=0)) okInt=false;
+    }catch(e){ okCols=false; okInt=false; why=e.message; }
+    check("xlsx "+name+" — خلايا كل صف ≤ طول widths", okCols, true, why);
+    check("xlsx "+name+" — كل المبالغ أعداد صحيحة", okInt, true, why);
+  });
+  let payInt=true, payWhy="";
+  try{
+    const sx=new TextDecoder().decode(unzipStore(bytesOf(we.eval(
+      '(function(){var b=null;var old=saveXlsx;saveXlsx=function(x){b=x;};try{el("rpXls").onclick();}finally{saveXlsx=old;}return b;})()'
+    )))["xl/worksheets/sheet1.xml"]);
+    xmlOK(sx);
+    if([...sx.matchAll(/<v>([-\d.]+)<\/v>/g)].some(m=>m[1].indexOf(".")>=0)) payInt=false;
+  }catch(e){ payInt=false; payWhy=e.message; }
+  check("xlsx كشف الرواتب — كل المبالغ أعداد صحيحة", payInt, true, payWhy);
+
+  /* ---------- ٧-٣ اختبارات الواجهة ---------- */
+  group("٧-٣ · الواجهة");
+  const wu=await boot();
+  check("يفتح على بيانات فارغة بلا خطأ JS", wu.__errs.length, 0, (wu.__errs[0]||""));
+  check("يفتح على بيانات فارغة بلا «عنصر مفقود»", wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0,
+    (wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0)[0]||""));
+  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","settings"];
+  setState(wu,fixture({workers:[WK({id:"w1"}),WK({id:"w2",name:"علي",status:"مفصول",statusChangedAt:"2026-09-02"})]}));
+  wu.eval("bootView()");
+  TABS.forEach(t=>{ try{ wu.eval('switchView("'+t+'")'); }catch(e){ wu.__errs.push(t+": "+e.message); } });
+  check("التنقل بين كل التبويبات بلا خطأ JS", wu.__errs.length, 0, (wu.__errs[0]||""));
+  check("التنقل بين كل التبويبات بلا «عنصر مفقود»",
+    wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0,
+    (wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0)[0]||""));
+  try{ wu.eval("openExt(); renderExt(); closeExt(); dlgShow({title:'ت'}); dlgEnd(null);"); }
+  catch(e){ wu.__errs.push("نوافذ: "+e.message); }
+  check("فتح كل النوافذ بلا خطأ JS", wu.__errs.length, 0, (wu.__errs[0]||""));
+  check("WSTATUSES خمس حالات", wu.eval("WSTATUSES.length"), 5);
+  check("كل حالة لها كلمة مختصرة", wu.eval("WSTATUSES.every(function(t){return !!WS_SHORT[t];})"), true);
+  check("كل حالة لها صنف لون بالشاشة", wu.eval("WSTATUSES.every(function(t){return !!WS_CLASS[t];})"), true);
+  check("كل حالة لها لون بالوورد", wu.eval("WSTATUSES.every(function(t){return !!statusDocColor(t);})"), true);
+  check("كل حالة لها صنف طباعة معرّف بالـCSS",
+    wu.eval("WSTATUSES.every(function(t){return STATUS_PRINT_CSS.indexOf('.'+statusPrintClass(t)+'{')>=0;})"), true);
+  check("كل حالة تظهر في قائمة الحالة", wu.eval("WSTATUSES.every(function(t){return statusOptions('').indexOf('>'+t+'<')>=0;})"), true);
+  check("كل حالة تظهر في فلتر حالات العمال",
+    wu.eval('(function(){ setVarSel(WSTATUSES.slice()); renderVarBoxes(); var h=el("varStatusBoxes").innerHTML; return WSTATUSES.every(function(t){return h.indexOf(t)>=0;}); })()'), true);
+  check("normStatus0 تعرف الحالة الخامسة", wu.eval('normStatus0("منقول")'), "منقول");
+
+  const wold=await boot();
+  const legacy={v:2, active:"c0", companies:[{
+    id:"c0", name:"قديمة", settings:{company:"قديمة", salary:335000, deduct:11632},
+    zones:[{id:"z",name:"منطقة"}], sections:[{id:"s",name:"قسم",zoneId:"z"}],
+    workers:[{id:"a",name:"عامل قديم",sectionId:"s",createdAt:"2024-01-01",endDate:"2026-09-15"},
+             {id:"b",name:"عامل ثاني",sectionId:"s"}],
+    days:{"2026-09-01":{states:{},notes:"",confirmed:true}},
+    leaves:[], adjustments:[{id:"x",workerId:"a",type:"deduct",amount:5000,date:"2026-09-03"}]}]};
+  let legacyOK=true, legacyWhy="";
+  try{ setState(wold,legacy); wold.eval("bootView()"); TABS.forEach(t=>wold.eval('switchView("'+t+'")')); }
+  catch(e){ legacyOK=false; legacyWhy=e.message; }
+  check("يفتح على بيانات قديمة (v2 بلا payV5) بلا خطأ", legacyOK && wold.__errs.length===0, true,
+    legacyWhy||(wold.__errs[0]||""));
+  check("بيانات قديمة — الاستقطاع القديم انترحّل لعقوبة", wold.eval("C().penalties.length"), 1);
+  check("بيانات قديمة — endDate انترحّل لحالة عمل", wold.eval('getWorkerStatus(C().workers[0])'), "منقول");
+  check("بيانات قديمة — بلا «عنصر مفقود»",
+    wold.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0,
+    (wold.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0)[0]||""));
+
+}catch(e){
+  group("خطأ أوقف الفحص");
+  cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
+}
+render();
+}
+run();
+</script>
+</body>
+</html>
