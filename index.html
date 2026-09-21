@@ -1035,6 +1035,21 @@ tr.rowvar td{background:#FCFAFE}
 
 </div>
 
+<!-- ===== نافذة عامة: بديل prompt / confirm ===== -->
+<div class="ovl hidden" id="dlgBack">
+  <div class="ovlbox" style="width:min(540px,100%)">
+    <div class="ovlhead"><h3 id="dlgTitle">تأكيد</h3></div>
+    <div class="ovlbody">
+      <div id="dlgBody"></div>
+      <div id="dlgErr"></div>
+    </div>
+    <div class="ovlfoot">
+      <button class="btn primary" id="dlgOk">تأكيد</button>
+      <button class="btn ghost" id="dlgCancel">إلغاء</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== نافذة الكشف الخارجي ===== -->
 <div class="ovl hidden" id="extBack">
   <div class="ovlbox">
@@ -1068,6 +1083,66 @@ const _stub = { addEventListener(){}, classList:{add(){},remove(){},toggle(){},c
   getContext(){return null}, value:"", textContent:"", innerHTML:"", style:{}, disabled:false, files:[] };
 function el(id){ const n=document.getElementById(id); if(!n){ console.warn("عنصر مفقود:",id); return _stub; } return n; }
 function uid(){ return Math.random().toString(36).slice(2,9); }
+
+/* ==================== نوافذ داخل الصفحة ====================
+   prompt() و confirm() المدمجان: نص بلا تنسيق، لا يقبلان أكثر من حقل
+   واحد، وبعض المتصفحات تعطي المستخدم خيار «امنع هذه الصفحة من إظهار
+   نوافذ» فيمرّ بعدها كل حذف وتعديل بلا أي سؤال — خطر مباشر على
+   بيانات المناطق والأقسام والمواد والشركات. البديل نافذة داخل
+   الصفحة تُرجع Promise: كائن القيم عند التأكيد، و null عند الإلغاء. */
+let dlgCur=null, dlgResolve=null;
+function dlgEnd(v){
+  const n=document.getElementById("dlgBack");
+  if(n && n.classList) n.classList.add("hidden");
+  const r=dlgResolve; dlgResolve=null; dlgCur=null;
+  if(r) r(v);
+}
+function dlgShow(o){
+  return new Promise(res=>{
+    if(dlgResolve) dlgEnd(null);
+    dlgCur=o||{}; dlgResolve=res;
+    const fields=dlgCur.fields||[];
+    el("dlgTitle").textContent=dlgCur.title||"تأكيد";
+    el("dlgErr").innerHTML="";
+    el("dlgBody").innerHTML=
+      (dlgCur.message?'<p class="hint" style="margin-top:0;white-space:pre-line">'+esc(dlgCur.message)+'</p>':"")+
+      (dlgCur.html||"")+
+      fields.map(f=>'<label class="field"><span>'+esc(f.label)+'</span>'+
+        (f.type==="select"
+          ? '<select id="'+esc(f.id)+'">'+(f.options||[]).map(op=>
+              '<option value="'+esc(op.v)+'"'+(String(op.v)===String(f.value)?" selected":"")+'>'+
+              esc(op.t)+'</option>').join("")+'</select>'
+          : '<input type="'+esc(f.type||"text")+'" id="'+esc(f.id)+'" value="'+
+              esc(f.value==null?"":f.value)+'" placeholder="'+esc(f.placeholder||"")+'"'+
+              (f.step?' step="'+esc(f.step)+'"':"")+(f.min!=null?' min="'+esc(f.min)+'"':"")+'>')+
+        '</label>').join("");
+    const ok=el("dlgOk");
+    ok.textContent=dlgCur.ok||"تأكيد";
+    ok.className="btn "+(dlgCur.danger?"danger":"primary");
+    el("dlgBack").classList.remove("hidden");
+    const first=fields.length?document.getElementById(fields[0].id):null;
+    if(first && first.focus){ first.focus(); if(first.select) first.select(); }
+  });
+}
+/* تأكيد بسيط بلا حقول */
+function confirmBox(title,message,opts){
+  return dlgShow(Object.assign({title:title,message:message},opts||{})).then(v=>!!v);
+}
+function dlgSubmit(){
+  const o=dlgCur||{}, vals={};
+  (o.fields||[]).forEach(f=>{
+    const n=document.getElementById(f.id);
+    vals[f.id]=n?String(n.value||""):"";
+  });
+  if(o.needWord){
+    const got=String(vals[o.needWord.field]||"").trim();
+    if(got!==o.needWord.word){
+      el("dlgErr").innerHTML='<div class="errbox">اكتب كلمة «'+esc(o.needWord.word)+'» بالضبط بالخانة أعلاه.</div>';
+      return;
+    }
+  }
+  dlgEnd(vals);
+}
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 /* السند القانوني الاعتيادي لقرار إنهاء الخدمات — قابل للتعديل من الإعدادات */
 const DEF_TERM_NOTE="مخالفة أحكام قانون العمل العراقي رقم (٣٧) لسنة ٢٠٠٥ — المادة (١٢٦/خامساً).";
@@ -2122,17 +2197,35 @@ el("zoneList").addEventListener("click",e=>{
         ed=e.target.closest("[data-zed]"), dl2=e.target.closest("[data-zdel]");
   const mv=(id,d)=>{ const i=c.zones.findIndex(z=>z.id===id); const j=i+d;
     if(i<0||j<0||j>=c.zones.length)return; const t=c.zones[i]; c.zones[i]=c.zones[j]; c.zones[j]=t; };
+  if(ed){
+    const z=c.zones.find(x=>x.id===ed.dataset.zed); if(!z) return;
+    dlgShow({title:"تعديل المنطقة", ok:"حفظ", fields:[
+      {id:"dzName",label:"اسم المنطقة (يظهر بالورقة)",value:z.name},
+      {id:"dzShort",label:"الاختصار (وسم قصير)",value:z.short||"",placeholder:z.name}
+    ]}).then(v=>{
+      if(!v) return;
+      const n=normName(v.dzName);
+      if(!n){ alert("اسم المنطقة ما يصير فارغ."); return; }
+      z.name=n; z.short=normName(v.dzShort)||n;
+      queueSave(); refresh(); renderPeople();
+    });
+    return;
+  }
+  if(dl2){
+    const z=c.zones.find(x=>x.id===dl2.dataset.zdel); if(!z) return;
+    const cnt=c.sections.filter(x=>x.zoneId===z.id).length;
+    confirmBox("حذف منطقة","يتحذف «"+z.name+"»؟"+
+      (cnt?"\nالأقسام ("+fmtNum(cnt)+") تبقى بس بدون منطقة.":""),{ok:"حذف",danger:true}).then(go=>{
+      if(!go) return;
+      c.zones=c.zones.filter(x=>x.id!==z.id);
+      c.sections.forEach(x=>{ if(x.zoneId===z.id) x.zoneId=""; });
+      queueSave(); refresh(); renderPeople();
+    });
+    return;
+  }
   if(up) mv(up.dataset.zup,-1);
   if(dn) mv(dn.dataset.zdn,1);
-  if(ed){ const z=c.zones.find(x=>x.id===ed.dataset.zed);
-    const n=prompt("اسم المنطقة (يظهر بالورقة):",z.name); if(n&&n.trim())z.name=n.trim();
-    const s=prompt("الاختصار (وسم قصير):",z.short||""); if(s!==null)z.short=s.trim()||z.name; }
-  if(dl2){ const z=c.zones.find(x=>x.id===dl2.dataset.zdel);
-    const cnt=c.sections.filter(s=>s.zoneId===z.id).length;
-    if(!confirm("يتحذف «"+z.name+"»؟"+(cnt?" الأقسام ("+cnt+") تبقى بس بدون منطقة.":"")))return;
-    c.zones=c.zones.filter(x=>x.id!==z.id);
-    c.sections.forEach(s=>{ if(s.zoneId===z.id) s.zoneId=""; }); }
-  if(up||dn||ed||dl2){ queueSave(); refresh(); renderPeople(); }
+  if(up||dn){ queueSave(); refresh(); renderPeople(); }
 });
 
 /* ==================== الأقسام والعمال ==================== */
@@ -2223,12 +2316,15 @@ function commitSectionRename(id,val){
   if(!s){ editSecId=null; renderPeople(); return; }
   const name=String(val||"").trim().replace(/\s+/g," ");
   if(!name){ alert("اسم القسم ما يصير فارغ."); return; }
-  if(name!==s.name && c.sections.some(x=>x.id!==id && x.name===name)
-     && !confirm("أكو قسم ثاني بنفس الاسم. تكمل؟")) return;
-  s.name=name; editSecId=null;
-  queueSave(); refresh(); renderPeople(); if(RP) runReport();
-  el("savedNote").textContent="انتعدّل اسم القسم ✓";
-  setTimeout(()=>el("savedNote").textContent="",2200);
+  const dup=(name!==s.name && c.sections.some(x=>x.id!==id && x.name===name));
+  const apply=()=>{
+    s.name=name; editSecId=null;
+    queueSave(); refresh(); renderPeople(); if(RP) runReport();
+    el("savedNote").textContent="انتعدّل اسم القسم ✓";
+    setTimeout(()=>el("savedNote").textContent="",2200);
+  };
+  if(dup) confirmBox("اسم مكرر","أكو قسم ثاني بنفس الاسم «"+name+"». تكمل؟",{ok:"أكمل"}).then(go=>{ if(go) apply(); });
+  else apply();
 }
 el("secTable").addEventListener("click",e=>{
   const c=C();
@@ -2239,18 +2335,30 @@ el("secTable").addEventListener("click",e=>{
     commitSectionRename(sv.dataset.secsave, box?box.value:""); return; }
   if(e.target.closest("[data-seccancel]")){ editSecId=null; renderPeople(); return; }
   const zn=e.target.closest("[data-seczone]");
-  if(zn){ const s=c.sections.find(x=>x.id===zn.dataset.seczone);
+  if(zn){
+    const sec=c.sections.find(x=>x.id===zn.dataset.seczone); if(!sec) return;
     if(!c.zones.length){ alert("ماكو مناطق مسجّلة."); return; }
-    const list=c.zones.map((z,i)=>(i+1)+") "+z.name).join("\n");
-    const pick=prompt("رقم المنطقة لقسم «"+s.name+"»:\n"+list, String(zoneIndex(s.zoneId)+1));
-    const i=parseInt(pick,10);
-    if(i>=1&&i<=c.zones.length){ s.zoneId=c.zones[i-1].id; queueSave(); refresh(); renderPeople(); }
+    dlgShow({title:"منطقة القسم", message:"القسم: "+sec.name, ok:"حفظ", fields:[
+      {id:"dsZone",label:"المنطقة",type:"select",value:sec.zoneId,
+       options:c.zones.map(z=>({v:z.id,t:z.name}))}
+    ]}).then(v=>{
+      if(!v) return;
+      const z=c.zones.find(x=>x.id===v.dsZone); if(!z) return;
+      sec.zoneId=z.id; queueSave(); refresh(); renderPeople();
+    });
     return; }
-  if(dl2){ const s=c.sections.find(x=>x.id===dl2.dataset.secdel);
-    if(confirm("يتحذف قسم "+s.name+"؟ العمال يبقون بس بدون قسم.")){
-      c.sections=c.sections.filter(x=>x.id!==s.id);
-      c.workers.forEach(w=>{ if(w.sectionId===s.id) w.sectionId=""; });
-      queueSave(); refresh(); renderPeople(); } }
+  if(dl2){
+    const sec=c.sections.find(x=>x.id===dl2.dataset.secdel); if(!sec) return;
+    const n=c.workers.filter(w=>w.sectionId===sec.id).length;
+    confirmBox("حذف قسم","يتحذف قسم «"+sec.name+"»؟"+
+      (n?"\n"+fmtNum(n)+" عامل يبقون بس بدون قسم.":"\nالعمال يبقون بس بدون قسم."),
+      {ok:"حذف",danger:true}).then(go=>{
+      if(!go) return;
+      c.sections=c.sections.filter(x=>x.id!==sec.id);
+      c.workers.forEach(w=>{ if(w.sectionId===sec.id) w.sectionId=""; });
+      queueSave(); refresh(); renderPeople();
+    });
+  }
 });
 el("addW").onclick=()=>{
   const n=normName(el("wName").value); if(!n){ el("wName").focus(); return; }
@@ -2540,9 +2648,17 @@ el("coTable").addEventListener("click",e=>{
   const u=e.target.closest("[data-couse]"), r=e.target.closest("[data-coren]"),
         d=e.target.closest("[data-codup]"), x=e.target.closest("[data-codel]");
   if(u){ state.active=u.dataset.couse; queueSave(); bootView(); return; }
-  if(r){ const c=state.companies.find(c=>c.id===r.dataset.coren);
-    const n=prompt("اسم الشركة:",c.name); if(n&&n.trim()){ c.name=n.trim(); c.settings.company=n.trim(); }
-    queueSave(); bootView(); return; }
+  if(r){
+    const co=state.companies.find(x=>x.id===r.dataset.coren); if(!co) return;
+    dlgShow({title:"تسمية الشركة", ok:"حفظ",
+      fields:[{id:"dcName",label:"اسم الشركة",value:co.name}]}).then(v=>{
+      if(!v) return;
+      const n=normName(v.dcName);
+      if(!n){ alert("اسم الشركة ما يصير فارغ."); return; }
+      co.name=n; co.settings.company=n;
+      queueSave(); bootView();
+    });
+    return; }
   if(d){ const c=state.companies.find(c=>c.id===d.dataset.codup);
     const copy=JSON.parse(JSON.stringify(c));
     copy.id=uid(); copy.name=c.name+" — نسخة"; copy.settings.company=copy.name;
@@ -2556,11 +2672,22 @@ el("coTable").addEventListener("click",e=>{
       copy.workers.forEach(w=>{ if(w.sectionId===old) w.sectionId=s.id; }); });
     copy.workers.forEach(w=>w.id=uid());
     state.companies.push(copy); queueSave(); bootView(); return; }
-  if(x){ const c=state.companies.find(c=>c.id===x.dataset.codel);
-    if(!confirm("يتحذف «"+c.name+"» بكل عماله وسجله وإجازاته وعقوباته نهائياً؟")) return;
-    state.companies=state.companies.filter(y=>y.id!==c.id);
-    if(state.active===c.id) state.active=state.companies[0].id;
-    queueSave(); bootView(); }
+  if(x){
+    const co=state.companies.find(y=>y.id===x.dataset.codel); if(!co) return;
+    dlgShow({title:"حذف شركة", danger:true, ok:"حذف نهائي",
+      message:"يتحذف «"+co.name+"» نهائياً مع "+fmtNum(co.workers.length)+" عامل و"+
+        fmtNum(Object.keys(co.days||{}).length)+" يوم جرد و"+fmtNum((co.leaves||[]).length)+
+        " إجازة و"+fmtNum((co.penalties||[]).length)+" عقوبة و"+
+        fmtNum((co.achievements||[]).length)+" مكافأة.\nما تكدر ترجعها إلا من نسخة منزّلة.",
+      fields:[{id:"dcDel",label:"اكتب كلمة «حذف» للتأكيد",placeholder:"حذف"}],
+      needWord:{field:"dcDel",word:"حذف"}
+    }).then(v=>{
+      if(!v) return;
+      state.companies=state.companies.filter(y=>y.id!==co.id);
+      if(state.active===co.id) state.active=state.companies[0].id;
+      queueSave(); bootView();
+    });
+  }
 });
 
 /* ==================== ملف الداتا والنسخ ==================== */
@@ -3635,17 +3762,31 @@ el("catAdd").onclick=()=>{
 };
 el("catList").addEventListener("click",e=>{
   const ed=e.target.closest("[data-medit]"), dl=e.target.closest("[data-mdel]"), c=C();
-  if(ed){ const m=c.materials.find(x=>x.id===ed.dataset.medit); if(!m) return;
-    const nm=prompt("اسم المادة:",m.name); if(nm===null) return;
-    const un=prompt("الوحدة:",m.unit||""); if(un===null) return;
-    const qt=prompt("الكمية الاعتيادية:",String(m.qty||1)); if(qt===null) return;
-    if(nm.trim()) m.name=nm.trim();
-    m.unit=un.trim(); m.qty=Math.max(0,Number(qt)||1);
-    queueSave(); renderCatalog(); renderMatItems(); drawIssue(); }
-  if(dl){ const m=c.materials.find(x=>x.id===dl.dataset.mdel); if(!m) return;
-    if(confirm("يتحذف «"+m.name+"» من قائمة المواد؟\n\nالوصولات المحفوظة ما تتأثر.")){
+  if(ed){
+    const m=c.materials.find(x=>x.id===ed.dataset.medit); if(!m) return;
+    dlgShow({title:"تعديل مادة", ok:"حفظ", fields:[
+      {id:"dmName",label:"اسم المادة",value:m.name},
+      {id:"dmUnit",label:"الوحدة",value:m.unit||"",placeholder:"لتر / قطعة / كيس"},
+      {id:"dmQty",label:"الكمية الاعتيادية",type:"number",min:"0",step:"0.25",value:String(m.qty==null?1:m.qty)}
+    ]}).then(v=>{
+      if(!v) return;
+      const nm=normName(v.dmName);
+      if(!nm){ alert("اسم المادة ما يصير فارغ."); return; }
+      if(c.materials.some(x=>x.id!==m.id && x.name===nm)){ alert("أكو مادة ثانية بنفس الاسم."); return; }
+      m.name=nm; m.unit=String(v.dmUnit||"").trim(); m.qty=Math.max(0,Number(v.dmQty)||0);
+      queueSave(); renderCatalog(); renderMatItems(); drawIssue();
+    });
+    return;
+  }
+  if(dl){
+    const m=c.materials.find(x=>x.id===dl.dataset.mdel); if(!m) return;
+    confirmBox("حذف مادة","يتحذف «"+m.name+"» من قائمة المواد؟\nالوصولات المحفوظة ما تتأثر.",
+      {ok:"حذف",danger:true}).then(go=>{
+      if(!go) return;
       c.materials=c.materials.filter(x=>x.id!==m.id); delete mtSel[m.id];
-      queueSave(); renderCatalog(); renderMatItems(); drawIssue(); } }
+      queueSave(); renderCatalog(); renderMatItems(); drawIssue();
+    });
+  }
 });
 
 /* ---- التبويب ---- */
@@ -4423,6 +4564,16 @@ function openExt(){
   const t=el("extTo"); if(t.focus) t.focus();
 }
 function closeExt(){ el("extBack").classList.add("hidden"); }
+el("dlgOk").onclick=dlgSubmit;
+el("dlgCancel").onclick=()=>dlgEnd(null);
+el("dlgBack").addEventListener("click",e=>{ if(e.target===el("dlgBack")) dlgEnd(null); });
+el("dlgBack").addEventListener("keydown",e=>{ if(e.key==="Enter" && e.target.tagName!=="TEXTAREA") dlgSubmit(); });
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Escape") return;
+  if(dlgResolve){ dlgEnd(null); return; }
+  const x=document.getElementById("extBack");
+  if(x && x.classList && !x.classList.contains("hidden")) closeExt();
+});
 el("varExt").onclick=openExt;
 el("extClose").onclick=closeExt;
 el("extBack").addEventListener("click",e=>{ if(e.target===el("extBack")) closeExt(); });
@@ -5044,10 +5195,25 @@ function renderReport(){
   el("rpWarn").innerHTML=warn;
   const fg=document.getElementById("fixGaps");
   if(fg) fg.onclick=()=>{
-    if(!confirm("راح تنعتمد "+RP.gaps.length+" يوم على أساس أن الكل حاضر فيها.\nتقدر تعدّل أي يوم بعدين من السجل. تكمل؟")) return;
+    /* هذا الزر يكتب حضوراً كاملاً لكل عامل بكل يوم ناقص، وينزل مباشرة
+       على الرواتب. التحذير يذكر عدد العمال المتأثرين فعلاً، والتأكيد
+       يطلب كتابة كلمة — لا ضغطة زر واحدة. */
     const c=C();
-    RP.gaps.forEach(k=>{ if(!c.days[k]) c.days[k]={states:{},notes:""}; c.days[k].confirmed=true; });
-    queueSave(); runReport(); renderHistory(); refresh();
+    const hit=c.workers.filter(w=>RP.gaps.some(d=>inService(w,d)));
+    dlgShow({
+      title:"اعتماد كل الأيام الناقصة",
+      danger:true, ok:"اعتماد الأيام",
+      message:"راح تنعتمد "+fmtNum(RP.gaps.length)+" يوم عمل على أساس أن كل العمال حاضرون فيها.\n"+
+        "هذا يمسّ "+fmtNum(hit.length)+" عامل من أصل "+fmtNum(c.workers.length)+
+        "، ويدخل مباشرة بحساب رواتب المدة من "+dateTextOf(RP.from)+" إلى "+dateTextOf(RP.to)+".\n"+
+        "أي غياب حقيقي بهذه الأيام راح ينحسب حضوراً مدفوعاً، ولازم تصلّحه يدوياً من السجل.",
+      fields:[{id:"gapOk",label:"اكتب كلمة «اعتماد» للتأكيد",placeholder:"اعتماد"}],
+      needWord:{field:"gapOk",word:"اعتماد"}
+    }).then(v=>{
+      if(!v) return;
+      RP.gaps.forEach(k=>{ if(!c.days[k]) c.days[k]={states:{},notes:""}; c.days[k].confirmed=true; });
+      queueSave(); runReport(); renderHistory(); refresh();
+    });
   };
 
   const q=el("rpSearch").value.trim();
