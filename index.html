@@ -1078,9 +1078,16 @@ tr.rowvar td{background:#FCFAFE}
 "use strict";
 
 /* ==================== أدوات عامة ==================== */
-const _stub = { addEventListener(){}, classList:{add(){},remove(){},toggle(){},contains(){return false}},
-  querySelector(){return _stub}, setAttribute(){}, focus(){}, click(){}, toBlob(){}, toDataURL(){return ""},
-  getContext(){return null}, value:"", textContent:"", innerHTML:"", style:{}, disabled:false, files:[] };
+/* بديل صامت لأي عنصر مفقود: كل ما تناديه الشيفرة على عنصر حقيقي
+   لازم يوجد هنا، وإلا انكسر التنفيذ كله عند أول نداء غير معرَّف. */
+const _stub = { addEventListener(){}, removeEventListener(){},
+  classList:{add(){},remove(){},toggle(){},contains(){return false}},
+  querySelector(){return _stub}, querySelectorAll(){return []}, appendChild(){}, closest(){return null},
+  setAttribute(){}, removeAttribute(){}, getAttribute(){return null},
+  focus(){}, select(){}, blur(){}, click(){}, scrollIntoView(){},
+  toBlob(){}, toDataURL(){return ""}, getContext(){return null},
+  value:"", textContent:"", innerHTML:"", style:{setProperty(){},removeProperty(){}},
+  dataset:{}, disabled:false, checked:false, files:[], width:0, height:0 };
 function el(id){ const n=document.getElementById(id); if(!n){ console.warn("عنصر مفقود:",id); return _stub; } return n; }
 function uid(){ return Math.random().toString(36).slice(2,9); }
 
@@ -2671,6 +2678,10 @@ el("coTable").addEventListener("click",e=>{
     copy.sections.forEach(s=>{ const old=s.id; s.id=uid();
       copy.workers.forEach(w=>{ if(w.sectionId===old) w.sectionId=s.id; }); });
     copy.workers.forEach(w=>w.id=uid());
+    /* المواد تُنسخ بمعرّفاتها نفسها، فيصير معرّف واحد لمادتين في
+       شركتين. mtSel وأي ربط لاحق بالمعرّف يقدر يخلط بينهما —
+       نولّد معرّفات جديدة للنسخة. الأسماء والكميات تبقى كما هي. */
+    (copy.materials||[]).forEach(m=>{ if(m) m.id=uid(); });
     state.companies.push(copy); queueSave(); bootView(); return; }
   if(x){
     const co=state.companies.find(y=>y.id===x.dataset.codel); if(!co) return;
@@ -4048,6 +4059,20 @@ function workerStatusText(w){
   const e=serviceEnd(w);
   return e ? "منتهي "+dateTextOf(e) : "على رأس العمل";
 }
+/* حارس بنية: طول صف الرأس يجب أن يطابق طول كل صف بيانات.
+   عمود يُضاف أو يُحذف من جهة واحدة يُزيح كل القيم بصمت — اسم عامل
+   تحت عمود الهاتف، أو تاريخ تحت عمود الحالة. */
+function colsMatch(head, rows, where){
+  const n=head.length;
+  for(let i=0;i<rows.length;i++){
+    if(!rows[i] || rows[i].length!==n){
+      console.warn("اختلال أعمدة:", where, "— الرأس", n, "والصف", i+1,
+        rows[i]?rows[i].length:0);
+      return false;
+    }
+  }
+  return true;
+}
 /* آخر يوم عمل: التاريخ وحده بلا أي كلام — هو ما يُصدَّر بدل عمود «الخدمة».
    عامل على رأس العمل ما إله آخر يوم، فتبقى الخلية شرطة. */
 function lastDayText(w){
@@ -4206,10 +4231,12 @@ el("dirTable").addEventListener("click",e=>{
    ويكسر الجدول. المرجع في التصدير «حالة العمل» ومعه «آخر يوم عمل»
    بالتاريخ وحده. النص الوصفي يبقى على الشاشة فقط. */
 function dirExportRows(raw){
-  return dirList().map((w,i)=>[i+1, w.name, w.motherName||"—", w.dob||"—", sectionLabel(w),
+  const rows=dirList().map((w,i)=>[i+1, w.name, w.motherName||"—", w.dob||"—", sectionLabel(w),
     (raw?normPhone(w.phone):fmtPhone(w.phone))||"—",
     (raw?normPhone(w.phone2):fmtPhone(w.phone2))||"—", w.address||"—",
     hireText(w), getWorkerStatus(w), lastDayText(w)]);
+  colsMatch(DIR_HEAD, rows, "دليل العمال");
+  return rows;
 }
 const DIR_HEAD=["ت","الاسم","اسم الأم","التولد","القسم","رقم الهاتف","رقم الطوارئ",
   "العنوان","المباشرة","حالة العمل","آخر يوم عمل"];
@@ -4332,9 +4359,12 @@ const VAR_STATUS_COL=7;
 /* صف «لا نتيجة» يُبنى من طول الترويسة نفسها، فلا ينحرف طوله عنها أبداً */
 const VAR_EMPTY_ROW=VAR_HEAD.map((h,i)=>i===1?"ماكو عمال بهذا الاختيار":"—");
 function varExportRows(raw){
-  return varList().map((w,i)=>[i+1, w.name, w.motherName||"—", w.dob||"—", sectionLabel(w),
+  const rows=varList().map((w,i)=>[i+1, w.name, w.motherName||"—", w.dob||"—", sectionLabel(w),
     (raw?normPhone(w.phone):fmtPhone(w.phone))||"—", w.address||"—",
     getWorkerStatus(w), statusDateText(w), statusNoteText(w)]);
+  colsMatch(VAR_HEAD, rows, "حالات العمال");
+  colsMatch(VAR_HEAD, [VAR_EMPTY_ROW], "صف لا نتيجة");
+  return rows;
 }
 /* وصف المدى المصدَّر — يُطبع بترويسة الملف حتى يُعرف ما الذي صُدِّر */
 function varScopeText(){
@@ -4518,10 +4548,12 @@ function extValue(w,k,i,raw){
 function extHead(){ return extCols().map(c=>c.t); }
 function extRows(raw){
   const cs=extCols();
-  return varList().map((w,i)=>cs.map(c=>{
+  const rows=varList().map((w,i)=>cs.map(c=>{
     const v=extValue(w,c.k,i,raw);
     return (c.k==="idx" && !raw) ? fmtNum(v) : v;
   }));
+  colsMatch(cs.map(c=>c.t), rows, "الكشف الخارجي");
+  return rows;
 }
 function extTitleText(){ return "كشف بأسماء العمال غير المستمرين"; }
 function extToText(){ return String(el("extTo").value||"").trim() || "—"; }
@@ -4735,7 +4767,7 @@ function variablesDocx(){
   const SOFT=isMono()?"#F2F2F2":"#F5F3F8";
   const m=receiptMedia();
   const rows=varExportRows();
-  const FULL=16838-640*2-6;
+  const FULL=16838-640*2;
   const GFIX=[400,2150,1900,900,1700,1400,0,1400,1500,1700];
   const G=GFIX.slice();
   G[6]=FULL-GFIX.reduce((a,b)=>a+b,0);
@@ -6089,7 +6121,7 @@ function docSignature(media){
 /* ---------- ١) ورقة الجرد اليومي ---------- */
 /* الورقة تملأ A4 كاملة: الأعمدة بعرض الصفحة، وأسطر الأسماء
    تُكمَّل بأسطر فارغة حسب المتبقّي من ارتفاع الصفحة. */
-const DY_FULL=10440;
+const DY_FULL=11906-720*2;      /* عرض الصفحة المتاح بالضبط */
 
 function dailyDocx(){
   docReset();
@@ -6097,7 +6129,8 @@ function dailyDocx(){
   const SOFT=isMono()?"#F2F2F2":"#F5F3F8";
 
   /* --- الترويسة --- */
-  const H1=3240,H2=3960,H3=3240;
+  /* آخر خلية تأخذ الباقي، فمجموع الترويسة = عرض الصفحة بالضبط */
+  const H1=3240,H2=3960,H3=DY_FULL-H1-H2;
   let b=wTable([
     wRow([
       wCell(
@@ -6468,7 +6501,7 @@ el("bkForget").onclick=async()=>{
    نسختان × ٧٢٥٠ + خط قص ٥٤٠ = ١٥٠٤٠ ، فيبقى هامش أمان ٦٦٤ تويب.
    المولّد واحد للإجازة والعقوبة: أي تعديل على التخطيط ينزل على الاثنين معاً. */
 const LV_MARGIN=567;                       // ١ سم
-const LV_FULL=11906-LV_MARGIN*2-6;         // عرض المحتوى
+const LV_FULL=11906-LV_MARGIN*2;           // عرض المحتوى بالضبط
 const LV_BUDGET=7250;                      // ارتفاع النسخة الواحدة
 
 /* مولّد نسخة واحدة من الوصل.
@@ -6851,7 +6884,7 @@ function directoryDocx(){
   const SOFT=isMono()?"#F2F2F2":"#F5F3F8";
   const m=receiptMedia();
   const rows=dirExportRows();
-  const FULL=16838-640*2-6;
+  const FULL=16838-640*2;
   /* العنوان يأخذ ما تبقّى من عرض الصفحة بعد الأعمدة ثابتة العرض،
      فلا يتجاوز الجدول حدود الورقة مهما تغيّر عدد الأعمدة. */
   const GFIX=[400,2150,1900,900,1500,1300,1300,0,1250,1300,1400];
