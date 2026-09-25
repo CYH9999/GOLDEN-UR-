@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>الفحص الذاتي — نظام الجرد اليومي v4.0</title>
+<style>
+  :root{--ink:#1E1A29;--ink2:#5F5873;--line:#E3E0EA;--ok:#2C6E49;--bad:#9B1C31;--brand:#4B2E83;--bg:#F4F3F8}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.6 "Dubai","Segoe UI","Noto Naskh Arabic",Tahoma,sans-serif;background:var(--bg);color:var(--ink)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 16px 48px}
+  h1{margin:0 0 4px;font-size:22px;color:var(--brand)}
+  .lead{margin:0 0 16px;color:var(--ink2)}
+  .src{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:16px}
+  .src b{color:var(--brand)}
+  .src input{margin-top:8px}
+  .sum{display:flex;gap:12px;margin:0 0 16px}
+  .sum>div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 18px;min-width:120px}
+  .sum .k{font-size:12px;color:var(--ink2)} .sum .v{font-size:26px;font-weight:800}
+  .v.ok{color:var(--ok)} .v.bad{color:var(--bad)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .card h2{margin:0;padding:10px 16px;font-size:15px;border-bottom:1px solid var(--line);background:#FAF9FC}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:right;padding:6px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:12px;color:var(--ink2);background:#FAF9FC}
+  td.r{font-variant-numeric:tabular-nums;direction:ltr;text-align:right;white-space:nowrap}
+  td.ok{color:var(--ok);font-weight:700} td.bad{color:var(--bad);font-weight:700}
+  tr.fail td{background:#FBEFF1}
+  .note{color:var(--ink2);font-size:12px}
+  #frames{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>الفحص الذاتي — نظام الجرد اليومي v4.0</h1>
+  <p class="lead">يفتح البرنامج الحقيقي (<code>../index.html</code>) داخل إطار معزول — ذاكرة بديلة بلا أي مساس ببيانات
+    الجهاز — ويشغّل عليه حالات الحساب والجرد التفصيلي وعزل الشركات والحفظ والاستعادة. كل رقم متوقَّع هنا محسوب يدوياً
+    بالقاعدة الموثّقة، لا بدالة من البرنامج نفسه.</p>
+  <div class="src" id="srcBox">جاري قراءة <b>../index.html</b>…</div>
+  <div class="sum" id="sum"></div>
+  <div id="out"></div>
+</div>
+<div id="frames"></div>
+<script>
+"use strict";
+/* ============ أدوات النتائج ============ */
+const groups=[]; let cur=null;
+function group(name){ cur={name:name, rows:[]}; groups.push(cur); }
+function check(desc, got, want, note){
+  const ok=(typeof want==="function") ? !!want(got) : Object.is(got,want);
+  cur.rows.push({desc:desc, got:fmt(got), want:(typeof want==="function"?(note||"شرط"):fmt(want)), ok:ok, note:note||""});
+  return ok;
+}
+function fmt(v){
+  if(v===undefined) return "—";
+  if(typeof v==="number") return Number.isInteger(v)?v.toLocaleString("en-US"):String(Math.round(v*100)/100);
+  if(typeof v==="string") return v.length>80?v.slice(0,80)+"…":(v===""?"«فارغ»":v);
+  return JSON.stringify(v);
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function render(){
+  let pass=0, fail=0, h="";
+  groups.forEach(g=>{
+    h+='<div class="card"><h2>'+esc(g.name)+'</h2><table><thead><tr><th style="width:46%">الحالة</th>'+
+      '<th>الناتج</th><th>المتوقع</th><th style="width:64px">النتيجة</th><th style="width:22%">ملاحظة</th></tr></thead><tbody>';
+    g.rows.forEach(r=>{ r.ok?pass++:fail++;
+      h+='<tr'+(r.ok?'':' class="fail"')+'><td>'+esc(r.desc)+'</td><td class="r">'+esc(r.got)+'</td><td class="r">'+esc(r.want)+'</td>'+
+        '<td class="'+(r.ok?'ok':'bad')+'">'+(r.ok?'ناجح':'فاشل')+'</td><td class="note">'+esc(r.note)+'</td></tr>'; });
+    h+='</tbody></table></div>';
+  });
+  document.getElementById("out").innerHTML=h;
+  document.getElementById("sum").innerHTML=
+    '<div><div class="k">المجموع</div><div class="v">'+(pass+fail)+'</div></div>'+
+    '<div><div class="k">ناجح</div><div class="v ok">'+pass+'</div></div>'+
+    '<div><div class="k">فاشل</div><div class="v '+(fail?'bad':'ok')+'">'+fail+'</div></div>';
+  document.title=(fail?"✗ ":"✓ ")+pass+"/"+(pass+fail)+" — الفحص الذاتي";
+  window.__RESULT={pass:pass, fail:fail, total:pass+fail,
+    failures:groups.reduce((a,g)=>a.concat(g.rows.filter(r=>!r.ok).map(r=>g.name+" › "+r.desc+" (ناتج "+r.got+"، متوقع "+r.want+")")),[])};
+}
+
+/* ============ تحميل البرنامج ============
+   من خادم محلي: يُقرأ ../index.html مباشرة. من file:// يمنع المتصفح القراءة،
+   فيظهر زر لاختيار الملف يدوياً — اختيار المستخدم مسموح بلا خادم ولا إنترنت. */
+const PRELUDE=`<script>(function(){
+  var mem={};
+  try{ Object.defineProperty(window,'localStorage',{configurable:true,value:{
+    getItem:function(k){return Object.prototype.hasOwnProperty.call(mem,k)?mem[k]:null;},
+    setItem:function(k,v){mem[k]=String(v);}, removeItem:function(k){delete mem[k];}, clear:function(){mem={};},
+    key:function(i){return Object.keys(mem)[i]||null;}, get length(){return Object.keys(mem).length;}
+  }}); }catch(e){}
+  try{ Object.defineProperty(window,'indexedDB',{configurable:true,value:{open:function(){ throw new Error('لا قاعدة بيانات بالفحص'); }}}); }catch(e){}
+  try{ window.BroadcastChannel=undefined; }catch(e){}
+  window.__warns=[]; window.__errs=[];
+  var ow=console.warn.bind(console);
+  console.warn=function(){ window.__warns.push(Array.prototype.join.call(arguments,' ')); ow.apply(null,arguments); };
+  window.addEventListener('error',function(e){ window.__errs.push(String(e.message)); });
+  window.alert=function(){}; window.confirm=function(){ return true; }; window.prompt=function(){ return null; };
+  window.print=function(){};
+  window.__printed=[];
+  window.open=function(){ var h=''; var w={document:{write:function(x){h+=x;},close:function(){ window.__printed.push(h); }},focus:function(){},print:function(){}}; return w; };
+})();<\/script>`;
+let SRC=null;
+function withPrelude(txt){
+  const at=txt.indexOf("<script>");
+  if(at<0) throw new Error("ما لقيت وسم script في الملف المختار");
+  return txt.slice(0,at)+PRELUDE+txt.slice(at);
+}
+async function loadSource(){
+  const box=document.getElementById("srcBox");
+  try{
+    const r=await fetch("../index.html",{cache:"no-store"});
+    if(!r.ok) throw new Error(r.status);
+    SRC=withPrelude(await r.text());
+    box.innerHTML="المصدر: <b>../index.html</b> (قُرئ مباشرة).";
+    return;
+  }catch(e){}
+  box.innerHTML='المتصفح منع قراءة <b>../index.html</b> لأن الصفحة مفتوحة من ملف محلي. '+
+    'اختر ملف <b>index.html</b> من مجلد البرنامج ويبدأ الفحص:<br><input type="file" id="pick" accept=".html,text/html">';
+  await new Promise(res=>{
+    document.getElementById("pick").addEventListener("change",async e=>{
+      const f=e.target.files&&e.target.files[0]; if(!f) return;
+      SRC=withPrelude(await f.text());
+      box.innerHTML="المصدر: <b>"+esc(f.name)+"</b> (اختير يدوياً).";
+      res();
+    });
+  });
+}
+let seq=0;
+function boot(){
+  return new Promise((res,rej)=>{
+    const f=document.createElement("iframe");
+    f.id="f"+(++seq); f.setAttribute("srcdoc",SRC);
+    f.onload=()=>{
+      const w=f.contentWindow; let n=0;
+      (function wait(){
+        let done=false; try{ done=(w.eval("stateLoaded")===true); }catch(e){}
+        if(done||n++>400) return res(w);
+        setTimeout(wait,8);
+      })();
+    };
+    f.onerror=()=>rej(new Error("تعذّر تحميل الإطار"));
+    document.getElementById("frames").appendChild(f);
+  });
+}
+const tick=ms=>new Promise(r=>setTimeout(r,ms||8));
+async function dlgWait(w){
+  for(let i=0;i<250;i++){ const b=w.document.getElementById("dlgBack");
+    if(b && !b.classList.contains("hidden")) return true; await tick(5); }
+  return false;
+}
+async function answer(w,ok){ if(!await dlgWait(w)) return false;
+  w.document.getElementById(ok===false?"dlgCancel":"dlgOk").click(); await tick(12); return true; }
+
+/* ============ البيانات الاختبارية ============
+   شركة جديدة بقواعد v4 (payV6، إصلاح شهر ٣١ يوماً ساري). كل أيام الشهر معتمدة،
+   الراحة الأسبوعية الجمعة، الراتب ٣٣٥٬٠٠٠، أجر اليوم = الراتب ÷ ٣٠. */
+const SAL=335000;
+function monthDays(y,m){ return new Date(y,m,0).getDate(); }
+function company(o){
+  o=o||{};
+  const days={};
+  (o.months||[[2026,9]]).forEach(ym=>{
+    const y=ym[0], m=ym[1], mm=String(m).padStart(2,"0");
+    for(let d=1; d<=monthDays(y,m); d++){
+      const iso=y+"-"+mm+"-"+String(d).padStart(2,"0");
+      days[iso]={states:Object.assign({},(o.states&&o.states[iso])||{}),notes:"",confirmed:true};
+    }
+  });
+  return { id:o.id||"co1", name:o.name||"شركة الفحص", theme:o.theme||"#4B2E83", accent:"#B8912E",
+    settings:Object.assign({ company:o.name||"شركة الفحص", title:"الجرد اليومي", address:"البصرة", signer:"عبد الله",
+      role:"المسؤول الإداري", mark:"ج", numerals:"latn", miscInTotal:"no", secCount:"active", signature:"",
+      salary:SAL, deduct:11166.67, dedMode:"auto", workDays:30, miscPaid:"yes", currency:"د.ع",
+      exportDPI:"300", printMode:"color", leavePolicy:"none", proRate:"yes", weekendDays:[5], holidays:[], defNote:"" }, o.settings||{}),
+    zones:[{id:"z1",name:"المنطقة",short:"م",color:"#4B2E83"}],
+    sections:[{id:"s1",name:"قسم الإنتاج",zoneId:"z1"}],
+    workers:(o.workers||[]).map(w=>Object.assign({sectionId:"s1",createdAt:"2025-01-01",status:"مستمر"},w)),
+    days:days, leaves:o.leaves||[], leaveSeq:0, penalties:o.penalties||[], penSeq:0,
+    achievements:o.achievements||[], achSeq:0,
+    materials:[{id:"m1",name:"منظّف",unit:"لتر",qty:2}], issues:[], issueSeq:0,
+    matSeeded:true, payV3:true, payV5:true, payV6:true, pay31From:(o.pay31From||"0000-00") };
+}
+function stateOf(cos){ return {v:2, active:cos[0].id, savedAt:1, companies:cos}; }
+function load(w,st){ w.__fx=st; w.eval("state=migrate(__fx); curDate='2026-09-25'; bootView();"); }
+function rows(w,a,b){ return w.eval('buildReport("'+a+'","'+b+'").rows'); }
+function row(w,id,a,b){ return rows(w,a||"2026-09-01",b||"2026-09-30").find(r=>r.id===id); }
+/* المطابقة: الجرد التفصيلي لكل العمال بنفس المدة مقابل كشف الرواتب */
+function ledgerMatch(w,a,b){
+  w.eval('switchView("ledger"); el("lgScope").value="all"; el("lgStatus").value=""; el("lgSearch").value="";'+
+    'el("lgFrom").value="'+a+'"; el("lgTo").value="'+b+'"; runLedger(false);');
+  return JSON.parse(w.eval(`JSON.stringify((function(){
+    var list=lgList(), sh=lgScopeRows().shown, L=ledgerTotals(list), T=totalsOf(LG.rp.rows,0);
+    return {diff:ledgerVsPayroll(list,sh).join("،"), mism:list.filter(function(x){return x.mismatch.length;}).length,
+      netL:L.net, netP:T.net, pL:L.present, pP:T.present, aL:L.absent, aP:T.absent, dL:L.deductDays,
+      dP:LG.rp.rows.reduce(function(s,r){return s+r.deductDays;},0), n:list.length};
+  })())`));
+}
+function checkLedger(w,a,b,label){
+  const m=ledgerMatch(w,a,b);
+  check(label+" — الجرد التفصيلي = كشف الرواتب (كل الحقول)", m.diff, "", "حضور/غياب/متفرقة/إجازة/أوف/مستقطع/مبالغ");
+  check(label+" — عدّ أيام كل عامل = صفّه", m.mism, 0);
+  check(label+" — الصافي بالجرد = بالكشف", m.netL, m.netP);
+  check(label+" — أيام الاستقطاع بالجرد = بالكشف", m.dL, m.dP);
+}
+
+/* ============ الحالات ============ */
+async function run(){
+try{
+  await loadSource();
+
+  /* ---- ١) الراتب الكامل والنسبي بأطوال الأشهر ---- */
+  group("١ · الراتب الكامل والنسبي (٢٨ / ٢٩ / ٣٠ / ٣١ يوماً)");
+  const w1=await boot();
+  load(w1,stateOf([company({months:[[2026,9]],workers:[{id:"a",name:"كامل"},{id:"b",name:"منتصف",startDate:"2026-09-16"},
+    {id:"c",name:"منقول",status:"منقول",statusChangedAt:"2026-09-10"}]})]));
+  check("مستمر طوال أيلول ٢٠٢٦ بلا غياب = الراتب كاملاً", row(w1,"a").net, 335000);
+  check("٣٠ يوماً: باشر ١٦ أيلول (خارج الخدمة ١٥ يوماً)", row(w1,"b").net, 167500, "٣٣٥٬٠٠٠ − تقريب(١٥ × ١١٬١٦٦٫٦٧)");
+  check("٣٠ يوماً: آخر يوم عمل ١٠ أيلول", row(w1,"c").net, 111750, "٣٣٥٬٠٠٠ − تقريب(٢٠ × ١١٬١٦٦٫٦٧ = ٢٢٣٬٣٣٣) = ٢٢٣٬٢٥٠");
+  checkLedger(w1,"2026-09-01","2026-09-30","أيلول");
+
+  load(w1,stateOf([company({months:[[2026,2]],workers:[{id:"a",name:"كامل"},{id:"b",name:"منتصف",startDate:"2026-02-15"}]})]));
+  check("٢٨ يوماً (شباط ٢٠٢٦): مستمر = كامل", row(w1,"a","2026-02-01","2026-02-28").net, 335000);
+  check("٢٨ يوماً: باشر ١٥ شباط (خارج ١٤ يوماً)", row(w1,"b","2026-02-01","2026-02-28").net, 178750, "٣٣٥٬٠٠٠ − تقريب(١٤ × ١١٬١٦٦٫٦٧ = ١٥٦٬٣٣٣) = ١٥٦٬٢٥٠");
+  checkLedger(w1,"2026-02-01","2026-02-28","شباط ٢٠٢٦");
+
+  load(w1,stateOf([company({months:[[2028,2]],workers:[{id:"a",name:"كامل"},{id:"b",name:"منتصف",startDate:"2028-02-15"}]})]));
+  check("٢٩ يوماً (شباط ٢٠٢٨): مستمر = كامل", row(w1,"a","2028-02-01","2028-02-29").net, 335000);
+  check("٢٩ يوماً: باشر ١٥ شباط (خارج ١٤ يوماً)", row(w1,"b","2028-02-01","2028-02-29").net, 178750);
+  checkLedger(w1,"2028-02-01","2028-02-29","شباط ٢٠٢٨");
+
+  load(w1,stateOf([company({months:[[2026,10]],workers:[{id:"a",name:"كامل"},{id:"b",name:"منتصف",startDate:"2026-10-16"},
+    {id:"c",name:"خدم ٣٠",status:"منقول",statusChangedAt:"2026-10-30"},{id:"d",name:"يوم واحد",startDate:"2026-10-31"}]})]));
+  check("٣١ يوماً (تشرين الأول): مستمر = كامل", row(w1,"a","2026-10-01","2026-10-31").net, 335000);
+  check("٣١ يوماً: باشر ١٦ (خارج ١٥، واليوم ٣١ لا يُحسم)", row(w1,"b","2026-10-01","2026-10-31").net, 178750, "حسم ١٤ يوماً");
+  check("٣١ يوماً: خدم ٣٠ يوماً = كامل", row(w1,"c","2026-10-01","2026-10-31").net, 335000);
+  check("٣١ يوماً: خدم اليوم الأخير وحده = أجر يوم", row(w1,"d","2026-10-01","2026-10-31").net, 11250, "كان صفراً قبل الإصلاح");
+  checkLedger(w1,"2026-10-01","2026-10-31","تشرين الأول");
+
+  load(w1,stateOf([company({months:[[2026,10]],pay31From:"2026-11",workers:[{id:"b",name:"منتصف",startDate:"2026-10-16"}]})]));
+  check("شهر قبل تاريخ الترحيل يبقى بأرقامه القديمة (حسم ١٥ يوماً)", row(w1,"b","2026-10-01","2026-10-31").net, 167500, "pay31From");
+
+  /* ---- ٢) سياسات الإجازة ---- */
+  group("٢ · سياسات الإجازة والإجازة الزمنية");
+  const LV=(id,w,from,days,pol,type)=>({id:id,no:"إ-"+id,workerId:w,type:type||"اعتيادية",from:from,days:days,
+    to:addISO(from,days-1),policy:pol});
+  load(w1,stateOf([company({workers:[{id:"n",name:"بلا استقطاع"},{id:"f",name:"كل الأيام"},{id:"h",name:"نصف مرتين"},{id:"t",name:"زمنية"}],
+    leaves:[LV("1","n","2026-09-01",3,"none"),LV("2","f","2026-09-01",3,"full"),
+            LV("3","h","2026-09-01",3,"half"),LV("4","h","2026-09-07",3,"half"),
+            {id:"5",no:"إ-5",workerId:"t",type:"زمنية",from:"2026-09-02",days:1,hours:3,to:"2026-09-02",policy:"none"}]})]));
+  check("إجازة ٣ أيام «بلا استقطاع»", row(w1,"n").net, 335000);
+  check("إجازة ٣ أيام «كل الأيام»", row(w1,"f").net, 301500, "تقريب(٣ × ١١٬١٦٦٫٦٧) = ٣٣٬٥٠٠");
+  check("إجازتا «نصف» بنفس الشهر (٣ + ٣) — النصف مرة واحدة", row(w1,"h").excusedDed, 3, "⌊٦ ÷ ٢⌋ = ٣ لا ⌊٣÷٢⌋+⌊٣÷٢⌋ = ٢");
+  check("إجازتا «نصف» — الصافي", row(w1,"h").net, 301500);
+  check("إجازة زمنية ٣ ساعات = صفر استقطاع", row(w1,"t").net, 335000);
+  check("الإجازة الزمنية لا تدخل عدد الإجازات", row(w1,"t").leave, 0);
+  checkLedger(w1,"2026-09-01","2026-09-30","الإجازات");
+
+  /* ---- ٣) الأوف والعطلة المتقاطعة مع إجازة ---- */
+  group("٣ · أوف أسبوعي + أوف بتاريخ + عطلة تتقاطع مع إجازة");
+  load(w1,stateOf([company({settings:{holidays:[{date:"2026-09-08",name:"عطلة رسمية"}]},
+    workers:[{id:"o",name:"أوف",offWeekdays:[6],offDates:["2026-09-10"]}],
+    leaves:[LV("1","o","2026-09-07",5,"full")]})]));
+  const ro=row(w1,"o");
+  check("أيام العمل المعتمدة له (٣٠ − ٤ جمع − عطلة)", ro.eligible, 25);
+  check("الأوف = ٤ سبوت + ١٠ أيلول", ro.off, 5);
+  check("أيام الإجازة الفعلية = ٧ و٩ فقط", ro.leave, 2, "٨ عطلة، ١٠ أوف، ١١ جمعة");
+  check("الحضور", ro.present, 18);
+  check("الصافي (استقطاع يومين)", ro.net, 312750, "تقريب(٢ × ١١٬١٦٦٫٦٧) = ٢٢٬٢٥٠");
+  checkLedger(w1,"2026-09-01","2026-09-30","الأوف والعطلة");
+  check("تصنيف ٨ أيلول بالجرد التفصيلي = عطلة (تسبق الإجازة)", w1.eval('lgLedger("o").days[7].k'), "hol");
+  check("تصنيف ١٠ أيلول = أوف (يسبق الإجازة)", w1.eval('lgLedger("o").days[9].k'), "off");
+  check("تصنيف ٧ أيلول = إجازة", w1.eval('lgLedger("o").days[6].k'), "leave");
+
+  /* ---- ٤) العقوبات والمكافآت بأجر يوم مجمَّد ---- */
+  group("٤ · العقوبات والمكافآت (مبلغ، أيام بأجر مجمَّد)");
+  load(w1,stateOf([company({workers:[{id:"p",name:"عقوبات"}],
+    penalties:[{id:"p1",no:"ع-1",workerId:"p",type:"استقطاع",kind:"amount",amount:20000,date:"2026-09-12"},
+               {id:"p2",no:"ع-2",workerId:"p",type:"استقطاع أيام",kind:"days",days:2,dayRate:15000,date:"2026-09-13"}],
+    achievements:[{id:"a1",no:"م-1",workerId:"p",type:"مكافأة",kind:"days",days:1,dayRate:11166.67,date:"2026-09-14"}]})]));
+  let rp=row(w1,"p");
+  check("عقوبة مبلغ ٢٠٬٠٠٠ + عقوبة يومين بأجر مجمَّد ١٥٬٠٠٠", rp.penDed, 50000);
+  check("مكافأة يوم بأجر مجمَّد", rp.achAdd, 11250);
+  check("الصافي", rp.net, 296250, "٣٣٥٬٠٠٠ − ٥٠٬٠٠٠ + ١١٬٢٥٠");
+  w1.eval('C().workers[0].salary=400000');
+  rp=row(w1,"p");
+  check("تغيير الراتب بعد الإصدار لا يغيّر مبلغ الوثائق", rp.penDed+"/"+rp.achAdd, "50000/11250");
+  check("الصافي بعد تغيير الراتب", rp.net, 361250);
+  checkLedger(w1,"2026-09-01","2026-09-30","العقوبات والمكافآت");
+  /* الحفظ من الواجهة يجمّد أجر اليوم */
+  load(w1,stateOf([company({workers:[{id:"p",name:"عقوبات"}]})]));
+  w1.eval('initPenView(); el("pnWorker").value="p"; el("pnWorker").dispatchEvent(new Event("change"));'+
+    'el("pnType").value=el("pnType").options[0].value; el("pnKind").value="days"; el("pnKind").dispatchEvent(new Event("change"));'+
+    'el("pnAmount").value="2"; el("pnDate").value="2026-09-13"; el("pnReason").value="سبب";');
+  const pv=w1.eval('el("pnSave").onclick()'); if(await dlgWait(w1)) await answer(w1,true); await pv; await tick(20);
+  check("عقوبة «أيام» محفوظة من الواجهة تحمل أجر اليوم مجمَّداً",
+    w1.eval('Math.round(Number((C().penalties[0]||{}).dayRate)*100)/100'), 11166.67);
+  w1.eval('C().workers[0].salary=600000');
+  check("مبلغها يبقى ٢٢٬٢٥٠ بعد رفع الراتب إلى ٦٠٠٬٠٠٠", row(w1,"p").penDed, 22250);
+
+  /* ---- ٥) قرار إنهاء الخدمة ثم حذفه ---- */
+  group("٥ · قرار إنهاء الخدمة ثم حذفه = رجوع كامل");
+  load(w1,stateOf([company({workers:[{id:"k",name:"مستمر"},
+    {id:"q",name:"منقطع",status:"انقطاع عن العمل",statusChangedAt:"2026-09-20",statusNote:"انقطاع مؤقت"}]})]));
+  async function terminate(w,wid,date){
+    w.eval('switchView("penalties"); el("pnNew").onclick(); el("pnWorker").value="'+wid+'"; el("pnWorker").dispatchEvent(new Event("change"));'+
+      'el("pnType").value="إنهاء الخدمات"; el("pnType").dispatchEvent(new Event("change")); el("pnDate").value="'+date+'"; el("pnReason").value="قرار";');
+    const p=w.eval('el("pnSave").onclick()'); if(await dlgWait(w)) await answer(w,true); await p; await tick(20);
+  }
+  async function delDecision(w,wid){
+    const id=w.eval('(C().penalties.find(function(x){return x.workerId==="'+wid+'";})||{}).id');
+    w.eval('renderPenalties(); var b=document.querySelector(\'[data-pdel="'+id+'"]\'); if(b) b.click();');
+    await answer(w,true); await tick(20);
+  }
+  const snapK=()=>w1.eval('JSON.stringify((function(w){return [w.status,w.statusChangedAt,w.statusNote];})(C().workers.find(function(x){return x.id==="k";})))');
+  const snapQ=()=>w1.eval('JSON.stringify((function(w){return [w.status,w.statusChangedAt,w.statusNote];})(C().workers.find(function(x){return x.id==="q";})))');
+  const k0=snapK(), q0=snapQ();
+  await terminate(w1,"k","2026-09-15");
+  check("بعد القرار: الحالة والتاريخ", w1.eval('C().workers[0].status+"|"+C().workers[0].statusChangedAt'), "إنهاء خدمات|2026-09-15");
+  check("بعد القرار: الصافي حتى ١٥ أيلول", row(w1,"k").net, 167500);
+  await delDecision(w1,"k");
+  check("بعد الحذف: الحالة والتاريخ والملاحظة كما كانت", snapK(), k0);
+  check("بعد الحذف: الصافي كامل", row(w1,"k").net, 335000);
+  await terminate(w1,"q","2026-09-15");
+  await delDecision(w1,"q");
+  check("عامل كان «منقطعاً» بتاريخ وملاحظة: يرجع كما كان بالضبط", snapQ(), q0);
+  check("لا وثيقة متبقية", w1.eval("C().penalties.length"), 0);
+  check("سجل الحالة: القرار الملغى لا يظهر كتغيير بالجرد التفصيلي",
+    w1.eval('workerChanges(C().workers[0],"2026-09-01","2026-09-30").length'), 0);
+  checkLedger(w1,"2026-09-01","2026-09-30","بعد الحذف");
+
+  /* ---- ٦) كل الحالات بشركة واحدة: الجرد = الكشف ---- */
+  group("٦ · كل الحالات معاً — الجرد التفصيلي = كشف الرواتب");
+  load(w1,stateOf([company({settings:{holidays:[{date:"2026-09-08",name:"عطلة"}],leavePolicy:"half"},
+    states:{"2026-09-02":{a:"absent",b:"misc"},"2026-09-03":{b:"misc",c:"absent"},"2026-09-22":{d:"misc"}},
+    workers:[{id:"a",name:"أ"},{id:"b",name:"ب",startDate:"2026-09-02"},{id:"c",name:"ج",status:"منقول",statusChangedAt:"2026-09-18"},
+      {id:"d",name:"د",offWeekdays:[6],offDates:["2026-09-10"]},{id:"e",name:"هـ",status:"مفصول",statusChangedAt:"2026-08-10"},{id:"f",name:"و"}],
+    leaves:[LV("1","f","2026-09-01",3,"half"),LV("2","f","2026-09-07",3,"half"),LV("3","d","2026-09-07",5,"full"),
+            {id:"4",no:"إ-4",workerId:"a",type:"زمنية",from:"2026-09-02",days:1,hours:2,to:"2026-09-02",policy:"none"}],
+    penalties:[{id:"p1",no:"ع-1",workerId:"a",type:"استقطاع",kind:"amount",amount:20000,date:"2026-09-12"},
+               {id:"p2",no:"ع-2",workerId:"d",type:"أيام",kind:"days",days:2,dayRate:11166.67,date:"2026-09-13"}],
+    achievements:[{id:"a1",no:"م-1",workerId:"f",type:"مكافأة",kind:"days",days:1,dayRate:11166.67,date:"2026-09-14"}]})]));
+  checkLedger(w1,"2026-09-01","2026-09-30","شامل");
+  check("عامل خارج الخدمة طوال الشهر بلا صفحة (مجموعه صفر)", w1.eval("lgScopeRows().empty.length"), 1);
+  check("الطباعة: صفحة لكل عامل + صفحة التغييرات والخلاصة",
+    (w1.eval('window.__printed=[]; el("lgPrint").click(); (window.__printed[0].match(/class="lgpg"/g)||[]).length')),
+    w1.eval("lgList().length+1"));
+  check("مدى متعدد الأشهر مرفوض بالجرد التفصيلي",
+    w1.eval('el("lgFrom").value="2026-08-20"; el("lgTo").value="2026-09-10"; runLedger(false); LG===null'), true);
+
+  /* ---- ٧) عزل شركتين ---- */
+  group("٧ · عزل شركتين (أرقام، توقيع، شعار، فلاتر)");
+  const w7=await boot();
+  const PNG="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAGUlEQVR4nGNkYPj/n4EIwESMolGFtFUIAB8wAx8xw1dFAAAAAElFTkSuQmCC";
+  const A=company({id:"A",name:"الأولى",workers:[{id:"a1",name:"أحمد"},{id:"a2",name:"علي"},{id:"a3",name:"حسين",status:"منقول",statusChangedAt:"2026-09-18"}]});
+  A.settings.signature=PNG; A.settings.logo=PNG; A.settings.logoW=8; A.settings.logoH=8;
+  const B=company({id:"B",name:"الثانية",settings:{salary:500000},workers:[{id:"b1",name:"زيد"},{id:"b2",name:"عمر"}]});
+  load(w7,stateOf([A,B]));
+  w7.eval('switchView("report"); el("rpFrom").value="2026-09-01"; el("rpTo").value="2026-09-30"; runReport(true);'+
+    'el("rpSearch").value="أحمد"; renderReport(); setVarSel(["منقول"]); switchView("settings");');
+  await tick(60);
+  check("الأولى قبل التبديل: البحث يعرض ١ من ٣", w7.eval("rpRows().length+'/'+RP.rows.length"), "1/3");
+  w7.eval('state.active="B"; bootView(); switchView("report"); runReport(true); switchView("settings");');
+  await tick(80);
+  check("خانة البحث تُفرَّغ عند التبديل", w7.eval('el("rpSearch").value'), "");
+  check("كشف الثانية كامل (٢ من ٢)", w7.eval("rpRows().length+'/'+RP.rows.length"), "2/2");
+  check("أرقام الثانية براتبها (٢ × ٥٠٠٬٠٠٠)", w7.eval("rpTot().net"), 1000000);
+  check("الثانية بلا توقيع بعد التبديل", w7.eval("S().signature"), "");
+  check("لوحة التوقيع فارغة بالثانية", w7.eval('(function(){var c=el("sigPad"),d=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,c.width,c.height).data,n=0;for(var i=3;i<d.length;i+=4)if(d[i])n++;return n;})()'), 0);
+  check("الثانية بلا شعار بوثائقها", w7.eval("receiptMedia().logoRid"), null);
+  check("فلتر الحالات لا ينتقل للثانية", w7.eval("varSelected().join('،')")!=="منقول", true);
+  check("الجرد التفصيلي يرجع لنطاق «كل العمال»", w7.eval('el("lgScope").value'), "all");
+  w7.eval('state.active="A"; bootView(); switchView("report"); el("rpFrom").value="2026-09-01"; el("rpTo").value="2026-09-30"; runReport(true);');
+  await tick(60);
+  check("الأولى: توقيعها وشعارها باقيان", w7.eval("!!S().signature && !!S().logo"), true);
+  check("الأولى: رقمها كما كان", w7.eval("rpTot().net"), 871000, "٣٣٥٬٠٠٠ × ٢ + منقول ١٨ أيلول (٣٣٥٬٠٠٠ − ١٣٤٬٠٠٠)");
+  check("الأولى: فلتر حالاتها محفوظ لها", w7.eval("varSelected().join('،')"), "منقول");
+
+  /* ---- ٨) الحفظ والاستعادة ---- */
+  group("٨ · الحفظ ثم القراءة (round-trip) والترحيل المتكرر");
+  const before=w7.eval("JSON.stringify(state)");
+  const netBefore=w7.eval('totalsOf(buildReport("2026-09-01","2026-09-30").rows,0).net');
+  await w7.eval("persistState()");
+  const raw=await w7.eval("readState()");
+  w7.__raw=raw;
+  const back=w7.eval("JSON.stringify(migrate(JSON.parse(__raw)))");
+  const strip=s=>JSON.stringify(Object.assign(JSON.parse(s),{savedAt:0}));
+  check("ما يُقرأ بعد الحفظ = الحالة نفسها", strip(back)===strip(before), true);
+  check("الترحيل مرتين بلا أثر", w7.eval("(function(){var a=JSON.stringify(migrate(JSON.parse(JSON.stringify(state)))); var b=JSON.stringify(migrate(JSON.parse(a))); return a===b;})()"), true);
+  w7.eval("state=migrate(JSON.parse(__raw)); bootView();");
+  check("الرواتب بعد الاستعادة كما قبلها", w7.eval('totalsOf(buildReport("2026-09-01","2026-09-30").rows,0).net'), netBefore);
+  const old={v:2, active:"c0", companies:[{id:"c0", name:"قديمة", settings:{company:"قديمة", salary:335000, deduct:11632},
+    zones:[{id:"z",name:"منطقة"}], sections:[{id:"s",name:"قسم",zoneId:"z"}],
+    workers:[{id:"x",name:"قديم",sectionId:"s",createdAt:"2024-01-01",endDate:"2026-09-15"},{id:"y",name:"ثاني",sectionId:"s"}],
+    days:{"2026-09-01":{states:{},notes:"",confirmed:true}}, leaves:[],
+    adjustments:[{id:"j",workerId:"x",type:"deduct",amount:5000,date:"2026-09-03"}]}]};
+  w7.__old=JSON.stringify(old);
+  w7.__m1=w7.eval("JSON.stringify(migrate(JSON.parse(__old)))");
+  check("بيانات قديمة: الترحيل لا يحذف عاملاً ولا وثيقة", w7.eval("(function(){var c=JSON.parse(__m1).companies[0];return c.workers.length+'/'+c.penalties.length;})()"), "2/1");
+  check("بيانات قديمة: ترحيلها مرتين = مرة واحدة", w7.eval("JSON.stringify(migrate(JSON.parse(__m1)))===__m1"), true);
+
+  /* ---- ٩) الواجهة: نظافة ووضع داكن ---- */
+  group("٩ · الواجهة");
+  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","settings"];
+  TABS.forEach(t=>{ try{ w7.eval('switchView("'+t+'")'); }catch(e){ w7.__errs.push(t+": "+e.message); } });
+  check("كل التبويبات بلا خطأ JS", w7.__errs.length, 0, w7.__errs[0]||"");
+  check("كل التبويبات بلا «عنصر مفقود»", w7.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0);
+  check("كل تبويب مربوط بلوحته (aria-controls)", w7.eval('[].every.call(document.querySelectorAll(\'[role="tab"]\'),function(b){return !!document.getElementById(b.getAttribute("aria-controls"));})'), true);
+  const shot=()=>w7.eval('(function(){var c=document.createElement("canvas"); drawSheet(c,1); return c.toDataURL();})()');
+  const docx=()=>w7.eval('Array.from(payrollDocx()).join(",")');
+  w7.eval('runReport(true); setUiTheme("light")'); const L1=shot(), D1=docx();
+  w7.eval('setUiTheme("dark")'); const L2=shot(), D2=docx();
+  check("الوضع الداكن لا يغيّر ورقة الجرد المرسومة", L1===L2, true);
+  check("الوضع الداكن لا يغيّر ملف Word", D1===D2, true);
+  check("الوضع الداكن مطبّق على الواجهة", w7.eval('document.documentElement.getAttribute("data-ui")'), "dark");
+  w7.eval('setUiTheme("auto")');
+
+}catch(e){
+  group("خطأ أوقف الفحص");
+  cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
+}
+render();
+}
+function addISO(iso,n){ const p=iso.split("-").map(Number); const d=new Date(p[0],p[1]-1,p[2]+n);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+run();
+</script>
+</body>
+</html>
