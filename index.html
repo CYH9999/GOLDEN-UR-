@@ -9005,7 +9005,8 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>switchView(b.
 /* لوحة المفاتيح على التبويبات (نمط ARIA للتفعيل اليدوي): الأسهم تنقل التركيز،
    Enter أو المسافة يفتح التبويب. عمودي = أعلى/أسفل، وأفقي بالشاشة الضيقة =
    يسار/يمين (باتجاه الكتابة العربية: اليسار هو التالي). */
-document.querySelector(".tabs").addEventListener("keydown",e=>{
+const tabsNav=document.querySelector(".tabs");
+if(tabsNav) tabsNav.addEventListener("keydown",e=>{
   const tabs=[...document.querySelectorAll('.tabs [role="tab"]')], i=tabs.indexOf(document.activeElement);
   if(i<0) return;
   let horiz=false; try{ horiz=getComputedStyle(tabs[0].parentNode).flexDirection==="row"; }catch(_){}
