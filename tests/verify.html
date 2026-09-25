@@ -508,7 +508,7 @@ try{
   check("يفتح على بيانات فارغة بلا خطأ JS", wu.__errs.length, 0, (wu.__errs[0]||""));
   check("يفتح على بيانات فارغة بلا «عنصر مفقود»", wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0,
     (wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0)[0]||""));
-  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","settings"];
+  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","settings"];
   setState(wu,fixture({workers:[WK({id:"w1"}),WK({id:"w2",name:"علي",status:"مفصول",statusChangedAt:"2026-09-02"})]}));
   wu.eval("bootView()");
   TABS.forEach(t=>{ try{ wu.eval('switchView("'+t+'")'); }catch(e){ wu.__errs.push(t+": "+e.message); } });
@@ -548,6 +548,79 @@ try{
   check("بيانات قديمة — بلا «عنصر مفقود»",
     wold.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0,
     (wold.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0)[0]||""));
+
+  /* ---------- ٧-٤ الجرد التفصيلي = كشف الرواتب ---------- */
+  group("٧-٤ · الجرد التفصيلي يطابق كشف الرواتب");
+  const wl=await boot();
+  /* سيناريو شامل: غياب ومتفرقة، ثلاث سياسات إجازة وإجازتا نصف بنفس الشهر، إجازة زمنية،
+     أوف أسبوعي وبتاريخ، عطلة تتقاطع مع إجازة، عقوبة مبلغ وعقوبة أيام ومكافأة أيام،
+     مباشرة وسط الشهر، نقل وسط الشهر، أيام غير معتمدة، وعامل خارج الخدمة كل المدة */
+  const LFX=()=>{ const fx=fixture({
+    states:{"2026-09-02":{w1:"absent",w2:"misc"},"2026-09-03":{w2:"misc",w3:"absent"},"2026-09-10":{w4:"misc",w1:"misc"},"2026-09-15":{w6:"absent"}},
+    workers:[WK({id:"w1",name:"أحمد",offWeekdays:[6]}),WK({id:"w2",name:"باسم",startDate:"2026-09-02"}),
+      WK({id:"w3",name:"جاسم",status:"منقول",statusChangedAt:"2026-09-18"}),WK({id:"w4",name:"دريد",offDates:["2026-09-10"]}),
+      WK({id:"w5",name:"هادي",status:"مفصول",statusChangedAt:"2026-08-10"}),WK({id:"w6",name:"وليد",leavePolicy:"full"})],
+    leaves:[{id:"l1",no:"إ-1",workerId:"w6",type:"إجازة اعتيادية",from:"2026-09-06",days:3,to:"2026-09-08",policy:"half"},
+            {id:"l2",no:"إ-2",workerId:"w6",type:"إجازة مرضية",from:"2026-09-20",days:3,to:"2026-09-22",policy:"half"},
+            {id:"l3",no:"إ-3",workerId:"w1",type:"إجازة زمنية",from:"2026-09-02",days:1,hours:3,policy:"none"},
+            {id:"l4",no:"إ-4",workerId:"w4",type:"إجازة اعتيادية",from:"2026-09-09",days:3,to:"2026-09-11",policy:"full"},
+            {id:"l5",no:"إ-5",workerId:"w1",type:"إجازة اعتيادية",from:"2026-09-23",days:2,to:"2026-09-24",policy:"none"}],
+    penalties:[{id:"p1",no:"ع-1",workerId:"w1",type:"استقطاع",kind:"amount",amount:20000,date:"2026-09-12"},
+               {id:"p2",no:"ع-2",workerId:"w4",type:"استقطاع أيام",kind:"days",days:2,dayRate:11166.67,date:"2026-09-13"}],
+    achievements:[{id:"a1",no:"م-1",workerId:"w6",type:"مكافأة",kind:"days",days:1,dayRate:11166.67,date:"2026-09-14"}]});
+    const c=fx.companies[0]; c.settings.holidays=[{date:"2026-09-21",name:"عطلة رسمية"}];
+    c.days["2026-09-29"].confirmed=false; c.days["2026-09-30"].confirmed=false;
+    return fx; };
+  setState(wl,LFX()); wl.eval("bootView(); switchView('ledger')");
+  const lgRes=JSON.parse(wl.eval(`JSON.stringify((function(){
+    var list=lgList(), rows=lgScopeRows().shown, T=totalsOf(rows,0), L=ledgerTotals(list);
+    return {diff:ledgerVsPayroll(list,rows), mism:list.filter(function(x){return x.mismatch.length;}).length,
+      n:list.length, empty:lgScopeRows().empty.length, allRows:LG.rp.rows.length,
+      netL:L.net, netP:T.net, netAll:totalsOf(LG.rp.rows,0).net,
+      dL:L.deductDays, dP:rows.reduce(function(a,r){return a+r.deductDays;},0)};
+  })())`));
+  check("الجرد = الكشف: لا حقل مختلف (حضور/غياب/متفرقة/إجازة/أوف/مستقطع/مبالغ)", lgRes.diff.join("،"), "");
+  check("عدّ أيام كل عامل = صفّه بالكشف", lgRes.mism, 0);
+  check("صافي الجرد = صافي الكشف", lgRes.netL, lgRes.netP);
+  check("صافي الجرد = صافي الكشف كاملاً (صفوف الأصفار صفر)", lgRes.netL, lgRes.netAll);
+  check("أيام الاستقطاع بالجرد = الكشف", lgRes.dL, lgRes.dP);
+  check("عامل خارج الخدمة كل المدة بلا صفحة جرد", lgRes.empty, 1);
+  check("إجازتا نصف بنفس الشهر، إحداهما تتقاطع مع عطلة — مستقطع ٢",
+    wl.eval('lgLedger("w6").row.excusedDed'), 2, "(٣ + ٢ بعد استبعاد عطلة ٢١) ÷ ٢ مرة واحدة، للأقل");
+  check("الإجازة الزمنية لا تغيّر تصنيف اليوم (حاضر)", wl.eval('lgLedger("w1").days[1].k'), "absent", "٢ أيلول: غياب مؤشّر وإجازة زمنية");
+  check("العطلة تسبق الإجازة بالتصنيف", wl.eval('lgLedger("w6").days[20].k'), "hol");
+  check("الأوف بتاريخ يسبق الإجازة", wl.eval('lgLedger("w4").days[9].k'), "off");
+  check("يوم غير معتمد لا يُعدّ", wl.eval('lgLedger("w1").cnt.unc'), 2);
+  check("قبل المباشرة «خارج الخدمة»", wl.eval('lgLedger("w2").days[0].k'), "out");
+  check("تفصيل الراتب من صف الكشف نفسه",
+    wl.eval('(function(){var L=lgLedger("w3"),r=buildReport("2026-09-01","2026-09-30").rows.find(function(x){return x.id==="w3";});return L.row.net===r.net && L.row.proCut===r.proCut;})()'), true);
+  /* نطاقات: قسم ومنطقة وحالة — المطابقة لكل نطاق */
+  check("المطابقة بنطاق حالة «منقول»",
+    wl.eval('(function(){ el("lgStatus").value="منقول"; renderLedger(); var d=ledgerVsPayroll(lgList(),lgScopeRows().shown).length+"/"+lgList().length; el("lgStatus").value=""; renderLedger(); return d; })()'), "0/1");
+  /* رقم الجرد ثابت: حذف عامل قبله لا يغيّر رقمه */
+  const no1=wl.eval('lgLedger("w4").no');
+  wl.eval('C().workers=C().workers.filter(function(w){return w.id!=="w2";}); runLedger(false);');
+  check("رقم الجرد لا يتغيّر بحذف عامل قبله", wl.eval('lgLedger("w4").no'), no1);
+  check("صيغة رقم الجرد", no1, v=>/^جت-2026-09-\d{3}$/.test(v), "جت-سنة-شهر-تسلسل");
+  /* الملفات */
+  let lgDocOK=true, lgDocWhy="";
+  try{ const z=unzipStore(bytesOf(wl.eval("ledgerDocx(lgList())"))); xmlOK(new TextDecoder().decode(z["word/document.xml"])); }
+  catch(e){ lgDocOK=false; lgDocWhy=e.message; }
+  check("Word الجرد التفصيلي — أرشيف وXML سليمان", lgDocOK, true, lgDocWhy);
+  let lgXOK=true, lgXWhy="", nSheets=0;
+  try{ const z=unzipStore(bytesOf(wl.eval("ledgerXlsx(lgList())")));
+    nSheets=Object.keys(z).filter(k=>/^xl\/worksheets\/sheet\d+\.xml$/.test(k)).length;
+    Object.keys(z).forEach(k=>{ if(k.endsWith(".xml")||k.endsWith(".rels")) xmlOK(new TextDecoder().decode(z[k])); }); }
+  catch(e){ lgXOK=false; lgXWhy=e.message; }
+  check("Excel الجرد التفصيلي — أرشيف وXML سليمان", lgXOK, true, lgXWhy);
+  check("Excel الجرد التفصيلي — أربع أوراق", nSheets, 4);
+  wl.eval('window.__pw=""; window.open=function(){ return {document:{write:function(h){window.__pw+=h;},close:function(){}},focus:function(){},print:function(){}}; };');
+  wl.eval('el("lgPrint").click()');
+  check("الطباعة: صفحة لكل عامل + صفحة الخلاصة",
+    wl.eval('(__pw.match(/class="lgpg"/g)||[]).length'), wl.eval("lgList().length+1"));
+  check("الجرد التفصيلي بلا «عنصر مفقود»", wl.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0,
+    (wl.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0)[0]||""));
+  check("الجرد التفصيلي بلا خطأ JS", wl.__errs.length, 0, (wl.__errs[0]||""));
 
 }catch(e){
   group("خطأ أوقف الفحص");

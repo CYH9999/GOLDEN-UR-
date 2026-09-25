@@ -282,10 +282,18 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .toast.on{opacity:1;transform:translate(50%,0)}
 .tally .t-leave .v{color:var(--misc)}
 .tally .t-off .v{color:var(--present)}
+/* الجرد التفصيلي على الشاشة: ورقة بيضاء داخل المجلد بنفس أنماط الطباعة */
+.h2tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--ground);
+  color:var(--ink-2);vertical-align:middle;margin-inline-start:6px}
+.lgscreen{padding:12px 14px;border-radius:6px;max-width:980px;margin:8px auto}
+.lgfold .mmeta{white-space:normal;text-align:left}
+.lgfold .mhead:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.topbar,.tabs,.tally,.reminder,.actions{display:none!important}}
 </style>
+<!-- أنماط ورقة الجرد التفصيلي: تُكتب من lgCss() حتى تطابق الشاشة الطباعة وألوان الشركة -->
+<style id="lgStyle"></style>
 </head>
 <body>
 
@@ -315,6 +323,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   <button role="tab" aria-selected="false" data-view="people">العمال والأقسام</button>
   <button role="tab" aria-selected="false" data-view="variables">حالات العمال</button>
   <button role="tab" aria-selected="false" data-view="report">التقارير والرواتب</button>
+  <button role="tab" aria-selected="false" data-view="ledger">الجرد التفصيلي</button>
   <button role="tab" aria-selected="false" data-view="settings">الإعدادات</button>
 </nav>
 
@@ -786,7 +795,8 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 
   <div class="panel">
     <div class="panel-head">
-      <h2>كشف الرواتب</h2>
+      <h2>كشف الرواتب <span class="h2tag">كشف مختصر</span></h2>
+      <button class="btn sm ghost" id="rpToLedger" title="نفس المدة بالتفصيل: يوماً بيوم ووصلاً بوصل">الجرد التفصيلي ←</button>
       <select id="rpSort" class="wsel" style="width:auto" title="الترتيب"></select>
       <input type="text" id="rpSearch" placeholder="بحث باسم…" style="flex:1;min-width:150px;width:auto">
       <button class="btn primary" id="rpWord">تصدير Word</button>
@@ -885,6 +895,54 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         <span class="fieldlbl">العمال الذين لديهم أيام أوف</span>
         <div id="offSummary"></div>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== الجرد التفصيلي ===== -->
+<section id="view-ledger" class="hidden">
+  <div class="panel">
+    <div class="panel-head">
+      <h2>الجرد التفصيلي</h2>
+      <div class="rng">
+        <label>من <input type="date" id="lgFrom"></label>
+        <label>إلى <input type="date" id="lgTo"></label>
+      </div>
+      <button class="btn sm" data-lgquick="this">هذا الشهر</button>
+      <button class="btn sm" data-lgquick="last">الشهر الماضي</button>
+      <button class="btn primary sm" id="lgRun">اعرض</button>
+    </div>
+    <div class="panel-body">
+      <p class="hint" style="margin-top:0">لكل عامل: تقويم الشهر يوماً بيوم، وكل وصل إجازة وعقوبة ومكافأة ومواد،
+        وتفصيل الراتب من الكامل إلى الصافي — والأرقام نفسها أرقام كشف الرواتب بلا أي حساب جديد.</p>
+      <div class="varbar">
+        <label class="field" style="margin:0"><span>النطاق</span>
+          <select id="lgScope" class="wsel">
+            <option value="all">كل العمال</option>
+            <option value="worker">عامل واحد</option>
+            <option value="section">حسب القسم</option>
+            <option value="zone">حسب المنطقة</option>
+          </select></label>
+        <label class="field hidden" style="margin:0" id="lgTargetWrap"><span id="lgTargetLbl">العامل</span>
+          <select id="lgTarget" class="wsel"></select></label>
+        <label class="field" style="margin:0"><span>الحالة</span>
+          <select id="lgStatus" class="wsel"></select></label>
+        <label class="field" style="margin:0"><span>الترتيب</span>
+          <select id="lgSort" class="wsel"></select></label>
+        <label class="field grow" style="margin:0"><span>بحث</span>
+          <input type="text" id="lgSearch" placeholder="اسم العامل أو اسم الأم أو القسم أو الهاتف…"></label>
+      </div>
+      <div id="lgCards" class="cards" style="margin-top:12px"></div>
+      <div id="lgWarn"></div>
+      <div class="actions">
+        <button class="btn primary" id="lgWord">تصدير Word</button>
+        <button class="btn" id="lgPrint">طباعة / PDF</button>
+        <button class="btn" id="lgXls">تصدير Excel</button>
+        <button class="btn ghost" id="lgExpand">فتح / طي الكل</button>
+        <button class="btn ghost" id="lgAllDays" aria-pressed="false">أظهر كل الأيام</button>
+        <span class="saved" id="lgNote"></span>
+      </div>
+      <div id="lgBody" style="margin-top:12px"></div>
     </div>
   </div>
 </section>
@@ -1595,7 +1653,7 @@ function blankCompany(name){
       defNote:"سار العمل بشكل اعتيادي، ولا توجد ملاحظات تُذكر لهذا اليوم." },
     zones:[ {id:z1,name:"داخل البناية القديمة",short:"داخلي",color:"#4B2E83"},
             {id:z2,name:"الأقسام الخارجية",short:"خارجي",color:"#B8912E"} ],
-    sections:[], workers:[], days:{}, leaves:[], leaveSeq:0,
+    sections:[], workers:[], workerSeq:0, days:{}, leaves:[], leaveSeq:0,
     penalties:[], penSeq:0, achievements:[], achSeq:0,
     materials:defaultMaterials(), issues:[], issueSeq:0, matSeeded:true, payV3:true, payV5:true,
     /* شركة جديدة: قاعدة شهر الـ٣١ يوماً تسري دائماً (راجع buildReport) */
@@ -1750,6 +1808,8 @@ function ensureFields(st){
     if(!Array.isArray(c.workers)) c.workers=[];
     c.workers=c.workers.filter(w=>w && typeof w==="object");
     c.workers.forEach(normalizeWorker);
+    /* رقم تسلسلي ثابت لكل عامل (أساس رقم الجرد التفصيلي) — يملأ الناقص فقط */
+    ensureWorkerSeq(c);
   });
   return st;
 }
@@ -2614,7 +2674,7 @@ el("addW").onclick=()=>{
     motherName:el("wMother").value, dob:el("wDob").value, status:st });
   /* عامل يُسجَّل أصلاً بحالة غير مستمرة: تاريخ التغيير هو تاريخ تسجيله */
   if(st!==WS_ACTIVE) setWorkerStatus(w,st,{date:todayISO()});
-  C().workers.push(w);
+  C().workers.push(w); ensureWorkerSeq(C());
   ["wName","wPhone","wPhone2","wAddr","wMother","wDob"].forEach(id=>{ el(id).value=""; });
   el("wStatus").value=WS_ACTIVE;
   el("wName").focus(); queueSave(); refresh(); renderPeople(); renderVariables();
@@ -2624,6 +2684,7 @@ el("addBulk").onclick=()=>{
   if(!lines.length)return;
   const sid=el("wSec").value;
   lines.forEach(n=>C().workers.push(newWorker({name:n,sectionId:sid})));
+  ensureWorkerSeq(C());
   el("bulk").value=""; queueSave(); refresh(); renderPeople(); renderVariables();
 };
 /* ---- حذف العامل ----
@@ -5802,6 +5863,168 @@ function totalsOf(rows, totalDays){
   return tot;
 }
 
+/* ==================== [محرّك] الجرد التفصيلي ====================
+   الجرد التفصيلي لا يحسب شيئاً من عنده: كل رقم مالي يُقرأ من صف
+   buildReport للعامل نفسه، وكل يوم يُصنَّف بـ classifyDay نفسها التي
+   يعدّ بها كشف الرواتب. ما يضيفه هو التفصيل: أي يوم كان ماذا، وبأي وصل،
+   ولماذا استُقطع أو لم يُستقطع. لذلك مجاميعه = كشف الرواتب بالضبط، وأي
+   اختلاف بين عدّه للأيام وعدّ الكشف يُكشف ويُعلن (mismatch) ولا يُخفى.
+
+   أولوية تصنيف اليوم بالجرد التفصيلي (مطابقة لما يستبعده المحرّك):
+   عطلة ← خارج الخدمة ← يوم غير معتمد ← أوف ← إجازة (غير زمنية) ← تأشير الجرد. */
+const LG_KINDS={
+  present:{t:"حاضر",        sym:"ح"},
+  absent: {t:"غائب",        sym:"غ"},
+  misc:   {t:"متفرقة",      sym:"م"},
+  leave:  {t:"إجازة",       sym:"إ"},
+  off:    {t:"أوف",         sym:"ف"},
+  hol:    {t:"عطلة",        sym:"ع"},
+  out:    {t:"خارج الخدمة", sym:"—"},
+  unc:    {t:"غير معتمد",   sym:"؟"}
+};
+const LG_ORDER=["present","absent","misc","leave","off","hol","out","unc"];
+/* رقم تسلسلي ثابت لكل عامل داخل شركته — أساس رقم الجرد التفصيلي.
+   يُعطى مرة واحدة ولا يتغيّر بعدها حتى لو حُذف عامل قبله، فيبقى رقم جرد
+   شهر مطبوع هو نفسه عند إعادة طباعته. يملأ الناقص فقط (متكرر بلا أثر). */
+function ensureWorkerSeq(c){
+  if(!c || !Array.isArray(c.workers)) return false;
+  let mx=Number(c.workerSeq)||0, changed=false;
+  c.workers.forEach(w=>{ if(w && Number(w.seq)>mx) mx=Number(w.seq); });
+  c.workers.forEach(w=>{ if(w && !(Number(w.seq)>0)){ w.seq=++mx; changed=true; } });
+  if(c.workerSeq!==mx){ c.workerSeq=mx; changed=true; }
+  return changed;
+}
+/* رقم الجرد: حتمي من الشهر ورقم العامل — نفس العامل ونفس الشهر = نفس الرقم.
+   بنفس صيغة أرقام الوثائق (بادئة-سنة-…) وأرقامها لاتينية مثلها، فلا ينقلب
+   ترتيبه داخل سطر عربي. */
+function ledgerNo(w, from){
+  const ym=String(from||"");
+  return "جت-"+ym.slice(0,4)+"-"+ym.slice(5,7)+"-"+String((w&&w.seq)||0).padStart(3,"0");
+}
+/* التغييرات الفعلية خلال المدة: المباشرة + قيود سجل الحالة.
+   القرار الملغى وقيد إلغائه يُستبعدان معاً — أثرهما صفر. */
+function workerChanges(w, from, to){
+  const out=[];
+  const s=serviceStart(w);
+  if(s && s>=from && s<=to) out.push({kind:"start", date:s, from:"", to:"مباشرة", note:"", ref:""});
+  (w.statusHistory||[]).forEach(e=>{
+    if(!e || e.voided || e.undo) return;
+    if(!e.date || e.date<from || e.date>to) return;
+    out.push({ kind: normStatus(e.to)===WS_ACTIVE ? "return" : "status", date:e.date,
+      from:e.from||"", to:normStatus(e.to), note:String(e.note||""), ref:String(e.ref||""),
+      migrated:!!e.migrated });
+  });
+  return out.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+}
+function lgDedText(p){ return p==="full" ? "نعم" : (p==="half" ? "نصف*" : "لا"); }
+function buildWorkerLedger(workerId, from, to, rp){
+  const c=C(), w=c.workers.find(x=>x.id===workerId);
+  if(!w) return null;
+  if(!rp || rp.from!==from || rp.to!==to) rp=buildReport(from,to);
+  if(rp.invalid) return null;
+  const row=rp.rows.find(r=>r.id===workerId);
+  if(!row) return null;
+  if(ensureWorkerSeq(c)) queueSave();
+  /* فهارس الإجازات والوصولات تُبنى مرة واحدة لكل كشف، لا لكل عامل */
+  if(!rp._lg) rp._lg={ lv:indexByWorker(c.leaves||[]), is:indexByWorker(c.issues||[]), conf:new Set(rp.days) };
+  const X=rp._lg, myLeaves=X.lv.get(w.id)||null, today=todayISO();
+  const pol=leavePolicyFor(w);
+  const svcS=serviceStart(w), svcE=serviceEnd(w);
+  const days=[], cnt={present:0,absent:0,misc:0,leave:0,off:0,hol:0,out:0,unc:0};
+  let d=from, guard=0;
+  while(d<=to && guard++<LOOP_MAX){
+    const e={ d:d, k:"", detail:"", ded:"لا", ref:"", routine:false };
+    const hr=holidayReason(d);
+    if(hr){
+      e.k="hol"; e.detail=hr; e.routine=!holidayOf(d);
+    }else if(!inService(w,d)){
+      e.k="out";
+      if(svcS && d<svcS) e.detail="قبل المباشرة ("+dateSlash(svcS)+")";
+      else if(svcE && d>svcE) e.detail="بعد آخر يوم عمل ("+dateSlash(svcE)+") — "+getWorkerStatus(w);
+      else if(rosterStart(w) && d<rosterStart(w)) e.detail="قبل تسجيله بالبرنامج ("+dateSlash(rosterStart(w))+")";
+      else e.detail="خارج الخدمة";
+      e.ded = (row.proCut>0 && ((svcS && d<svcS) || (svcE && d>svcE))) ? "نسبي" : "لا";
+    }else if(!X.conf.has(d)){
+      e.k="unc"; e.detail = d>today ? "لم يحن بعد" : "لم يُعتمد — خارج الحساب لحين اعتماده";
+    }else{
+      const cd=classifyDay(w,d,myLeaves);
+      e.k=cd.k;
+      if(cd.k==="off"){
+        e.detail = offDatesOf(w).indexOf(d)>=0 ? "أوف بتاريخ محدد" : "أوف أسبوعي ("+WD_NAMES[parseISO(d).getDay()]+")";
+      }else if(cd.k==="leave"){
+        const p=policyOfLeave(cd.leave,w);
+        e.detail=(cd.leave.type||"إجازة")+" — وصل "+(cd.leave.no||"")+" — "+policyName(p);
+        e.ref=cd.leave.no||""; e.ded=lgDedText(p);
+      }else if(cd.k==="absent"){
+        e.detail="غياب بلا حجة"; e.ded="نعم";
+      }else if(cd.k==="misc"){
+        e.detail="متفرقة — "+policyName(pol); e.ded=lgDedText(pol);
+      }else{
+        if(cd.timed){
+          e.detail="حاضر + "+(cd.timed.type||"إجازة زمنية")+" "+hoursText(cd.timed.hours||1)+" — وصل "+(cd.timed.no||"");
+          e.ref=cd.timed.no||"";
+        }else e.routine=true;
+      }
+    }
+    cnt[e.k]++;
+    days.push(e);
+    d=addDays(d,1);
+  }
+  /* مطابقة عدّ الأيام مع صف كشف الرواتب — يجب أن تكون صفراً دائماً */
+  const mismatch=[];
+  ["present","absent","misc","leave","off"].forEach(k=>{ if(cnt[k]!==row[k]) mismatch.push(k); });
+  if(cnt.present+cnt.absent+cnt.misc+cnt.leave+cnt.off!==row.eligible) mismatch.push("eligible");
+  const inRange=l=>l.from && l.from<=to && leaveEnd(l)>=from;
+  const leaves=(myLeaves||[]).filter(inRange).slice().sort((a,b)=>a.from<b.from?-1:1);
+  const issues=(X.is.get(w.id)||[]).filter(x=>x.from && x.from<=to && (x.to||x.from)>=from)
+    .slice().sort((a,b)=>a.from<b.from?-1:1);
+  const sec=sectionOf(w.sectionId), z=sec?zoneOf(sec.zoneId):null;
+  return {
+    w:w, row:row, from:from, to:to, no:ledgerNo(w,from), issued:today,
+    info:{ name:w.name||"", mother:motherText(w), dob:dobText(w),
+      section:sec?sec.name:"بدون قسم", zone:z?(z.name||z.short||""):"—",
+      phone:w.phone?fmtPhone(w.phone):"—", start:hireText(w),
+      status:getWorkerStatus(w), statusDate:w.statusChangedAt||"", statusNote:w.statusNote||"" },
+    days:days, cnt:cnt, mismatch:mismatch, policy:pol,
+    leaves:leaves, pens:(row.pens||[]).slice().sort((a,b)=>a.date<b.date?-1:1),
+    achs:(row.achs||[]).slice().sort((a,b)=>a.date<b.date?-1:1), issues:issues,
+    changes:workerChanges(w,from,to),
+    halfNote: cnt.misc+cnt.leave>0 && (pol==="half" || row.leaveBy.half>0)
+  };
+}
+/* صف أصفار: عامل لا خدمة له بالمدة ولا وثائق — يظهر بكشف الرواتب صفاً
+   فارغاً، والجرد التفصيلي لا يطبع له صفحة (مجموعه صفر فلا يمسّ المطابقة) */
+function ledgerEmpty(r){ return !r.svcDays && !r.eligible && !r.penCount && !r.achCount && !r.net && !r.salary; }
+/* مجاميع مجموعة جرد تفصيلي — من أيام الجرد نفسه ومن صفوف الكشف للمبالغ،
+   حتى تُقارن بمجاميع كشف الرواتب (totalsOf) رقماً برقم */
+function ledgerTotals(list){
+  const t={workers:list.length,present:0,absent:0,misc:0,leave:0,off:0,excused:0,excusedDed:0,deductDays:0,
+    salary:0,absDeduction:0,penDed:0,penCount:0,achAdd:0,achCount:0,deduction:0,net:0,
+    leaveDocs:0,issueDocs:0,mismatch:0};
+  list.forEach(L=>{
+    const r=L.row, n=L.cnt;
+    t.present+=n.present; t.absent+=n.absent; t.misc+=n.misc; t.leave+=n.leave; t.off+=n.off;
+    t.excused+=n.misc+n.leave; t.excusedDed+=r.excusedDed; t.deductDays+=r.deductDays;
+    t.salary+=r.salary; t.absDeduction+=r.absDeduction; t.penDed+=r.penDed; t.penCount+=r.penCount;
+    t.achAdd+=r.achAdd; t.achCount+=r.achCount; t.deduction+=r.deduction; t.net+=r.net;
+    t.leaveDocs+=L.leaves.length; t.issueDocs+=L.issues.length;
+    if(L.mismatch.length) t.mismatch++;
+  });
+  ["salary","absDeduction","penDed","achAdd","deduction","net"].forEach(k=>{ t[k]=money(t[k]); });
+  return t;
+}
+/* المطابقة مع كشف الرواتب لنفس الصفوف: قائمة الحقول المختلفة (فارغة = مطابق) */
+function ledgerVsPayroll(list, rows){
+  const a=ledgerTotals(list), b=totalsOf(rows, 0);
+  const dd=rows.reduce((s,r)=>s+r.deductDays,0);
+  const diff=[];
+  ["present","absent","misc","leave","off","excused","excusedDed","salary","absDeduction","penDed","achAdd","deduction","net"]
+    .forEach(k=>{ if(Math.abs((a[k]||0)-(b[k]||0))>1e-6) diff.push(k); });
+  if(a.deductDays!==dd) diff.push("deductDays");
+  if(a.mismatch) diff.push("days");
+  return diff;
+}
+
 let RP=null;   // آخر تقرير محسوب
 function monthRange(offset){
   const n=new Date(); n.setDate(1); n.setMonth(n.getMonth()+(offset||0));
@@ -6473,25 +6696,26 @@ function crc32(buf){
 function utf8(str){ return new TextEncoder().encode(str); }
 
 /* ---- كاتب ZIP بطريقة Store ---- */
-function zipStore(files){
-  if(!Array.isArray(files)||!files.length) throw new Error("أرشيف بلا ملفات");
+/* كاتب الأرشيف: entries = [{name(بايتات), crc, size, data, method}] —
+   method 0 = تخزين، 8 = Deflate. zipStore يمرّ من هنا بنفس بايتاته السابقة. */
+function zipBuild(entries){
   const parts=[], central=[];
   let offset=0, count=0;
-  files.forEach(f=>{
-    const name=utf8(f.name), data=f.data, crc=crc32(data), len=data.length;
+  entries.forEach(f=>{
+    const name=f.name, data=f.data, crc=f.crc, len=data.length, m=f.method||0;
     const lh=new Uint8Array(30+name.length), lv=new DataView(lh.buffer);
     lv.setUint32(0,0x04034b50,true); lv.setUint16(4,20,true); lv.setUint16(6,0x0800,true);
-    lv.setUint16(8,0,true); lv.setUint16(10,0,true); lv.setUint16(12,0x21,true);
-    lv.setUint32(14,crc,true); lv.setUint32(18,len,true); lv.setUint32(22,len,true);
+    lv.setUint16(8,m,true); lv.setUint16(10,0,true); lv.setUint16(12,0x21,true);
+    lv.setUint32(14,crc,true); lv.setUint32(18,len,true); lv.setUint32(22,f.size,true);
     lv.setUint16(26,name.length,true); lv.setUint16(28,0,true);
     lh.set(name,30);
     parts.push(lh,data);
 
     const ch=new Uint8Array(46+name.length), cv=new DataView(ch.buffer);
     cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
-    cv.setUint16(8,0x0800,true); cv.setUint16(10,0,true);
+    cv.setUint16(8,0x0800,true); cv.setUint16(10,m,true);
     cv.setUint16(12,0,true); cv.setUint16(14,0x21,true);
-    cv.setUint32(16,crc,true); cv.setUint32(20,len,true); cv.setUint32(24,len,true);
+    cv.setUint32(16,crc,true); cv.setUint32(20,len,true); cv.setUint32(24,f.size,true);
     cv.setUint16(28,name.length,true); cv.setUint16(30,0,true); cv.setUint16(32,0,true);
     cv.setUint16(34,0,true); cv.setUint16(36,0,true); cv.setUint32(38,0,true);
     cv.setUint32(42,offset,true);
@@ -6509,6 +6733,41 @@ function zipStore(files){
   const out=new Uint8Array(total);
   let at=0; all.forEach(p=>{ out.set(p,at); at+=p.length; });
   return out;
+}
+function zipStore(files){
+  if(!Array.isArray(files)||!files.length) throw new Error("أرشيف بلا ملفات");
+  return zipBuild(files.map(f=>({name:utf8(f.name), crc:crc32(f.data), size:f.data.length, data:f.data, method:0})));
+}
+/* ---- ضغط أرشيف جاهز بـ Deflate ----
+   المستندات الكبيرة (الجرد التفصيلي لـ٨٠٠ عامل = ٧٨ ميغا XML بلا ضغط) تُضغط
+   بـ CompressionStream المدمج بالمتصفح نفسه — بلا مكتبة ولا إنترنت. يقرأ
+   الأرشيف الذي كتبه zipStore ويعيد كتابته مضغوطاً؛ متصفح بلا الميزة أو أي
+   خطأ يرجّع الأرشيف الأصلي كما هو (صالح لكن أكبر). */
+async function deflateRaw(u8){
+  const cs=new CompressionStream("deflate-raw");
+  const buf=await new Response(new Blob([u8]).stream().pipeThrough(cs)).arrayBuffer();
+  return new Uint8Array(buf);
+}
+async function zipDeflate(bytes){
+  if(typeof CompressionStream!=="function") return bytes;
+  try{
+    new CompressionStream("deflate-raw");
+    const dv=new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), ents=[];
+    let p=0;
+    while(p+30<=bytes.length && dv.getUint32(p,true)===0x04034b50){
+      if(dv.getUint16(p+8,true)!==0) return bytes;         // ليس أرشيف تخزين من كاتبنا
+      const nl=dv.getUint16(p+26,true), xl=dv.getUint16(p+28,true), len=dv.getUint32(p+18,true);
+      const d0=p+30+nl+xl;
+      ents.push({name:bytes.slice(p+30,p+30+nl), crc:dv.getUint32(p+14,true), size:len, raw:bytes.subarray(d0,d0+len)});
+      p=d0+len;
+    }
+    if(!ents.length) return bytes;
+    for(const e of ents){
+      const z=await deflateRaw(e.raw);
+      if(z.length<e.size){ e.data=z; e.method=8; } else { e.data=e.raw; e.method=0; }
+    }
+    return zipBuild(ents);
+  }catch(e){ return bytes; }
 }
 
 /* ---- أدوات XML ---- */
@@ -6557,7 +6816,10 @@ function wGap(h){
 function wCell(text,o){
   o=o||{};
   const w=o.width?'<w:tcW w:w="'+o.width+'" w:type="dxa"/>':'<w:tcW w:w="0" w:type="auto"/>';
-  const shd=o.shade?'<w:shd w:val="clear" w:color="auto" w:fill="'+HEX(o.shade)+'"/>':"";
+  /* shdVal/shdColor اختياريان: تظليل مخطط (مثل خارج الخدمة بالجرد التفصيلي) يبقى
+     مميّزاً بالطباعة غير الملوّنة. الافتراضي تعبئة سادة كما كان. */
+  const shd=o.shade?'<w:shd w:val="'+(o.shdVal||"clear")+'" w:color="'+(o.shdColor?HEX(o.shdColor):"auto")+
+    '" w:fill="'+HEX(o.shade)+'"/>':"";
   const span=o.span?'<w:gridSpan w:val="'+o.span+'"/>':"";
   const va='<w:vAlign w:val="'+(o.valign||"center")+'"/>';
   // نص عادي يُلفّ بفقرة. أما o.raw فيعني أن المُمرَّر فقرات XML جاهزة
@@ -6702,9 +6964,8 @@ function colRef(i){
   while(n>0){ const r=(n-1)%26; s2=String.fromCharCode(65+r)+s2; n=Math.floor((n-1)/26); }
   return s2;
 }
-function buildXlsx(rows, opts){
-  opts=opts||{};
-  const title=(opts.sheet||"الورقة").slice(0,28).replace(/[\\\/\*\?\[\]:]/g,"-");
+/* ورقة واحدة إلى XML — أول ورقة بالملف هي المحدّدة عند الفتح */
+function xlsxSheetXml(rows, widths, selected){
   let body="";
   rows.forEach((row,ri)=>{
     let cells="";
@@ -6720,18 +6981,33 @@ function buildXlsx(rows, opts){
     });
     body+='<row r="'+(ri+1)+'">'+cells+'</row>';
   });
-  const widths=(opts.widths||[]).map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join("");
-  const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+  const cols=(widths||[]).map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join("");
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
-    '<sheetViews><sheetView rightToLeft="1" workbookViewId="0" tabSelected="1">'+
+    '<sheetViews><sheetView rightToLeft="1" workbookViewId="0"'+(selected?' tabSelected="1"':'')+'>'+
     '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'+
     '<sheetFormatPr defaultRowHeight="15"/>'+
-    (widths?'<cols>'+widths+'</cols>':'')+
+    (cols?'<cols>'+cols+'</cols>':'')+
     '<sheetData>'+body+'</sheetData></worksheet>';
+}
+/* اسم الورقة: إكسل يرفض \ / * ? [ ] : وأكثر من ٣١ حرفاً، ويرفض اسمين متطابقين */
+function xlsxSheetName(n, used){
+  let t=String(n||"الورقة").slice(0,28).replace(/[\\\/\*\?\[\]:]/g,"-")||"الورقة";
+  let k=t, i=2;
+  while(used.has(k)) k=t.slice(0,25)+" "+(i++);
+  used.add(k); return k;
+}
+/* ملف إكسل بعدة أوراق: sheets = [{name, rows, widths}].
+   buildXlsx (ورقة واحدة) يمرّ من هنا بنفس المخرج الذي كان ينتجه. */
+function buildXlsxBook(sheets){
+  if(!Array.isArray(sheets) || !sheets.length) throw new Error("ملف إكسل بلا أوراق");
+  const used=new Set(), n=sheets.length;
+  const names=sheets.map(sh=>xlsxSheetName(sh.name,used));
   const workbook='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '+
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
-    '<sheets><sheet name="'+xe(title)+'" sheetId="1" r:id="rId1"/></sheets></workbook>';
+    '<sheets>'+names.map((nm,i)=>'<sheet name="'+xe(nm)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join("")+
+    '</sheets></workbook>';
   const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
     '<fonts count="2"><font><sz val="11"/><name val="Arial"/></font>'+
@@ -6756,7 +7032,7 @@ function buildXlsx(rows, opts){
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
     '<Default Extension="xml" ContentType="application/xml"/>'+
     '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
-    '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'+
+    names.map((nm,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("")+
     '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+
     '</Types>';
   const rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
@@ -6765,17 +7041,22 @@ function buildXlsx(rows, opts){
     '</Relationships>';
   const wbRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
-    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'+
-    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'+
+    names.map((nm,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join("")+
+    '<Relationship Id="rId'+(n+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'+
     '</Relationships>';
-  return zipStore([
+  const files=[
     {name:"[Content_Types].xml", data:utf8(ctypes)},
     {name:"_rels/.rels", data:utf8(rels)},
     {name:"xl/workbook.xml", data:utf8(workbook)},
     {name:"xl/_rels/workbook.xml.rels", data:utf8(wbRels)},
-    {name:"xl/styles.xml", data:utf8(styles)},
-    {name:"xl/worksheets/sheet1.xml", data:utf8(sheet)}
-  ]);
+    {name:"xl/styles.xml", data:utf8(styles)}
+  ];
+  sheets.forEach((sh,i)=>files.push({name:"xl/worksheets/sheet"+(i+1)+".xml", data:utf8(xlsxSheetXml(sh.rows||[],sh.widths,i===0))}));
+  return zipStore(files);
+}
+function buildXlsx(rows, opts){
+  opts=opts||{};
+  return buildXlsxBook([{name:opts.sheet||"الورقة", rows:rows, widths:opts.widths}]);
 }
 function saveXlsx(bytes,name){
   const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
@@ -7690,9 +7971,772 @@ function issueDocx(){
   return buildDocx(b,{media:m.media,margin:LV_MARGIN});
 }
 
+/* ==================== [رسم] ورقة الجرد التفصيلي (HTML) ====================
+   ورقة واحدة يرسمها مولّد واحد: الشاشة والطباعة تقرآن نفس HTML ونفس
+   الأنماط (lgCss)، فما يراه المستخدم هو ما يُطبع. الألوان من لوحة الشركة
+   أو لوحة الأبيض والأسود، وكل نوع يوم له رمز ونمط تعبئة مختلف حتى يتميّز
+   بالطباعة غير الملوّنة بلا اعتماد على اللون وحده. */
+function lgKindStyle(){
+  const p=pal();
+  if(isMono()) return {
+    present:"background:#fff;color:#111",
+    absent:"background:#1A1A1A;color:#fff",
+    misc:"background:#BDBDBD;color:#111",
+    leave:"background:#E6E6E6;color:#111;box-shadow:inset 0 0 0 2px #111",
+    off:"background:#F4F4F4;color:#111;outline:1px dotted #111;outline-offset:-3px",
+    hol:"background:#8C8C8C;color:#fff",
+    out:"background:repeating-linear-gradient(45deg,#fff 0 3px,#D0D0D0 3px 5px);color:#555",
+    unc:"background:#fff;color:#111;outline:1px dashed #111;outline-offset:-3px"
+  };
+  return {
+    present:"background:#E4F0EA;color:#2C6E49",
+    absent:"background:#F7E5E8;color:#9B1C31",
+    misc:"background:#F7EFD8;color:#8A6A12",
+    leave:"background:#E3ECF7;color:#1D4E89",
+    off:"background:#E0F1F2;color:#2B6F77",
+    hol:"background:"+tint(p.base,.82)+";color:"+shade(p.base,.36),
+    out:"background:repeating-linear-gradient(45deg,#F4F4F4 0 3px,#E2E2E2 3px 5px);color:#777",
+    unc:"background:#fff;color:#7a5c12;outline:1px dashed #B8912E;outline-offset:-3px"
+  };
+}
+function lgCss(){
+  const CLR=CL(), K=lgKindStyle(), mono=isMono();
+  const SOFT=mono?"#F2F2F2":tint(CLR.purple,.92), LN=mono?"#9A9A9A":tint(CLR.purple,.62),
+        LN2=mono?"#D6D6D6":tint(CLR.purple,.84);
+  let css='.lg{font:400 8.8pt/1.35 '+FF+';color:'+CLR.ink+';direction:rtl;background:#fff;'+
+      '-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:right}'+
+    '.lg *{box-sizing:border-box}'+
+    '.lg .lg-hd{display:flex;align-items:center;gap:10px;border-bottom:3px solid '+CLR.gold+';padding-bottom:5px;margin-bottom:7px}'+
+    '.lg .lg-hd img{max-height:15mm;max-width:32mm;object-fit:contain}'+
+    '.lg .lg-co{font-size:14pt;font-weight:800;color:'+CLR.purple+';line-height:1.2}'+
+    '.lg .lg-tt{font-size:10.5pt;font-weight:700;color:'+CLR.purpleDeep+'}'+
+    '.lg .lg-meta{margin-inline-start:auto;font-size:8pt;color:'+CLR.ink2+';line-height:1.5;text-align:left}'+
+    '.lg .lg-meta b{color:'+CLR.purpleDeep+'}'+
+    '.lg .lg-info{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid '+LN+';border-radius:5px;margin-bottom:5px}'+
+    '.lg .lg-info div{padding:1px 6px;border-bottom:1px solid '+LN2+';border-inline-start:1px solid '+LN2+';font-weight:600}'+
+    '.lg .lg-info b{display:block;font-size:7pt;color:'+CLR.ink2+';font-weight:600}'+
+    '.lg h4{font-size:9.5pt;margin:7px 0 3px;color:'+CLR.purpleDeep+';border-inline-start:3px solid '+CLR.gold+';padding-inline-start:6px;break-after:avoid}'+
+    '.lg table{width:100%;border-collapse:collapse}'+
+    '.lg th,.lg td{border:1px solid '+LN+';padding:1.5px 5px;text-align:right;vertical-align:top}'+
+    '.lg th{background:'+SOFT+';color:'+CLR.purpleDeep+';font-weight:700;font-size:8pt}'+
+    '.lg thead{display:table-header-group}.lg tr{break-inside:avoid}'+
+    '.lg .num{font-variant-numeric:tabular-nums;white-space:nowrap}'+
+    '.lg .c{text-align:center}.lg .l{text-align:left}.lg .nw{white-space:nowrap}'+
+    '.lg .cal{table-layout:fixed;margin-bottom:3px}'+
+    '.lg .cal th{text-align:center;font-size:7.5pt;padding:1px}'+
+    '.lg .cal td{height:6.4mm;text-align:center;vertical-align:middle;padding:0}'+
+    '.lg .cal .dn{display:block;font-size:6.5pt;opacity:.8;line-height:1.05}'+
+    '.lg .cal .sy{display:block;font-size:10pt;font-weight:800;line-height:1.05}'+
+    '.lg .cal .k-none{background:#fff;color:#bbb}'+
+    '.lg .legend{font-size:7.5pt;color:'+CLR.ink2+';margin:2px 0 4px}'+
+    '.lg .legend span{display:inline-flex;align-items:center;gap:3px;margin-inline-end:9px;white-space:nowrap}'+
+    '.lg .legend i{display:inline-block;min-width:15px;height:13px;border:1px solid '+LN+';text-align:center;'+
+      'font-style:normal;font-weight:800;font-size:7.5pt;line-height:12px}'+
+    '.lg .sumg{display:grid;grid-template-columns:repeat(12,1fr);border:1px solid '+LN+';border-radius:5px;margin-bottom:2px}'+
+    '.lg .sumg div{padding:1px 2px;border-inline-start:1px solid '+LN2+';text-align:center;font-size:7pt;color:'+CLR.ink2+';line-height:1.2}'+
+    '.lg .sumg b{display:block;font-size:10.5pt;color:'+CLR.ink+';font-variant-numeric:tabular-nums}'+
+    '.lg .sumg .bad b{color:'+CLR.absent+'}'+
+    '.lg .pay td:last-child,.lg .pay th:last-child{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}'+
+    '.lg .pay .sub td{font-weight:700;background:'+SOFT+'}'+
+    '.lg .pay .tot td{font-weight:800;font-size:10pt;background:'+CLR.goldLite+';color:'+CLR.purpleDeep+'}'+
+    '.lg .neg{color:'+CLR.absent+'}.lg .pos{color:'+(mono?CLR.ink:CLR.present)+'}'+
+    '.lg .mini{font-size:7.5pt;color:'+CLR.ink2+'}'+
+    '.lg .none{color:'+CLR.ink2+';font-size:8pt;margin:2px 0}'+
+    '.lg .two{display:grid;grid-template-columns:56fr 44fr;gap:10px;align-items:start}'+
+    '.lg .kt{outline:none!important;box-shadow:none!important;background-image:none!important}'+
+    '.lg table+table{margin-top:3px}'+
+    '.lg .sigs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:8px;break-inside:avoid}'+
+    '.lg .sigs div{text-align:center;font-size:8.5pt}'+
+    '.lg .sigs .ln{border-top:1px solid '+CLR.ink2+';margin-top:4px;padding-top:2px;font-weight:700;color:'+CLR.purpleDeep+'}'+
+    '.lg .sigs .sp{height:11mm;display:flex;align-items:flex-end;justify-content:center}'+
+    '.lg .sigs img{max-height:11mm;max-width:45mm}'+
+    '.lg .wst{font-weight:700}'+
+    '.lg .err{border:1px solid '+CLR.absent+';color:'+CLR.absent+';padding:3px 6px;border-radius:4px;margin:4px 0;font-weight:700}';
+  LG_ORDER.forEach(k=>{ css+='.lg .k-'+k+'{'+K[k]+'}'; });
+  /* ألوان الحالات للطباعة الملوّنة؛ بالأبيض والأسود تبقى بالحبر مع الخط العريض */
+  css+= mono ? '.lg .st-on,.lg .st-move,.lg .st-end,.lg .st-cut,.lg .st-fire{color:'+CLR.ink+';font-weight:700}'
+             : STATUS_PRINT_CSS.replace(/(^|\})\./g,"$1.lg .");
+  return css+'.lg .ph{white-space:nowrap;direction:ltr;unicode-bidi:isolate}';
+}
+/* أسماء أيام التقويم تبدأ بالسبت (أول الأسبوع بالعراق) — يمين الجدول */
+const LG_WEEK=[6,0,1,2,3,4,5];
+function lgCalendar(L){
+  const ym=L.from.slice(0,7), first=parseISO(ym+"-01");
+  const len=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
+  const off=LG_WEEK.indexOf(first.getDay());
+  const byDate={}; L.days.forEach(x=>{ byDate[x.d]=x; });
+  let h='<table class="cal"><thead><tr>'+LG_WEEK.map(i=>'<th>'+WD_NAMES[i]+'</th>').join("")+'</tr></thead><tbody><tr>';
+  let col=0;
+  for(let i=0;i<off;i++){ h+='<td class="k-none"></td>'; col++; }
+  for(let dd=1; dd<=len; dd++){
+    if(col===7){ h+='</tr><tr>'; col=0; }
+    const iso=ym+"-"+String(dd).padStart(2,"0"), x=byDate[iso];
+    if(x) h+='<td class="k-'+x.k+'" title="'+esc(LG_KINDS[x.k].t+(x.detail?" — "+x.detail:""))+'">'+
+      '<span class="dn">'+fmtNum(dd)+'</span><span class="sy">'+LG_KINDS[x.k].sym+'</span></td>';
+    else h+='<td class="k-none" title="خارج المدة"><span class="dn">'+fmtNum(dd)+'</span><span class="sy">&nbsp;</span></td>';
+    col++;
+  }
+  while(col<7){ h+='<td class="k-none"></td>'; col++; }
+  h+='</tr></tbody></table>';
+  h+='<div class="legend">'+LG_ORDER.map(k=>'<span><i class="k-'+k+'">'+LG_KINDS[k].sym+'</i>'+
+    LG_KINDS[k].t+' '+fmtNum(L.cnt[k])+'</span>').join("")+'</div>';
+  return h;
+}
+/* جدول الأيام: الافتراضي الأيام غير الاعتيادية فقط، والأيام المتتالية
+   المتطابقة تُجمع بسطر واحد (إجازة ٥ أيام = سطر). «كل الأيام» = سطر لكل يوم. */
+function lgDayRows(L, all){
+  const src=all ? L.days : L.days.filter(x=>!x.routine);
+  const out=[];
+  src.forEach(x=>{
+    const p=out[out.length-1];
+    if(!all && p && p.k===x.k && p.detail===x.detail && p.ded===x.ded && addDays(p.to,1)===x.d){ p.to=x.d; p.n++; return; }
+    out.push({from:x.d,to:x.d,n:1,k:x.k,detail:x.detail,ded:x.ded});
+  });
+  return out;
+}
+function lgRangeText(g){
+  return g.from===g.to ? dateSlash(g.from) : dateSlash(g.from)+" ← "+dateSlash(g.to);
+}
+function lgDayName(g){ return g.from===g.to ? dayNameOf(g.from) : daysText(g.n); }
+function changeKindText(ch){
+  if(ch.kind==="start") return "مباشرة";
+  if(ch.kind==="return") return "رجوع للعمل";
+  const m={}; m[WS_MOVE]="نقل"; m[WS_END]="إنهاء خدمات"; m[WS_CUT]="انقطاع عن العمل"; m[WS_FIRE]="فصل";
+  return m[ch.to]||ch.to;
+}
+function lgHeaderHtml(L){
+  const st=S();
+  return '<div class="lg-hd">'+(st.logo?'<img src="'+st.logo+'" alt="">':'')+
+    '<div><div class="lg-co">'+esc(st.company||"")+'</div>'+
+    '<div class="lg-tt">الجرد التفصيلي — '+esc(L.info.name)+'</div></div>'+
+    '<div class="lg-meta">رقم الجرد: <b><bdi dir="ltr">'+esc(L.no)+'</bdi></b><br>المدة: '+dateSlash(L.from)+' ← '+dateSlash(L.to)+
+    '<br>تاريخ الإصدار: '+dateSlash(L.issued)+'</div></div>';
+}
+/* أجزاء الورقة — ترتيبها على الصفحة: بطاقة العامل ← خلاصة الأيام بسطر واحد ←
+   [التقويم | تفصيل الراتب] جنباً إلى جنب ← الأيام ← الوثائق ← التغييرات ← التواقيع.
+   التقسيم يُبقي جرد العامل العادي بصفحة A4 واحدة ويترك مساحة لعشرين سطر استثناء. */
+/* بطاقة العامل: صفّان × ٦ خانات — الاسم والحالة بخانتين. رقم الجرد والمدة
+   وتاريخ الإصدار بالترويسة فلا تتكرّر هنا. [العنوان، القيمة، عرض الخانة] */
+function lgInfoPairs(L){
+  const I=L.info;
+  return [["الاسم",I.name,2],["اسم الأم",I.mother,1],["التولد",I.dob,1],["الهاتف",I.phone,1],["القسم",I.section,1],
+    ["المنطقة",I.zone,1],["المباشرة",I.start,1],["الحالة الحالية",statusFullText(I.status,I.statusDate),2],
+    ["سياسة المتفرقة",policyName(L.policy),1],["الأوف",offLabel(L.w),1]];
+}
+function lgSumPairs(L){
+  const r=L.row;
+  return [["أيام المدة",r.periodDays],["أيام خدمته",r.svcDays],["معتمدة له",r.eligible],["حضور",r.present],["غياب",r.absent,1],
+    ["متفرقة",r.misc],["إجازة",r.leave],["أوف",r.off],["متفرقة+إجازة",r.excused],["مستقطعة",r.deductDays,1],
+    ["غير معتمد",L.cnt.unc],["الحضور",Math.round(r.rate*100)+"%"]];
+}
+function lgSumNote(L){
+  const r=L.row;
+  if(!r.deductDays) return "";
+  return "الأيام المستقطعة "+fmtNum(r.deductDays)+" = غياب "+fmtNum(r.absent)+" + "+fmtNum(r.excusedDed)+
+    " من المتفرقة والإجازات حسب سياسة كل وصل"+(L.halfNote?" (* أيام «النصف» تُجمع بالشهر ثم تُقسم على ٢ وتُقرَّب للأقل)":"")+".";
+}
+/* بنود تفصيل الراتب — [البند، الشرح، المبلغ، الصنف] كلها من صف الكشف */
+function lgPayLines(L){
+  const r=L.row, cur=S().currency||"", CUR=cur?" "+cur:"";
+  return [
+    ["الراتب الكامل","شهري",fmtMoney(r.fullSalary)+CUR,""],
+    ["حسم خارج الخدمة",r.proCut?fmtNum(r.cutDays)+" يوم × "+fmtRate(r.dailyRate):"لا يوجد",r.proCut?"-"+fmtMoney(r.proCut):fmtNum(0),r.proCut?"neg":""],
+    ["الراتب المستحق",r.partial?"خدمة "+fmtNum(r.svcDays)+" من "+fmtNum(r.periodDays)+" يوم":"خدمة كاملة",fmtMoney(r.salary)+CUR,"sub"],
+    ["استقطاع الغياب",fmtNum(r.deductDays)+" يوم × "+fmtRate(r.dayDed),r.absDeduction?"-"+fmtMoney(r.absDeduction):fmtNum(0),r.absDeduction?"neg":""],
+    ["العقوبات",fmtNum(r.penCount)+" إشعار"+(r.penDays?" · "+daysText(r.penDays):""),r.penDed?"-"+fmtMoney(r.penDed):fmtNum(0),r.penDed?"neg":""],
+    ["المكافآت",fmtNum(r.achCount)+" إشعار",r.achAdd?"+"+fmtMoney(r.achAdd):fmtNum(0),r.achAdd?"pos":""],
+    ["الصافي","",fmtMoney(r.net)+CUR,"tot"]
+  ];
+}
+function lgChangeText(ch){
+  return changeKindText(ch)+(ch.kind==="start"?"":(ch.from?" ("+ch.from+" ← "+ch.to+")":" ("+ch.to+")"));
+}
+function ledgerHtml(L, o){
+  o=o||{};
+  const I=L.info;
+  let h='';
+  if(L.mismatch.length)
+    h+='<div class="err">تنبيه داخلي: عدّ الأيام هنا يختلف عن كشف الرواتب ('+esc(L.mismatch.join("، "))+') — بلّغ عنه.</div>';
+  if(o.head) h+=lgHeaderHtml(L);
+  h+='<div class="lg-info">'+lgInfoPairs(L).map(x=>'<div'+(x[2]>1?' style="grid-column:span '+x[2]+'"':'')+'><b>'+x[0]+'</b>'+
+    (x[0]==="الحالة الحالية"?'<span class="'+statusPrintClass(I.status)+'">'+esc(x[1])+'</span>':
+     (x[0]==="الهاتف"?'<span class="ph">'+esc(x[1])+'</span>':esc(x[1])))+'</div>').join("")+'</div>';
+  /* خلاصة الأيام — من صف كشف الرواتب نفسه */
+  h+='<div class="sumg">'+lgSumPairs(L).map(x=>'<div'+(x[2]&&x[1]?' class="bad"':'')+'>'+x[0]+'<b>'+fmtNum(x[1])+'</b></div>').join("")+'</div>';
+  const note=lgSumNote(L);
+  if(note) h+='<div class="mini">'+esc(note)+'</div>';
+  h+='<div class="two"><div><h4>تقويم المدة</h4>'+lgCalendar(L)+'</div>'+
+    '<div><h4>تفصيل الراتب</h4><table class="pay"><tbody>'+
+    lgPayLines(L).map(x=>'<tr'+(x[3]==="sub"||x[3]==="tot"?' class="'+x[3]+'"':'')+'><td class="nw">'+x[0]+'</td><td class="mini">'+esc(x[1])+'</td>'+
+      '<td'+(x[3]==="neg"||x[3]==="pos"?' class="'+x[3]+'"':'')+'>'+esc(x[2])+'</td></tr>').join("")+
+    '</tbody></table></div></div>';
+
+  const rows=lgDayRows(L, !!o.allDays);
+  h+='<h4>الأيام '+(o.allDays?'(كل الأيام)':'غير الاعتيادية')+'</h4>';
+  if(rows.length){
+    h+='<table><thead><tr><th style="width:23%">التاريخ</th><th style="width:10%">اليوم</th><th style="width:14%">الحالة</th>'+
+      '<th>التفصيل</th><th style="width:9%" class="c">مستقطع؟</th></tr></thead><tbody>'+
+      rows.map(g=>'<tr><td class="num">'+lgRangeText(g)+'</td><td>'+esc(lgDayName(g))+'</td>'+
+        '<td class="k-'+g.k+' kt">'+LG_KINDS[g.k].sym+' '+LG_KINDS[g.k].t+'</td>'+
+        '<td>'+esc(g.detail||"—")+'</td><td class="c">'+esc(g.ded)+'</td></tr>').join("")+
+      '</tbody></table>';
+  }else h+='<p class="none">كل الأيام اعتيادية: حضور كامل.</p>';
+
+  /* الوثائق */
+  h+='<h4>الوثائق خلال المدة</h4>';
+  let any=false;
+  if(L.leaves.length){ any=true;
+    h+='<table><thead><tr><th>وصل الإجازة</th><th>النوع</th><th>المدة</th><th class="c">الأيام</th><th>السياسة</th><th>السبب</th></tr></thead><tbody>'+
+      L.leaves.map(l=>{ const t=isTimedLeave(l);
+        return '<tr><td class="num"><bdi dir="ltr">'+esc(l.no||"")+'</bdi></td><td>'+esc(l.type||"")+'</td>'+
+          '<td class="num">'+(t?dateSlash(l.from)+' — '+esc(hoursText(l.hours||1)):dateSlash(l.from)+' ← '+dateSlash(leaveEnd(l)))+'</td>'+
+          '<td class="c">'+(t?'—':fmtNum(l.days||1))+'</td><td>'+esc(t?"زمنية — بلا استقطاع":policyName(policyOfLeave(l,L.w)))+'</td>'+
+          '<td>'+esc(l.reason||"—")+'</td></tr>'; }).join("")+'</tbody></table>';
+  }
+  if(L.pens.length){ any=true;
+    h+='<table><thead><tr><th>إشعار العقوبة</th><th>النوع</th><th>التاريخ</th><th>الصيغة</th><th class="l">المبلغ</th><th>السبب</th></tr></thead><tbody>'+
+      L.pens.map(p=>{ const a=penaltyAmount(p,L.w);
+        return '<tr><td class="num"><bdi dir="ltr">'+esc(p.no||"")+'</bdi></td><td>'+esc(p.type||"")+
+        (p.terminates?' <b class="neg">(قرار إنهاء خدمة)</b>':'')+'</td>'+
+        '<td class="num">'+dateSlash(p.date)+'</td><td>'+esc(penKindName(p.kind)+(p.kind==="days"?" — "+daysText(p.days):""))+'</td>'+
+        '<td class="l num neg">'+(a?"-"+fmtMoney(a):fmtNum(0))+'</td>'+
+        '<td>'+esc(p.reason||"—")+'</td></tr>'; }).join("")+'</tbody></table>';
+  }
+  if(L.achs.length){ any=true;
+    h+='<table><thead><tr><th>إشعار المكافأة</th><th>النوع</th><th>التاريخ</th><th class="l">المبلغ</th><th>الوصف</th></tr></thead><tbody>'+
+      L.achs.map(a=>{ const v=achAmount(a,L.w);
+        return '<tr><td class="num"><bdi dir="ltr">'+esc(a.no||"")+'</bdi></td><td>'+esc(a.type||"")+'</td>'+
+        '<td class="num">'+dateSlash(a.date)+'</td><td class="l num pos">'+(v?"+"+fmtMoney(v):fmtNum(0))+'</td>'+
+        '<td>'+esc(a.reason||"—")+'</td></tr>'; }).join("")+'</tbody></table>';
+  }
+  if(L.issues.length){ any=true;
+    h+='<table><thead><tr><th>وصل المواد</th><th>التاريخ</th><th>لغاية</th><th class="c">عدد المواد</th></tr></thead><tbody>'+
+      L.issues.map(x=>'<tr><td class="num"><bdi dir="ltr">'+esc(x.no||"")+'</bdi></td><td class="num">'+dateSlash(x.from)+'</td>'+
+        '<td class="num">'+dateSlash(x.to||x.from)+'</td><td class="c">'+fmtNum((x.items||[]).length)+'</td></tr>').join("")+'</tbody></table>';
+  }
+  if(!any) h+='<p class="none">لا توجد وثائق خلال المدة.</p>';
+
+  if(L.changes.length){
+    h+='<h4>تغييرات الحالة خلال المدة</h4><table><thead><tr><th>التاريخ</th><th>التغيير</th><th>الملاحظة</th><th>المرجع</th></tr></thead><tbody>'+
+      L.changes.map(ch=>'<tr><td class="num">'+dateSlash(ch.date)+'</td><td>'+esc(lgChangeText(ch))+'</td>'+
+        '<td>'+esc(ch.note||"—")+(ch.migrated?' <span class="mini">(مرحَّل)</span>':'')+'</td><td class="num"><bdi dir="ltr">'+esc(ch.ref||"—")+'</bdi></td></tr>').join("")+
+      '</tbody></table>';
+  }
+  if(o.sigs){
+    const st=S();
+    h+='<div class="sigs">'+
+      '<div><div class="sp"></div><div class="ln">توقيع العامل بالاستلام</div>'+esc(I.name)+'</div>'+
+      '<div><div class="sp"></div><div class="ln">'+esc(st.cmT2||"المسؤول الإداري")+'</div>'+esc(st.cmN2||"")+'</div>'+
+      '<div><div class="sp">'+(st.signature?'<img src="'+st.signature+'" alt="">':'')+'</div>'+
+        '<div class="ln">المصادقة</div>'+esc(st.signer||"")+(st.role?'<div class="mini">'+esc(st.role)+'</div>':'')+'</div>'+
+      '</div>';
+  }
+  return h;
+}
+/* صفحة «التغييرات خلال الشهر» والخلاصة — آخر صفحة بجرد أكثر من عامل */
+function lgChangesOf(list){
+  const out=[];
+  list.forEach(L=>L.changes.forEach(ch=>out.push(Object.assign({name:L.info.name},ch))));
+  return out.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:cmpAr(a.name,b.name)));
+}
+function lgSummaryHtml(list, from, to, rows){
+  const t=ledgerTotals(list), ch=lgChangesOf(list), cur=S().currency||"", CUR=cur?" "+esc(cur):"";
+  const diff=ledgerVsPayroll(list, rows);
+  let h='<h4>التغييرات خلال الشهر</h4>';
+  if(ch.length){
+    h+='<table><thead><tr><th>النوع</th><th>الاسم</th><th>التاريخ</th><th>الملاحظة</th><th>المرجع</th></tr></thead><tbody>'+
+      ch.map(x=>'<tr><td>'+esc(changeKindText(x))+'</td><td>'+esc(x.name)+'</td><td class="num">'+dateSlash(x.date)+'</td>'+
+        '<td>'+esc(x.note||"—")+'</td><td class="num">'+esc(x.ref||"—")+'</td></tr>').join("")+'</tbody></table>';
+  }else h+='<p class="none">لا مباشرات ولا تغييرات حالة خلال المدة.</p>';
+  h+='<h4>خلاصة المدة</h4><div class="sumg">'+
+    [["عدد العمال",t.workers],["حضور",t.present],["غياب",t.absent],["متفرقة",t.misc],["إجازة",t.leave],["أوف",t.off],
+     ["أيام مستقطعة",t.deductDays],["وصولات الإجازة",t.leaveDocs],["العقوبات",t.penCount],
+     ["المكافآت",t.achCount],["وصولات المواد",t.issueDocs],["تغييرات",ch.length]]
+    .map(x=>'<div>'+x[0]+'<b>'+fmtNum(x[1])+'</b></div>').join("")+'</div>';
+  h+='<table class="pay" style="margin-top:5px"><tbody>'+
+    '<tr class="sub"><td>الرواتب المستحقة</td><td>'+fmtMoney(t.salary)+CUR+'</td></tr>'+
+    '<tr><td>استقطاع الغياب</td><td class="neg">-'+fmtMoney(t.absDeduction)+'</td></tr>'+
+    '<tr><td>العقوبات ('+fmtNum(t.penCount)+')</td><td class="neg">-'+fmtMoney(t.penDed)+'</td></tr>'+
+    '<tr><td>المكافآت ('+fmtNum(t.achCount)+')</td><td class="pos">+'+fmtMoney(t.achAdd)+'</td></tr>'+
+    '<tr class="tot"><td>صافي الرواتب</td><td>'+fmtMoney(t.net)+CUR+'</td></tr></tbody></table>';
+  h+= diff.length
+    ? '<div class="err">المجاميع تختلف عن كشف الرواتب بـ: '+esc(diff.join("، "))+'</div>'
+    : '<p class="mini">المجاميع أعلاه مطابقة لكشف الرواتب المختصر لنفس المدة ونفس العمال رقماً برقم.</p>';
+  return h;
+}
+
+/* ==================== [واجهة] الجرد التفصيلي ==================== */
+let LG=null;               // {from,to,rp,cache}
+let lgOpen=new Set();      // العمال المفتوحة بطاقاتهم
+let lgAll=false;           // «أظهر كل الأيام»
+function lgTargetFill(){
+  const c=C(), sc=el("lgScope").value, n=el("lgTarget"), wrap=el("lgTargetWrap");
+  if(!n || n.innerHTML===undefined) return;
+  const keep=n.value;
+  let opts="", lbl="";
+  if(sc==="worker"){ lbl="العامل"; opts='<option value="">— اختر العامل —</option>'+
+    workersAZ().map(w=>'<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join(""); }
+  else if(sc==="section"){ lbl="القسم"; opts='<option value="">كل الأقسام</option>'+
+    sortedSections().map(s=>'<option value="'+s.id+'">'+esc(s.name)+'</option>').join(""); }
+  else if(sc==="zone"){ lbl="المنطقة"; opts='<option value="">كل المناطق</option>'+
+    c.zones.map(z=>'<option value="'+z.id+'">'+esc(z.name)+'</option>').join(""); }
+  wrap.classList.toggle("hidden", sc==="all");
+  el("lgTargetLbl").textContent=lbl;
+  n.innerHTML=opts;
+  if(keep && [...n.options].some(o=>o.value===keep)) n.value=keep;
+}
+function lgInit(){
+  const s=el("lgStatus");
+  if(s && s.innerHTML!==undefined && !s.innerHTML) s.innerHTML=statusOptions("", "كل الحالات");
+  fillSort("lgSort",PAY_SORT_OPTS);
+  lgTargetFill();
+  if(!el("lgFrom").value || !el("lgTo").value){
+    const r=(RP && !RP.invalid) ? [RP.from,RP.to] : monthRange(0);
+    el("lgFrom").value=r[0]; el("lgTo").value=r[1];
+  }
+  runLedger(false);
+}
+function runLedger(manual){
+  let from=el("lgFrom").value, to=el("lgTo").value;
+  if(!from||!to){ const r=monthRange(0); from=from||r[0]; to=to||r[1]; el("lgFrom").value=from; el("lgTo").value=to; }
+  const fail=msg=>{ LG=null; el("lgCards").innerHTML=""; el("lgBody").innerHTML="";
+    el("lgWarn").innerHTML='<div class="errbox">'+msg+'</div>'; };
+  if(from>to){ fail("<b>تاريخ البداية بعد تاريخ النهاية.</b>"); if(manual) alertBox("تاريخ البداية بعد تاريخ النهاية."); return; }
+  if(!sameMonth(from,to)){
+    fail('<b>المدى يمتد على أكثر من شهر — الجرد مرفوض.</b><br>الجرد التفصيلي يقرأ أرقام كشف الرواتب الشهري، '+
+      'والرواتب شهرية.<br><span class="mini">اختر شهراً واحداً: «هذا الشهر» أو «الشهر الماضي».</span>');
+    if(manual) alertBox("المدى يمتد على أكثر من شهر. اختر شهراً واحداً.");
+    return;
+  }
+  LG={from:from, to:to, rp:buildReport(from,to), cache:new Map()};
+  renderLedger();
+}
+function lgLedger(id){
+  if(!LG) return null;
+  if(!LG.cache.has(id)) LG.cache.set(id, buildWorkerLedger(id, LG.from, LG.to, LG.rp));
+  return LG.cache.get(id);
+}
+/* الصفوف ضمن النطاق والفلاتر والترتيب — الشاشة والطباعة وWord وExcel تقرأ منها */
+function lgScopeRows(){
+  if(!LG) return {rows:[], shown:[], empty:[]};
+  const c=C(), sc=el("lgScope").value, tg=el("lgTarget").value;
+  const stf=String(el("lgStatus").value||""), q=String(el("lgSearch").value||"").trim();
+  const byId=new Map(c.workers.map(w=>[w.id,w]));
+  let rows=LG.rp.rows.filter(r=>{
+    const w=byId.get(r.id); if(!w) return false;
+    if(sc==="worker") return r.id===tg;
+    if(sc==="section" && tg && w.sectionId!==tg) return false;
+    if(sc==="zone" && tg){ const s=sectionOf(w.sectionId); if(!s || s.zoneId!==tg) return false; }
+    if(stf && getWorkerStatus(w)!==stf) return false;
+    if(q && !workerMatches(w,q)) return false;
+    return true;
+  });
+  rows=sortRows(rows, fillSort("lgSort",PAY_SORT_OPTS));
+  const shown = sc==="worker" ? rows : rows.filter(r=>!ledgerEmpty(r));
+  const empty = sc==="worker" ? [] : rows.filter(r=>ledgerEmpty(r));
+  return {rows:rows, shown:shown, empty:empty};
+}
+function lgList(){ return lgScopeRows().shown.map(r=>lgLedger(r.id)).filter(Boolean); }
+function lgScopeText(){
+  const sc=el("lgScope").value, n=el("lgTarget");
+  let t = sc==="all" ? "كل العمال" : "";
+  if(sc!=="all"){ const o=n.options && n.options[n.selectedIndex]; t=(o?o.textContent:""); }
+  const stf=el("lgStatus").value, q=String(el("lgSearch").value||"").trim();
+  if(stf) t+=" · الحالة: "+stf;
+  if(q) t+=" · بحث: "+q;
+  return t;
+}
+function renderLedger(){
+  const style=document.getElementById("lgStyle");
+  if(style) style.textContent=lgCss();
+  if(!LG){ return; }
+  const sc=el("lgScope").value;
+  const S0=lgScopeRows(), list=S0.shown.map(r=>lgLedger(r.id)).filter(Boolean);
+  const t=ledgerTotals(list), diff=ledgerVsPayroll(list, S0.shown);
+  el("lgCards").innerHTML=
+    '<div class="card"><div class="k">عمال بالجرد</div><div class="v">'+fmtNum(list.length)+'</div></div>'+
+    '<div class="card good"><div class="k">حضور</div><div class="v">'+fmtNum(t.present)+'</div></div>'+
+    '<div class="card bad"><div class="k">غياب</div><div class="v">'+fmtNum(t.absent)+'</div></div>'+
+    '<div class="card"><div class="k">متفرقة + إجازة</div><div class="v">'+fmtNum(t.excused)+'</div><div class="k">أوف '+fmtNum(t.off)+'</div></div>'+
+    '<div class="card bad"><div class="k">أيام مستقطعة</div><div class="v">'+fmtNum(t.deductDays)+'</div></div>'+
+    '<div class="card hero"><div class="k">الصافي</div><div class="v">'+fmtMoney(t.net)+'</div><div class="k">'+esc(S().currency||"")+'</div></div>';
+  let warn="";
+  if(sc==="worker" && !el("lgTarget").value) warn+='<div class="warnbox">اختر العامل من القائمة.</div>';
+  if(diff.length) warn+='<div class="errbox"><b>اختلاف مع كشف الرواتب</b> بالحقول: '+esc(diff.join("، "))+'</div>';
+  else if(list.length) warn+='<div class="okbox">الأرقام مطابقة لكشف الرواتب المختصر لنفس المدة ونفس العمال ✓</div>';
+  if(S0.empty.length) warn+='<div class="warnbox">'+fmtNum(S0.empty.length)+' عامل خارج الخدمة طوال المدة وبلا وثائق — '+
+    'بلا جرد تفصيلي (صفّهم بكشف الرواتب أصفار).</div>';
+  if(LG.rp.gaps.length) warn+='<div class="warnbox">'+fmtNum(LG.rp.gaps.length)+' يوم عمل بالمدة لم يُعتمد بعد — '+
+    'يظهر بالتقويم «غير معتمد» ولا يدخل الحساب.</div>';
+  const mr=monthOf(LG.from);
+  if(LG.from!==mr[0] || LG.to!==mr[1]) warn+='<div class="warnbox"><b>جرد مرحلي</b> — المدى لا يغطي الشهر كاملاً، '+
+    'وأرقامه أرقام الكشف المرحلي نفسه.</div>';
+  el("lgWarn").innerHTML=warn;
+  const ab=el("lgAllDays"); if(ab && ab.setAttribute){ ab.setAttribute("aria-pressed",lgAll?"true":"false");
+    ab.textContent=lgAll?"الأيام غير الاعتيادية فقط":"أظهر كل الأيام"; }
+  if(!list.length){ el("lgBody").innerHTML='<p class="hint">ماكو عمال ضمن هذا النطاق.</p>'; return; }
+  const one=list.length===1;
+  el("lgBody").innerHTML=list.map(L=>{
+    const r=L.row, open=one || lgOpen.has(L.w.id);
+    return '<div class="mfold lgfold'+(open?" open":"")+'">'+
+      '<div class="mhead" data-lgw="'+L.w.id+'" tabindex="0" role="button" aria-expanded="'+(open?"true":"false")+'">'+
+      '<span class="mcaret">'+(open?"▾":"▸")+'</span><b>'+esc(L.info.name)+'</b> '+
+      (r.status!==WS_ACTIVE?statusChip(r.status,r.endDate||r.statusChangedAt):'')+
+      '<span class="mmeta">'+esc(L.info.section)+' · حضور '+fmtNum(r.present)+' · غياب '+fmtNum(r.absent)+
+      ' · متفرقة+إجازة '+fmtNum(r.excused)+' · الصافي '+fmtMoney(r.net)+
+      (L.mismatch.length?' · <span class="mwarn">اختلاف</span>':'')+'</span></div>'+
+      (open?'<div class="mbody"><div class="lg lgscreen">'+ledgerHtml(L,{allDays:lgAll,head:true})+'</div></div>':'')+
+      '</div>';
+  }).join("");
+}
+el("lgBody").addEventListener("click",e=>{
+  const h=e.target.closest("[data-lgw]"); if(!h) return;
+  const id=h.dataset.lgw;
+  if(lgOpen.has(id)) lgOpen.delete(id); else lgOpen.add(id);
+  renderLedger();
+  const n=document.querySelector('[data-lgw="'+id+'"]'); if(n) n.focus();
+});
+el("lgBody").addEventListener("keydown",e=>{
+  if((e.key==="Enter"||e.key===" ") && e.target.closest && e.target.closest("[data-lgw]")){ e.preventDefault(); e.target.click(); }
+});
+el("lgRun").onclick=()=>runLedger(true);
+document.querySelectorAll("[data-lgquick]").forEach(b=>b.onclick=()=>{
+  const r=monthRange(b.dataset.lgquick==="last"?-1:0);
+  el("lgFrom").value=r[0]; el("lgTo").value=r[1]; runLedger(true);
+});
+el("lgScope").addEventListener("change",()=>{ lgTargetFill(); renderLedger(); });
+el("lgTarget").addEventListener("change",()=>renderLedger());
+el("lgStatus").addEventListener("change",()=>renderLedger());
+el("lgSort").addEventListener("change",()=>renderLedger());
+el("lgSearch").addEventListener("input",()=>renderLedger());
+el("lgExpand").onclick=()=>{
+  const ids=lgScopeRows().shown.map(r=>r.id);
+  lgOpen = ids.some(id=>lgOpen.has(id)) ? new Set() : new Set(ids);
+  renderLedger();
+};
+el("lgAllDays").onclick=()=>{ lgAll=!lgAll; renderLedger(); };
+el("rpToLedger").onclick=()=>{
+  if(RP && !RP.invalid){ el("lgFrom").value=RP.from; el("lgTo").value=RP.to; }
+  switchView("ledger");
+};
+function lgNote(t){ el("lgNote").textContent=t; setTimeout(()=>{ el("lgNote").textContent=""; },2200); }
+function lgReady(){
+  if(!LG){ alertBox("اختر مدة شهر واحد واضغط «اعرض» أول."); return null; }
+  const list=lgList();
+  if(!list.length){ alertBox("ماكو عمال ضمن هذا النطاق."); return null; }
+  return list;
+}
+function lgFileTag(){ return LG.from+"_"+LG.to; }
+
+/* ---- [تصدير] طباعة الجرد التفصيلي: صفحة A4 عمودية لكل عامل ----
+   الترويسة داخل thead فيكرّرها المتصفح أعلى كل صفحة إذا طال جرد عامل
+   على صفحتين. صفحة «التغييرات خلال الشهر» والخلاصة آخر الطباعة. */
+el("lgPrint").onclick=()=>{
+  const list=lgReady(); if(!list) return;
+  const w=window.open("","_blank");
+  if(!w){ alertBox("المتصفح منع فتح النافذة. اسمح بالنوافذ المنبثقة."); return; }
+  const multi=el("lgScope").value!=="worker" && list.length>0;
+  const st=S();
+  const page=(head,body)=>'<table class="lgpg"><thead><tr><td>'+head+'</td></tr></thead>'+
+    '<tbody><tr><td>'+body+'</td></tr></tbody></table>';
+  let html=list.map(L=>page(lgHeaderHtml(L), ledgerHtml(L,{allDays:lgAll,sigs:true}))).join("");
+  if(multi){
+    const hd='<div class="lg-hd">'+(st.logo?'<img src="'+st.logo+'" alt="">':'')+
+      '<div><div class="lg-co">'+esc(st.company||"")+'</div><div class="lg-tt">التغييرات خلال الشهر وخلاصة الجرد التفصيلي</div></div>'+
+      '<div class="lg-meta">المدة: '+dateSlash(LG.from)+' ← '+dateSlash(LG.to)+'<br>'+esc(lgScopeText())+
+      '<br>تاريخ الإصدار: '+dateSlash(todayISO())+'</div></div>';
+    html+=page(hd, lgSummaryHtml(list, LG.from, LG.to, lgScopeRows().shown));
+  }
+  w.document.write('<html dir="rtl"><head><meta charset="utf-8"><title>الجرد التفصيلي</title><style>'+
+    '@page{size:A4 portrait;margin:9mm 10mm}html,body{margin:0;padding:0;background:#fff}'+
+    lgCss()+
+    '.lgpg{width:100%;border-collapse:collapse;break-after:page;page-break-after:always}'+
+    '.lgpg:last-child{break-after:auto;page-break-after:auto}'+
+    '.lgpg>thead>tr>td,.lgpg>tbody>tr>td{border:0;padding:0}'+
+    /* صف الصفحة نفسه يُسمح بانكساره — وإلا يُقصّ جرد عامل أطول من صفحة */
+    '.lgpg>tbody>tr{break-inside:auto;page-break-inside:auto}'+
+    '</style></head><body><div class="lg">'+html+'</div></body></html>');
+  w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
+  lgNote("انفتحت الطباعة ✓");
+};
+
+/* ---- [تصدير] الجرد التفصيلي إلى Word: صفحة A4 عمودية لكل عامل ----
+   نفس أقسام الورقة المطبوعة بنفس الترتيب، مبنية بمولّد وورد نفسه
+   (wTable/wRow/wCell). كل شبكة مجموعها = عرض الصفحة المتاح بالضبط. */
+const LG_MG=567, LG_FULL=11906-LG_MG*2;
+function lgGrid(ws, full){
+  full=full||LG_FULL;
+  const tw=ws.reduce((a,b)=>a+b,0);
+  const G=ws.map(x=>Math.floor(full*x/tw));
+  G[G.length-1]=full-G.slice(0,-1).reduce((a,b)=>a+b,0);
+  return G;
+}
+/* ألوان أنواع الأيام بالوورد — نفس معنى lgKindStyle، والتظليل المخطط
+   لخارج الخدمة يبقى مميّزاً بالأبيض والأسود */
+function lgDocKinds(){
+  const p=pal();
+  if(isMono()) return {
+    present:{fill:"#FFFFFF",color:"#111111"}, absent:{fill:"#1A1A1A",color:"#FFFFFF"},
+    misc:{fill:"#BDBDBD",color:"#111111"},    leave:{fill:"#E6E6E6",color:"#111111"},
+    off:{fill:"#F4F4F4",color:"#111111"},     hol:{fill:"#8C8C8C",color:"#FFFFFF"},
+    out:{fill:"#FFFFFF",color:"#555555",pat:"thinDiagStripe",patColor:"#9A9A9A"},
+    unc:{fill:"#FFFFFF",color:"#111111",pat:"pct10",patColor:"#000000"} };
+  return {
+    present:{fill:"#E4F0EA",color:"#2C6E49"}, absent:{fill:"#F7E5E8",color:"#9B1C31"},
+    misc:{fill:"#F7EFD8",color:"#8A6A12"},    leave:{fill:"#E3ECF7",color:"#1D4E89"},
+    off:{fill:"#E0F1F2",color:"#2B6F77"},     hol:{fill:tint(p.base,.82),color:shade(p.base,.36)},
+    out:{fill:"#F4F4F4",color:"#777777",pat:"thinDiagStripe",patColor:"#D0D0D0"},
+    unc:{fill:"#FFFFFF",color:"#7A5C12"} };
+}
+function lgKCell(k,body,o){
+  const K=lgDocKinds()[k]||{fill:"#FFFFFF",color:"#111111"};
+  return wCell(body,Object.assign({shade:K.fill,shdVal:K.pat,shdColor:K.patColor,raw:true},o||{}));
+}
+function lgDocTable(heads, grid, rows, CLR){
+  const SOFT=isMono()?"#EDEDED":tint(CLR.purple,.9);
+  const hr=wRow(heads.map((h,i)=>wCell(h,{bold:true,size:8,color:CLR.purpleDeep,shade:SOFT,width:grid[i]})),{header:true});
+  return wTable([hr].concat(rows.map(r=>wRow(r.map((v,i)=>{
+    const o=Object.assign({size:8.5,width:grid[i],align:"right"},(v&&typeof v==="object"&&!Array.isArray(v))?v:{});
+    const t=(v&&typeof v==="object")?v.t:v;
+    return wCell(String(t==null?"":t),o);
+  })))),{border:isMono()?"#9A9A9A":tint(CLR.purple,.62),grid:grid});
+}
+function lgDocH(t,CLR){ return wPara(t,{size:10,bold:true,color:CLR.purpleDeep,before:100,after:40}); }
+function lgDocHeader(L,m,CLR,title){
+  const st=S(), G=lgGrid([1.25,1.5,1.05]), ld=logoDims(0.95,0.42);
+  return wTable([wRow([
+    wCell((m.logoRid?wImage(m.logoRid,ld.w,ld.h,"right"):"")+
+      wPara(st.company||"اسم الشركة",{size:13,bold:true,color:CLR.purpleDeep,align:"right",after:0}),
+      {width:G[0],raw:true}),
+    wCell(wPara(title,{size:14,bold:true,color:CLR.purple,align:"center",after:20})+
+      wPara(L?L.info.name:lgScopeText(),{size:11,bold:true,color:CLR.ink,align:"center",after:0}),{width:G[1],raw:true}),
+    wCell((L?wPara("رقم الجرد: "+L.no,{size:9,bold:true,align:"left",after:10}):"")+
+      wPara("المدة: "+dateSlash(LG.from)+" ← "+dateSlash(LG.to),{size:8.5,color:CLR.ink2,align:"left",after:10})+
+      wPara("تاريخ الإصدار: "+dateSlash(todayISO()),{size:8.5,color:CLR.ink2,align:"left",after:0}),{width:G[2],raw:true})
+  ],{header:true})],{border:CLR.gold,borderSize:10,grid:G})+wGap(100);
+}
+function lgWorkerDocXml(L,m,CLR){
+  const r=L.row, I=L.info, BRD=isMono()?"#9A9A9A":tint(CLR.purple,.62), SOFT=isMono()?"#EDEDED":tint(CLR.purple,.9);
+  let b=lgDocHeader(L,m,CLR,"الجرد التفصيلي");
+  if(L.mismatch.length) b+=wPara("تنبيه داخلي: عدّ الأيام يختلف عن كشف الرواتب ("+L.mismatch.join("، ")+")",{size:9,bold:true,color:CLR.absent});
+  /* بطاقة العامل: صفّان × ٦ خانات، الاسم والحالة بخانتين */
+  const G6=lgGrid([1,1,1,1,1,1]), info=lgInfoPairs(L), irows=[];
+  let cells=[], col=0;
+  info.forEach(x=>{
+    const span=x[2]||1, wdt=G6.slice(col,col+span).reduce((a,c)=>a+c,0);
+    cells.push(wCell(wPara(x[0],{size:7,color:CLR.ink2,align:"right",after:0})+
+      wPara(x[1],{size:9,bold:true,align:"right",after:0,color:x[0]==="الحالة الحالية"?statusDocColor(I.status):CLR.ink}),
+      {width:wdt,span:span>1?span:0,raw:true,valign:"top"}));
+    col+=span;
+    if(col>=6){ irows.push(wRow(cells)); cells=[]; col=0; }
+  });
+  b+=wTable(irows,{border:BRD,grid:G6});
+  /* خلاصة الأيام بسطر واحد — من صف الكشف */
+  const G12=lgGrid([1,1,1,1,1,1,1,1,1,1,1,1]);
+  b+=wGap(60)+wTable([wRow(lgSumPairs(L).map((x,j)=>wCell(
+    wPara(x[0],{size:6.5,color:CLR.ink2,align:"center",after:0})+
+    wPara(fmtNum(x[1]),{size:10,bold:true,align:"center",after:0,color:(x[2]&&x[1])?CLR.absent:CLR.ink}),
+    {width:G12[j],raw:true})))],{border:BRD,grid:G12});
+  const note=lgSumNote(L);
+  if(note) b+=wPara(note,{size:7,color:CLR.ink2,after:0});
+
+  /* [التقويم | تفصيل الراتب] بجدول حاوٍ من خليتين؛ كل جدول داخلي بعرض خليته
+     ناقص هوامشها، وكل خلية تنتهي بفقرة كما يشترط المخطط */
+  const GO=lgGrid([56,44]), inner=w=>w-140;
+  const K=lgDocKinds();
+  const GC=lgGrid([1,1,1,1,1,1,1],inner(GO[0]));
+  const ym=L.from.slice(0,7), first=parseISO(ym+"-01");
+  const len=new Date(first.getFullYear(),first.getMonth()+1,0).getDate(), off=LG_WEEK.indexOf(first.getDay());
+  const byDate={}; L.days.forEach(x=>{ byDate[x.d]=x; });
+  const crow=[wRow(LG_WEEK.map((i,j)=>wCell(WD_NAMES[i],{bold:true,size:7,color:CLR.purpleDeep,shade:SOFT,width:GC[j]})))];
+  const blank=j=>wCell(wPara("",{after:0}),{raw:true,width:GC[j]});
+  cells=[];
+  for(let i=0;i<off;i++) cells.push(blank(cells.length));
+  for(let dd=1; dd<=len; dd++){
+    const iso=ym+"-"+String(dd).padStart(2,"0"), x=byDate[iso], j=cells.length;
+    const cl=x?K[x.k].color:"#BBBBBB";
+    const body=wPara(fmtNum(dd),{size:6,color:cl,align:"center",after:0})+
+      wPara(x?LG_KINDS[x.k].sym:" ",{size:9.5,bold:true,color:cl,align:"center",after:0});
+    cells.push(x ? lgKCell(x.k,body,{width:GC[j]}) : wCell(body,{raw:true,width:GC[j]}));
+    if(cells.length===7){ crow.push(wRow(cells)); cells=[]; }
+  }
+  if(cells.length){ while(cells.length<7) cells.push(blank(cells.length)); crow.push(wRow(cells)); }
+  const calXml=wPara("تقويم المدة",{size:9,bold:true,color:CLR.purpleDeep,after:30})+
+    wTable(crow,{border:BRD,grid:GC})+
+    wPara(LG_ORDER.map(k=>LG_KINDS[k].sym+" "+LG_KINDS[k].t+" "+fmtNum(L.cnt[k])).join("  ·  "),{size:6.5,color:CLR.ink2,after:0,before:20});
+  const GP=lgGrid([1.25,1.35,1.1],inner(GO[1]));
+  const payXml=wPara("تفصيل الراتب",{size:9,bold:true,color:CLR.purpleDeep,after:30})+
+    wTable(lgPayLines(L).map(x=>{
+      const hi=x[3]==="sub"||x[3]==="tot", sh=x[3]==="tot"?CLR.goldLite:(x[3]==="sub"?SOFT:null);
+      const cc=x[3]==="neg"?CLR.absent:(x[3]==="pos"?CLR.present:(x[3]==="tot"?CLR.purpleDeep:CLR.ink));
+      return wRow([wCell(x[0],{size:8.5,bold:hi,width:GP[0],align:"right",shade:sh}),
+        wCell(x[1],{size:6.5,color:CLR.ink2,width:GP[1],align:"right",shade:sh}),
+        wCell(x[2],{size:8.5,bold:hi,color:cc,width:GP[2],align:"left",shade:sh,ltr:true})]);
+    }),{border:BRD,grid:GP});
+  b+=wGap(80)+wTable([wRow([
+    wCell(calXml+wPara("",{after:0}),{raw:true,width:GO[0],valign:"top"}),
+    wCell(payXml+wPara("",{after:0}),{raw:true,width:GO[1],valign:"top"})])],{border:"#FFFFFF",borderSize:2,grid:GO});
+
+  /* الأيام */
+  const dr=lgDayRows(L,lgAll);
+  b+=lgDocH(lgAll?"الأيام (كل الأيام)":"الأيام غير الاعتيادية",CLR);
+  if(dr.length){
+    const G5=lgGrid([2.3,1,1.3,4,0.9]);
+    const hr=wRow(["التاريخ","اليوم","الحالة","التفصيل","مستقطع؟"].map((h,i)=>wCell(h,{bold:true,size:8,color:CLR.purpleDeep,shade:SOFT,width:G5[i]})),{header:true});
+    b+=wTable([hr].concat(dr.map(g=>wRow([
+      wCell(lgRangeText(g),{size:8.5,width:G5[0],align:"right"}),
+      wCell(lgDayName(g),{size:8.5,width:G5[1],align:"right"}),
+      wCell(LG_KINDS[g.k].sym+" "+LG_KINDS[g.k].t,{size:8.5,bold:true,color:K[g.k].color,shade:K[g.k].fill,width:G5[2],align:"right"}),
+      wCell(g.detail||"—",{size:8.5,width:G5[3],align:"right"}),
+      wCell(g.ded,{size:8.5,width:G5[4]})]))),{border:BRD,grid:G5});
+  }else b+=wPara("كل الأيام اعتيادية: حضور كامل.",{size:8.5,color:CLR.ink2});
+
+  /* الوثائق */
+  b+=lgDocH("الوثائق خلال المدة",CLR);
+  let any=false;
+  const noCell=v=>({t:v||"",ltr:true,align:"right"});
+  if(L.leaves.length){ any=true;
+    b+=lgDocTable(["وصل الإجازة","النوع","المدة","الأيام","السياسة","السبب"],lgGrid([1.1,1.5,2.2,0.6,1.3,2]),
+      L.leaves.map(l=>{ const t=isTimedLeave(l);
+        return [noCell(l.no),l.type||"",t?dateSlash(l.from)+" — "+hoursText(l.hours||1):dateSlash(l.from)+" ← "+dateSlash(leaveEnd(l)),
+          {t:t?"—":fmtNum(l.days||1),align:"center"},t?"زمنية — بلا استقطاع":policyName(policyOfLeave(l,L.w)),l.reason||"—"]; }),CLR);
+  }
+  if(L.pens.length){ any=true;
+    b+=lgDocTable(["إشعار العقوبة","النوع","التاريخ","الصيغة","المبلغ","السبب"],lgGrid([1.1,1.6,1,1.5,1,2.3]),
+      L.pens.map(p=>{ const a=penaltyAmount(p,L.w);
+        return [noCell(p.no),(p.type||"")+(p.terminates?" (قرار إنهاء خدمة)":""),dateSlash(p.date),
+          penKindName(p.kind)+(p.kind==="days"?" — "+daysText(p.days):""),
+          {t:a?"-"+fmtMoney(a):fmtNum(0),align:"left",ltr:true,color:a?CLR.absent:null},p.reason||"—"]; }),CLR);
+  }
+  if(L.achs.length){ any=true;
+    b+=lgDocTable(["إشعار المكافأة","النوع","التاريخ","المبلغ","الوصف"],lgGrid([1.1,1.6,1,1,3.3]),
+      L.achs.map(a=>{ const v=achAmount(a,L.w);
+        return [noCell(a.no),a.type||"",dateSlash(a.date),{t:v?"+"+fmtMoney(v):fmtNum(0),align:"left",ltr:true,color:v?CLR.present:null},a.reason||"—"]; }),CLR);
+  }
+  if(L.issues.length){ any=true;
+    b+=lgDocTable(["وصل المواد","التاريخ","لغاية","عدد المواد"],lgGrid([1,1,1,1]),
+      L.issues.map(x=>[noCell(x.no),dateSlash(x.from),dateSlash(x.to||x.from),{t:fmtNum((x.items||[]).length),align:"center"}]),CLR);
+  }
+  if(!any) b+=wPara("لا توجد وثائق خلال المدة.",{size:8.5,color:CLR.ink2});
+
+  if(L.changes.length){
+    b+=lgDocH("تغييرات الحالة خلال المدة",CLR);
+    b+=lgDocTable(["التاريخ","التغيير","الملاحظة","المرجع"],lgGrid([1,2,3,1.1]),
+      L.changes.map(ch=>[dateSlash(ch.date),lgChangeText(ch),(ch.note||"—")+(ch.migrated?" (مرحَّل)":""),noCell(ch.ref||"—")]),CLR);
+  }
+  b+=lgDocSigs(I.name,m,CLR);
+  return b;
+}
+function lgDocSigs(name,m,CLR){
+  const st=S(), G=lgGrid([1,1,1]);
+  const sig=m.sigRid?wImage(m.sigRid,1.5,0.5,"center"):wPara("",{after:0});
+  const cell=(top,title,sub,j)=>wCell(top+
+    wPara("______________________",{size:9,color:CLR.ink2,align:"center",after:0})+
+    wPara(title,{size:9,bold:true,color:CLR.purpleDeep,align:"center",after:0})+
+    wPara(sub||" ",{size:8.5,color:CLR.ink,align:"center",after:0}),{raw:true,width:G[j],valign:"bottom"});
+  const blank=wPara("",{after:0})+wGap(400);
+  return wGap(160)+wTable([wRow([
+    cell(blank,"توقيع العامل بالاستلام",name,0),
+    cell(blank,st.cmT2||"المسؤول الإداري",st.cmN2||"",1),
+    cell(sig,"المصادقة",(st.signer||"")+(st.role?" — "+st.role:""),2)
+  ])],{border:"#FFFFFF",borderSize:2,grid:G});
+}
+function lgSummaryDocXml(list,m,CLR){
+  const t=ledgerTotals(list), ch=lgChangesOf(list), cur=S().currency||"", CUR=cur?" "+cur:"";
+  let b=lgDocHeader(null,m,CLR,"التغييرات خلال الشهر وخلاصة الجرد");
+  b+=lgDocH("التغييرات خلال الشهر",CLR);
+  if(ch.length) b+=lgDocTable(["النوع","الاسم","التاريخ","الملاحظة","المرجع"],lgGrid([1.3,2,1,3,1.1]),
+    ch.map(x=>[changeKindText(x),x.name,dateSlash(x.date),x.note||"—",x.ref||"—"]),CLR);
+  else b+=wPara("لا مباشرات ولا تغييرات حالة خلال المدة.",{size:9,color:CLR.ink2});
+  b+=lgDocH("خلاصة المدة",CLR);
+  b+=lgDocTable(["البند","العدد","المبلغ"],lgGrid([3,1,1.6]),[
+    ["عدد العمال بالجرد",{t:fmtNum(t.workers),align:"center"},""],
+    ["حضور / غياب / متفرقة / إجازة / أوف",{t:[t.present,t.absent,t.misc,t.leave,t.off].map(fmtNum).join(" / "),align:"center"},""],
+    ["أيام مستقطعة",{t:fmtNum(t.deductDays),align:"center"},{t:"-"+fmtMoney(t.absDeduction),align:"left"}],
+    ["وصولات الإجازة",{t:fmtNum(t.leaveDocs),align:"center"},""],
+    ["العقوبات",{t:fmtNum(t.penCount),align:"center"},{t:"-"+fmtMoney(t.penDed),align:"left"}],
+    ["المكافآت",{t:fmtNum(t.achCount),align:"center"},{t:"+"+fmtMoney(t.achAdd),align:"left"}],
+    ["وصولات المواد",{t:fmtNum(t.issueDocs),align:"center"},""],
+    ["الرواتب المستحقة","",{t:fmtMoney(t.salary)+CUR,align:"left"}],
+    [{t:"صافي الرواتب",bold:true},"",{t:fmtMoney(t.net)+CUR,align:"left",bold:true,color:CLR.purpleDeep}]
+  ],CLR);
+  const diff=ledgerVsPayroll(list, lgScopeRows().shown);
+  b+=wPara(diff.length?"المجاميع تختلف عن كشف الرواتب بـ: "+diff.join("، ")
+    :"المجاميع أعلاه مطابقة لكشف الرواتب المختصر لنفس المدة ونفس العمال رقماً برقم.",
+    {size:8.5,color:diff.length?CLR.absent:CLR.ink2,bold:!!diff.length,before:60});
+  b+=lgDocSigs("",m,CLR);
+  return b;
+}
+function ledgerDocx(list){
+  docReset();
+  const CLR=CL(), m=receiptMedia();
+  const parts=list.map(L=>lgWorkerDocXml(L,m,CLR));
+  if(el("lgScope").value!=="worker") parts.push(lgSummaryDocXml(list,m,CLR));
+  return buildDocx(parts.join(pageBreakXml()),{media:m.media,margin:LG_MG});
+}
+/* تصدير كبير (مئات العمال) يأخذ ثوانٍ: رسالة «جاري التحضير» تُرسم أولاً ثم يبدأ
+   البناء، والملف يُضغط قبل الحفظ */
+function lgBusy(t){ el("lgNote").textContent=t; return new Promise(r=>setTimeout(r,30)); }
+el("lgWord").onclick=async()=>{
+  const list=lgReady(); if(!list) return;
+  await lgBusy("جاري تحضير ملف Word…");
+  try{ saveDocx(await zipDeflate(ledgerDocx(list)),"الجرد-التفصيلي-"+lgFileTag()+".docx"); lgNote("انصدّر Word ✓"); }
+  catch(err){ el("lgNote").textContent=""; alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
+};
+
+/* ---- [تصدير] الجرد التفصيلي إلى Excel: خلاصة + أيام + وثائق + تغييرات ---- */
+const LG_XLS_SUM=["ت","رقم الجرد","الاسم","اسم الأم","القسم","المنطقة","الحالة","المباشرة","آخر يوم عمل",
+  "أيام المدة","أيام الخدمة","أيام معتمدة","حضور","غياب","متفرقة","إجازة","أوف","متفرقة + إجازة","غير معتمد",
+  "أيام مستقطعة","نسبة الحضور %","الراتب الكامل","حسم خارج الخدمة","الراتب المستحق","استقطاع الغياب",
+  "العقوبات","المكافآت","الصافي"];
+function ledgerXlsx(list){
+  const n2=v=>Math.round(Number(v)||0);
+  const sum=[LG_XLS_SUM];
+  list.forEach((L,i)=>{ const r=L.row, I=L.info;
+    sum.push([i+1,L.no,I.name,I.mother,I.section,I.zone,I.status,L.w.startDate?dateSlash(L.w.startDate):"",
+      r.endDate?dateSlash(r.endDate):"",r.periodDays,r.svcDays,r.eligible,r.present,r.absent,r.misc,r.leave,r.off,
+      r.excused,L.cnt.unc,r.deductDays,Math.round(r.rate*100),n2(r.fullSalary),n2(r.proCut),n2(r.salary),
+      n2(r.absDeduction),n2(r.penDed),n2(r.achAdd),n2(r.net)]); });
+  const t=ledgerTotals(list);
+  sum.push(["","","المجموع ("+list.length+" عامل)","","","","","","","","","",t.present,t.absent,t.misc,t.leave,t.off,
+    t.excused,"",t.deductDays,"","","",n2(t.salary),n2(t.absDeduction),n2(t.penDed),n2(t.achAdd),n2(t.net)]);
+  const dh=["رقم الجرد","الاسم","من","إلى","عدد الأيام","اليوم","الحالة","التفصيل","مستقطع"], days=[dh];
+  list.forEach(L=>lgDayRows(L,lgAll).forEach(g=>days.push([L.no,L.info.name,dateSlash(g.from),dateSlash(g.to),g.n,
+    g.from===g.to?WD_NAMES[parseISO(g.from).getDay()]:"",LG_KINDS[g.k].t,g.detail||"",g.ded])));
+  const vh=["رقم الجرد","الاسم","الوثيقة","الرقم","النوع","التاريخ","لغاية","أيام / ساعات","الصيغة / السياسة","المبلغ","السبب / الوصف"], docs=[vh];
+  list.forEach(L=>{
+    L.leaves.forEach(l=>{ const tm=isTimedLeave(l);
+      docs.push([L.no,L.info.name,"إجازة",l.no||"",l.type||"",dateSlash(l.from),dateSlash(leaveEnd(l)),
+        tm?hoursText(l.hours||1):(Number(l.days)||1),tm?"زمنية":policyName(policyOfLeave(l,L.w)),"",l.reason||""]); });
+    L.pens.forEach(p=>docs.push([L.no,L.info.name,p.terminates?"عقوبة — إنهاء خدمة":"عقوبة",p.no||"",p.type||"",dateSlash(p.date),"",
+      p.kind==="days"?(Number(p.days)||0):"",penKindName(p.kind),-n2(penaltyAmount(p,L.w)),p.reason||""]));
+    L.achs.forEach(a=>docs.push([L.no,L.info.name,"مكافأة",a.no||"",a.type||"",dateSlash(a.date),"",
+      a.kind==="days"?(Number(a.days)||0):"",achKindName(a.kind),n2(achAmount(a,L.w)),a.reason||""]));
+    L.issues.forEach(x=>docs.push([L.no,L.info.name,"مواد",x.no||"","",dateSlash(x.from),dateSlash(x.to||x.from),
+      (x.items||[]).length,"","",x.notes||""]));
+  });
+  const chh=["النوع","الاسم","التاريخ","من حالة","إلى حالة","الملاحظة","المرجع"], chg=[chh];
+  lgChangesOf(list).forEach(x=>chg.push([changeKindText(x),x.name,dateSlash(x.date),x.from||"",x.kind==="start"?"":x.to,x.note||"",x.ref||""]));
+  if(!colsMatch(LG_XLS_SUM,sum.slice(1),"الجرد التفصيلي — الخلاصة") || !colsMatch(dh,days.slice(1),"الجرد التفصيلي — الأيام") ||
+     !colsMatch(vh,docs.slice(1),"الجرد التفصيلي — الوثائق") || !colsMatch(chh,chg.slice(1),"الجرد التفصيلي — التغييرات"))
+    throw new Error("اختلال بأعمدة الجرد التفصيلي");
+  return buildXlsxBook([
+    {name:"الخلاصة", rows:sum, widths:[5,16,24,20,16,14,14,12,12,9,9,9,8,8,8,8,8,11,9,10,10,14,14,14,14,12,12,14]},
+    {name:"الأيام", rows:days, widths:[16,24,12,12,9,10,12,44,9]},
+    {name:"الوثائق", rows:docs, widths:[16,24,16,12,18,12,12,11,18,12,36]},
+    {name:"التغييرات", rows:chg, widths:[16,24,12,14,14,36,14]}
+  ]);
+}
+el("lgXls").onclick=async()=>{
+  const list=lgReady(); if(!list) return;
+  await lgBusy("جاري تحضير ملف Excel…");
+  try{ saveXlsx(await zipDeflate(ledgerXlsx(list)),"الجرد-التفصيلي-"+lgFileTag()+".xlsx"); lgNote("انصدّر Excel ✓"); }
+  catch(err){ el("lgNote").textContent=""; alertBox("تعذّر إنشاء ملف الإكسل: "+err.message); }
+};
+
 /* ==================== [واجهة] التبويبات ==================== */
 function switchView(v){
-  ["daily","leaves","penalties","achievements","materials","history","people","variables","report","settings"].forEach(x=>
+  ["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","settings"].forEach(x=>
     el("view-"+x).classList.toggle("hidden",x!==v));
   document.querySelectorAll(".tabs button").forEach(b=>
     b.setAttribute("aria-selected",b.dataset.view===v?"true":"false"));
@@ -7707,6 +8751,7 @@ function switchView(v){
   if(v==="settings"){ renderCompanies(); renderPresets(); fillSettings();
     refreshBackupState(); renderSnaps(); }
   if(v==="report"){ initFolds(); fillSalary(); if(!RP){ const r=monthRange(0); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; } runReport(); }
+  if(v==="ledger") lgInit();
 }
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 el("dateInput").addEventListener("change",()=>{ curDate=el("dateInput").value||todayISO(); refresh(); });
@@ -7724,6 +8769,7 @@ function loadDemo(){
     "مصطفى وليد شاكر","نور الهدى صالح","زيد عماد ياسر","باسم عبد الرزاق","رياض نعيم داود",
     "أمير طالب حمزة","عمار جليل عبود","سجاد فاضل كريم","ياسر خضير عباس","وسام لطيف جودة"];
   c.workers=names.map((n,i)=>newWorker({name:n,sectionId:c.sections[i%c.sections.length].id}));
+  ensureWorkerSeq(c);
   c.settings.company=c.settings.company||"شركة النموذج";
   c.settings.address="البصرة"; c.settings.signer=c.settings.signer||"اسمك هنا";
   const r=dayRec(curDate);
@@ -7761,6 +8807,7 @@ function refresh(){
   if(!el("view-materials").classList.contains("hidden")) initMatView();
   if(!el("view-settings").classList.contains("hidden")) renderCompanies();
   if(!el("view-report").classList.contains("hidden")){ fillSalary(); runReport(); }
+  if(!el("view-ledger").classList.contains("hidden")){ lgTargetFill(); if(LG) runLedger(false); }
 }
 /* وصولات الإجازة والعقوبة مرقّمة داخل كل شركة على حدة،
    فلازم تُفرّغ النماذج عند التبديل حتى لا يُحفظ وصل برقم شركة ثانية. */
@@ -7792,6 +8839,10 @@ function resetCompanyUI(){
   openMonths=null;                 // مجلدات السجل: أحدث شهر للشركة الجديدة مفتوح
   editWorkerId=null; editSecId=null; editDirId=null;
   extSel=null;
+  LG=null; lgOpen=new Set();      // الجرد التفصيلي يُبنى من جديد لبيانات الشركة الجديدة
+  const lt=document.getElementById("lgTarget"); if(lt) lt.innerHTML="";
+  const ls=document.getElementById("lgScope"); if(ls) ls.value="all";   // العامل/القسم المختار يخصّ الشركة السابقة
+  const lst=document.getElementById("lgStatus"); if(lst) lst.value="";
   sigCache.src=null; logoCache.src=null; sigLoadGen++;
   const x=document.getElementById("extBack"); if(x && x.classList) x.classList.add("hidden");
 }
