@@ -105,6 +105,8 @@ const PRELUDE = `<script>(function(){
   window.prompt=function(){ return null; };
   window.print=function(){};
   window.open=function(){ return null; };
+  /* قفل النافذة الواحدة: الأطر المعزولة بنفس الأصل تقفل بعضها، فتُعطَّل القناة بالفحص */
+  try{ window.BroadcastChannel=undefined; }catch(e){}
 })();<\/script>`;
 
 let SRC=null;
@@ -165,6 +167,18 @@ function fixture(o){
     matSeeded:true, payV3:true }]};
 }
 function W(w,src){ w.__in=undefined; return w.eval(src); }
+/* النوافذ صارت داخل الصفحة (لا alert/confirm): الفحص ينتظر ظهورها ويضغط زرها */
+const tick=ms=>new Promise(r=>setTimeout(r,ms||5));
+async function dlgWait(w){
+  for(let i=0;i<200;i++){ const b=w.document.getElementById("dlgBack");
+    if(b && !b.classList.contains("hidden")) return true; await tick(5); }
+  return false;
+}
+function dlgText(w){ const n=w.document.getElementById("dlgBody"); return n?n.textContent:""; }
+async function answer(w,ok){
+  if(!await dlgWait(w)) return false;
+  w.document.getElementById(ok===false?"dlgCancel":"dlgOk").click(); await tick(10); return true;
+}
 function setState(w,obj){ w.__fx=obj; w.eval("state=migrate(__fx); curDate=todayISO();"); }
 const MONTH=["2026-09-01","2026-09-30"];
 function report(w,a,b){ return w.eval('buildReport("'+(a||MONTH[0])+'","'+(b||MONTH[1])+'")'); }
@@ -282,7 +296,9 @@ try{
    "pnKind:none","pnAmount:0","pnNo:ع-2026-001","pnReason:سبب"].forEach(p=>{
      const i=p.indexOf(":"); set(w6,p.slice(0,i),p.slice(i+1)); });
   w6.eval('el("pnSave").onclick()');
-  check("٦) قرار إنهاء الخدمة انحفظ", w6.eval("C().penalties.length"), 1, (w6.__alerts[0]||""));
+  const msg6=(await dlgWait(w6)) ? dlgText(w6) : "";
+  await answer(w6,true);
+  check("٦) قرار إنهاء الخدمة انحفظ", w6.eval("C().penalties.length"), 1, msg6.slice(0,60));
   check("٦) بعد قرار إنهاء الخدمة — الحالة", w6.eval('getWorkerStatus(C().workers[0])'), "إنهاء خدمات");
   check("٦) بعد القرار — الراتب نسبي", report(w6).rows[0].net, 167500);
   w6.eval('(function(){ var c=C(), l=c.penalties[0];'+
@@ -324,11 +340,11 @@ try{
   initForms(w9);
   ["lvWorker:w1","lvFrom:2026-09-11","lvDays:3","lvType:اعتيادية","lvPolicy:half","lvNo:إ-2026-009"]
     .forEach(p=>{ const i=p.indexOf(":"); set(w9,p.slice(0,i),p.slice(i+1)); });
-  w9.__alerts.length=0;
   w9.eval('el("lvSave").onclick()');
+  const msg9=(await dlgWait(w9)) ? dlgText(w9) : "";
   check("٩) إجازتان متداخلتان — الحفظ مرفوض", w9.eval("C().leaves.length"), 1);
-  check("٩) رسالة الرفض تذكر التداخل",
-    (w9.__alerts[0]||"").indexOf("تتداخل")>=0, true);
+  check("٩) رسالة الرفض تذكر التداخل", msg9.indexOf("تتداخل")>=0, true);
+  await answer(w9,true);
 
   const w10=await boot();
   setState(w10,fixture({workers:[WK()]}));

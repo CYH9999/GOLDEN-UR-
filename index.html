@@ -271,6 +271,18 @@ tr.rowvar td{background:#FCFAFE}
 .chkcol input[type=checkbox]{width:auto;margin:0;accent-color:var(--brand)}
 .chkcol .rk{margin-inline-start:auto;font-size:10px;font-weight:800;color:var(--absent);white-space:nowrap}
 
+/* ---- إضافات v4: صف الوثيقة المفتوحة، خلية الإجراءات، الأرقام، رسالة الحفظ ---- */
+tr.rowopen td{background:#FFF8E6}
+td.actcell{text-align:left;white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.dbbadge.bad{background:var(--absent-bg);color:var(--absent)}
+.toast{position:fixed;bottom:18px;inset-inline-start:50%;transform:translate(50%,20px);opacity:0;
+  background:#1f1a26;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);pointer-events:none;transition:opacity .2s,transform .2s;z-index:70}
+.toast.on{opacity:1;transform:translate(50%,0)}
+.tally .t-leave .v{color:var(--misc)}
+.tally .t-off .v{color:var(--present)}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.topbar,.tabs,.tally,.reminder,.actions{display:none!important}}
 </style>
@@ -305,6 +317,11 @@ tr.rowvar td{background:#FCFAFE}
   <button role="tab" aria-selected="false" data-view="report">التقارير والرواتب</button>
   <button role="tab" aria-selected="false" data-view="settings">الإعدادات</button>
 </nav>
+
+<div class="reminder hidden" id="lockBar" role="status">
+  <span class="rm-txt">البرنامج مفتوح بنافذة ثانية — الحفظ معطّل هنا حتى لا تكتب النافذتان فوق بعض. سكّر هذه النافذة واشتغل بالأولى.</span>
+  <button class="btn sm" id="lockRetry">حاول تفعيل هذه النافذة</button>
+</div>
 
 <div class="tally" id="tally"></div>
 
@@ -831,10 +848,12 @@ tr.rowvar td{background:#FCFAFE}
         </div>
         <label class="field"><span>احتساب الراتب لمن باشر أو ترك العمل داخل المدة</span>
           <select id="setProRate">
-            <option value="yes">نسبي: أجر اليوم × أيام خدمته</option>
+            <option value="yes">نسبي: الراتب الكامل − أجر اليوم × أيام خارج الخدمة</option>
             <option value="no">راتب كامل دائماً</option>
           </select>
-          <span class="hint">أجر اليوم = الراتب ÷ أيام الشهر المعتمدة</span></label>
+          <span class="hint">أجر اليوم = الراتب ÷ أيام الشهر المعتمدة (٣٠). أيام خارج الخدمة = أيام التقويم قبل
+            المباشرة أو بعد آخر يوم عمل، واليوم الحادي والثلاثون لا يُحسم لأن الراتب ٣٠ يوماً. المستمر طوال
+            الشهر يأخذ راتبه كاملاً مهما كان عدد أيام الشهر.</span></label>
       </div>
       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
         <label class="field" style="margin:0"><span>من تاريخ</span><input type="date" id="hlDate"></label>
@@ -1011,6 +1030,10 @@ tr.rowvar td{background:#FCFAFE}
           </div>
 
           <div id="bkWarn"></div>
+          <div class="actions hidden" id="corruptBox">
+            <button class="btn danger sm" id="corruptDl">تنزيل النسخة التالفة</button>
+            <span class="saved">نسخة تعذّرت قراءتها عند الإقلاع — محفوظة كما هي للإنقاذ اليدوي.</span>
+          </div>
 
           <h3 class="subhead">مجلد النسخ اليومية</h3>
           <p class="hint" style="margin-top:0">اختر مجلداً (فلاش أو مجلد على الشبكة) والبرنامج يكتب فيه
@@ -1035,9 +1058,11 @@ tr.rowvar td{background:#FCFAFE}
 
 </div>
 
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
 <!-- ===== نافذة عامة: بديل prompt / confirm ===== -->
 <div class="ovl hidden" id="dlgBack">
-  <div class="ovlbox" style="width:min(540px,100%)">
+  <div class="ovlbox" style="width:min(540px,100%)" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" aria-describedby="dlgBody">
     <div class="ovlhead"><h3 id="dlgTitle">تأكيد</h3></div>
     <div class="ovlbody">
       <div id="dlgBody"></div>
@@ -1052,8 +1077,8 @@ tr.rowvar td{background:#FCFAFE}
 
 <!-- ===== نافذة الكشف الخارجي ===== -->
 <div class="ovl hidden" id="extBack">
-  <div class="ovlbox">
-    <div class="ovlhead"><h3>كشف خارجي — بلا معلومات شخصية</h3>
+  <div class="ovlbox" role="dialog" aria-modal="true" aria-labelledby="extTitle">
+    <div class="ovlhead"><h3 id="extTitle">كشف خارجي — بلا معلومات شخصية</h3>
       <button class="btn sm ghost x" id="extClose">إغلاق</button></div>
     <div class="ovlbody">
       <p class="hint" style="margin-top:0">كشف يُسلَّم لجهة خارجية. معلومات العامل الشخصية ملك الشركة
@@ -1076,8 +1101,22 @@ tr.rowvar td{background:#FCFAFE}
 
 <script>
 "use strict";
+/* ==================================================================
+   فهرس الطبقات — كل قسم تحت يحمل وسم طبقته بين معقوفين، حتى يصير فصل
+   البرنامج لوحدات مستقلة (تطبيق سطح مكتب لاحقاً) بحثاً عن الوسم، لا
+   قراءةً لسبعة آلاف سطر:
+     [أدوات]   دوال عامة بلا حالة: العناصر، النوافذ، التواريخ، الألوان
+     [تخزين]   IndexedDB و localStorage والملف المرتبط والقفل والنسخ واللقطات
+     [نموذج]   شكل البيانات وقيمه الافتراضية والترحيل (ensureFields)
+     [محرّك]   الحساب الخالص: تصنيف اليوم، الخدمة، الإجازات، الرواتب، الجرد التفصيلي
+     [واجهة]   الجداول والنماذج والمستمعات
+     [رسم]     أوراق Canvas بدقة الطباعة
+     [تصدير]   مولّدات Word و Excel والطباعة
+   دوال المحرّك لا تقرأ من الصفحة (DOM) إطلاقاً، والواجهة لا تحسب أي مبلغ
+   بنفسها — كل رقم مالي يخرج من buildReport أو من دوال المحرّك التي تستعملها.
+   ================================================================== */
 
-/* ==================== أدوات عامة ==================== */
+/* ==================== [أدوات] أدوات عامة ==================== */
 /* بديل صامت لأي عنصر مفقود: كل ما تناديه الشيفرة على عنصر حقيقي
    لازم يوجد هنا، وإلا انكسر التنفيذ كله عند أول نداء غير معرَّف. */
 const _stub = { addEventListener(){}, removeEventListener(){},
@@ -1091,49 +1130,74 @@ const _stub = { addEventListener(){}, removeEventListener(){},
 function el(id){ const n=document.getElementById(id); if(!n){ console.warn("عنصر مفقود:",id); return _stub; } return n; }
 function uid(){ return Math.random().toString(36).slice(2,9); }
 
-/* ==================== نوافذ داخل الصفحة ====================
+/* ==================== [أدوات] نوافذ داخل الصفحة ====================
    prompt() و confirm() المدمجان: نص بلا تنسيق، لا يقبلان أكثر من حقل
    واحد، وبعض المتصفحات تعطي المستخدم خيار «امنع هذه الصفحة من إظهار
    نوافذ» فيمرّ بعدها كل حذف وتعديل بلا أي سؤال — خطر مباشر على
    بيانات المناطق والأقسام والمواد والشركات. البديل نافذة داخل
    الصفحة تُرجع Promise: كائن القيم عند التأكيد، و null عند الإلغاء. */
-let dlgCur=null, dlgResolve=null;
+let dlgCur=null, dlgResolve=null, dlgQueue=[], dlgPrevFocus=null;
 function dlgEnd(v){
   const n=document.getElementById("dlgBack");
   if(n && n.classList) n.classList.add("hidden");
   const r=dlgResolve; dlgResolve=null; dlgCur=null;
   if(r) r(v);
+  /* طلب ثانٍ وصل والنافذة مفتوحة ينتظر دوره ولا يلغي الأول: الإلغاء الصامت
+     كان يعني أن عملية «رُفضت» بلا أن يرى المستخدم سؤالها أصلاً. */
+  if(dlgQueue.length){ const nx=dlgQueue.shift(); dlgOpen(nx.o,nx.res); return; }
+  const pf=dlgPrevFocus; dlgPrevFocus=null;
+  if(pf && pf.focus && document.body && document.body.contains && document.body.contains(pf)){ try{ pf.focus(); }catch(e){} }
 }
 function dlgShow(o){
   return new Promise(res=>{
-    if(dlgResolve) dlgEnd(null);
-    dlgCur=o||{}; dlgResolve=res;
-    const fields=dlgCur.fields||[];
-    el("dlgTitle").textContent=dlgCur.title||"تأكيد";
-    el("dlgErr").innerHTML="";
-    el("dlgBody").innerHTML=
-      (dlgCur.message?'<p class="hint" style="margin-top:0;white-space:pre-line">'+esc(dlgCur.message)+'</p>':"")+
-      (dlgCur.html||"")+
-      fields.map(f=>'<label class="field"><span>'+esc(f.label)+'</span>'+
-        (f.type==="select"
-          ? '<select id="'+esc(f.id)+'">'+(f.options||[]).map(op=>
-              '<option value="'+esc(op.v)+'"'+(String(op.v)===String(f.value)?" selected":"")+'>'+
-              esc(op.t)+'</option>').join("")+'</select>'
-          : '<input type="'+esc(f.type||"text")+'" id="'+esc(f.id)+'" value="'+
-              esc(f.value==null?"":f.value)+'" placeholder="'+esc(f.placeholder||"")+'"'+
-              (f.step?' step="'+esc(f.step)+'"':"")+(f.min!=null?' min="'+esc(f.min)+'"':"")+'>')+
-        '</label>').join("");
-    const ok=el("dlgOk");
-    ok.textContent=dlgCur.ok||"تأكيد";
-    ok.className="btn "+(dlgCur.danger?"danger":"primary");
-    el("dlgBack").classList.remove("hidden");
-    const first=fields.length?document.getElementById(fields[0].id):null;
-    if(first && first.focus){ first.focus(); if(first.select) first.select(); }
+    if(dlgResolve){ dlgQueue.push({o:o,res:res}); return; }
+    dlgPrevFocus=document.activeElement||null;
+    dlgOpen(o,res);
   });
+}
+function dlgOpen(o,res){
+  dlgCur=o||{}; dlgResolve=res;
+  const fields=dlgCur.fields||[];
+  el("dlgTitle").textContent=dlgCur.title||"تأكيد";
+  el("dlgErr").innerHTML="";
+  el("dlgBody").innerHTML=
+    (dlgCur.message?'<p class="hint" style="margin-top:0;white-space:pre-line">'+esc(dlgCur.message)+'</p>':"")+
+    (dlgCur.html||"")+
+    fields.map(f=>'<label class="field"><span>'+esc(f.label)+'</span>'+
+      (f.type==="select"
+        ? '<select id="'+esc(f.id)+'">'+(f.options||[]).map(op=>
+            '<option value="'+esc(op.v)+'"'+(String(op.v)===String(f.value)?" selected":"")+'>'+
+            esc(op.t)+'</option>').join("")+'</select>'
+        : f.type==="textarea"
+        ? '<textarea id="'+esc(f.id)+'" rows="'+(f.rows||2)+'" placeholder="'+esc(f.placeholder||"")+'">'+
+            esc(f.value==null?"":f.value)+'</textarea>'
+        : '<input type="'+esc(f.type||"text")+'" id="'+esc(f.id)+'" value="'+
+            esc(f.value==null?"":f.value)+'" placeholder="'+esc(f.placeholder||"")+'"'+
+            (f.step?' step="'+esc(f.step)+'"':"")+(f.min!=null?' min="'+esc(f.min)+'"':"")+'>')+
+      (f.hint?'<span class="hint" style="display:block;font-weight:400">'+esc(f.hint)+'</span>':"")+
+      '</label>').join("");
+  const ok=el("dlgOk"), cancel=el("dlgCancel");
+  ok.textContent=dlgCur.ok||"تأكيد";
+  ok.className="btn "+(dlgCur.danger?"danger":"primary");
+  cancel.textContent=dlgCur.cancel||"إلغاء";
+  cancel.classList.toggle("hidden",!!dlgCur.noCancel);
+  el("dlgBack").classList.remove("hidden");
+  if(typeof dlgCur.onOpen==="function"){ try{ dlgCur.onOpen(); }catch(e){} }
+  /* التركيز الافتراضي: أول خانة، وإلا «إلغاء» بالنوافذ الخطرة حتى لا
+     يمرّ حذف بضغطة Enter عابرة، وإلا زر التأكيد. */
+  const first=fields.length?document.getElementById(fields[0].id):null;
+  const target=first || (dlgCur.danger && !dlgCur.noCancel ? cancel : ok);
+  if(target && target.focus){ try{ target.focus(); if(first && first.select) first.select(); }catch(e){} }
 }
 /* تأكيد بسيط بلا حقول */
 function confirmBox(title,message,opts){
   return dlgShow(Object.assign({title:title,message:message},opts||{})).then(v=>!!v);
+}
+/* بديل alert() المدمج: نافذة بزر واحد لا توقف تنفيذ الشيفرة — كل استدعاء لها
+   يكون آخر خطوة بمساره أو يليه return. تُرجع Promise تُحلّ عند الإغلاق. */
+function alertBox(message,title){
+  return dlgShow({title:title||"تنبيه", message:String(message==null?"":message),
+    ok:"حسناً", noCancel:true}).then(()=>true);
 }
 function dlgSubmit(){
   const o=dlgCur||{}, vals={};
@@ -1197,7 +1261,7 @@ function applyTheme(){
   r.style.setProperty("--ink-2",tint(shade(p.base,.35),.35));
 }
 
-/* ==================== التخزين ====================
+/* ==================== [تخزين] التخزين ====================
    IndexedDB هو قاعدة البيانات الأساسية داخل الجهاز: تفتح تلقائياً مع البرنامج
    بدون أي ملف. ملف الداتا اختياري للنقل بين الحواسيب والنسخ الاحتياطي. */
 const KEY="state", HKEY="fileHandle";
@@ -1226,16 +1290,65 @@ function lsSet(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ ret
    الحفظ حتى تكتمل القراءة. */
 let stateLoaded=false;
 
+/* الطابع الزمني يُكتب فقط إذا نجحت كتابة البيانات نفسها. كان يُكتب دائماً،
+   فعند امتلاء localStorage تبقى فيه نسخة قديمة بطابع أحدث من IndexedDB،
+   وعند الفتح التالي تفوز القديمة وتضيع كل تعديلات ما بعد الامتلاء. */
 async function persistState(){
   if(!stateLoaded) return false;
+  if(roLocked) return false;          // النافذة الثانية لا تكتب أبداً
   const t=Date.now(); state.savedAt=t;
   const s=JSON.stringify(state);
-  const a=await idbSet(KEY,s); await idbSet(KEY+"_t",t);
-  const b=lsSet("jard_pro_state",s); lsSet("jard_pro_state_t",String(t)); return a||b; }
+  const a=await idbSet(KEY,s); if(a) await idbSet(KEY+"_t",t);
+  const b=lsSet("jard_pro_state",s); if(b) lsSet("jard_pro_state_t",String(t));
+  return a||b; }
 /* حفظ متزامن فوري (يُستدعى عند إغلاق الصفحة) — localStorage فقط لأنه متزامن */
 function flushSync(){
-  if(!stateLoaded) return;
-  try{ lsSet("jard_pro_state",JSON.stringify(state)); lsSet("jard_pro_state_t",String(Date.now())); }catch(e){} }
+  if(!stateLoaded || roLocked) return;
+  try{ if(lsSet("jard_pro_state",JSON.stringify(state))) lsSet("jard_pro_state_t",String(Date.now())); }catch(e){} }
+
+/* ==================== [تخزين] قفل النافذة الواحدة ====================
+   نافذتان مفتوحتان على نفس البيانات تعني أن كل واحدة تكتب فوق الثانية:
+   آخر من يحفظ يفوز، فتضيع تأشيرات يوم كامل بلا أي إنذار. النافذة الثانية
+   تصير للقراءة فقط: لا تكتب شيئاً، ويظهر فوقها شريط يقول ذلك.
+   القناة BroadcastChannel، وإن لم تتوفّر نستعمل حدث storage. */
+const LOCK_CH="jard_pro_lock", LOCK_LS="jard_pro_lock_msg";
+const TAB_ID=uid();
+let roLocked=false, lockChan=null;
+function lockSend(msg){
+  msg.id=TAB_ID; msg.at=Date.now();
+  try{ if(lockChan) lockChan.postMessage(msg); }catch(e){}
+  /* الاحتياط: حدث storage يصل لبقية النوافذ بنفس الأصل */
+  try{ lsSet(LOCK_LS, JSON.stringify(msg)); }catch(e){}
+}
+function setReadOnly(on){
+  if(roLocked===on) return;
+  roLocked=on;
+  const b=el("lockBar");
+  if(b && b.classList){ if(on) b.classList.remove("hidden"); else b.classList.add("hidden"); }
+  if(on) badge("ro"); else badge("local");
+}
+function lockRecv(msg){
+  if(!msg || msg.id===TAB_ID) return;
+  if(msg.t==="hello"){
+    /* نافذة جديدة تسأل: إذا كنا النسخة الفعّالة نردّ عليها فتقفل نفسها */
+    if(!roLocked) lockSend({t:"here", to:msg.id});
+    return;
+  }
+  if(msg.t==="here" && msg.to===TAB_ID){ setReadOnly(true); return; }
+  if(msg.t==="bye" && roLocked){ setReadOnly(false); }
+}
+function lockInit(){
+  try{ lockChan=new BroadcastChannel(LOCK_CH); lockChan.onmessage=ev=>lockRecv(ev.data); }
+  catch(e){ lockChan=null; }
+  try{
+    window.addEventListener("storage",ev=>{
+      if(!ev || ev.key!==LOCK_LS || !ev.newValue) return;
+      try{ lockRecv(JSON.parse(ev.newValue)); }catch(_){}
+    });
+  }catch(e){}
+  lockSend({t:"hello"});
+  try{ window.addEventListener("beforeunload",()=>{ if(!roLocked) lockSend({t:"bye"}); }); }catch(e){}
+}
 
 /* هل هذه النسخة فارغة فعلياً؟ (بلا عمال وبلا أيام جرد بأي شركة) */
 function looksEmpty(raw){
@@ -1267,15 +1380,26 @@ async function writeFile(){ if(!fileHandle)return false; try{
 }catch(e){ return false; } }
 /* (أُزيلت verifyPerm — الفحص يتم مباشرة عند الإقلاع) */
 
-/* ==================== نموذج البيانات ==================== */
+/* ==================== [نموذج] نموذج البيانات ==================== */
 /* رقم الوثيقة بصيغة واحدة لكل الوصولات: بادئة ، سنة ، تسلسل من ثلاث خانات.
-   مُستقلّ عن C() حتى يقدر الترحيل يولّد أرقاماً قبل تهيئة الشركة الحالية. */
-function docNo(prefix,n){
-  return prefix+"-"+new Date().getFullYear()+"-"+String(Math.max(1,n|0)).padStart(3,"0");
+   مُستقلّ عن C() حتى يقدر الترحيل يولّد أرقاماً قبل تهيئة الشركة الحالية.
+   السنة من تاريخ الوثيقة نفسها إن مُرِّر — لا من ساعة الجهاز يوم الإصدار. */
+function docNo(prefix,n,iso){
+  const y=/^\d{4}-/.test(String(iso||"")) ? String(iso).slice(0,4) : String(new Date().getFullYear());
+  return prefix+"-"+y+"-"+String(Math.max(1,n|0)).padStart(3,"0");
+}
+/* الرقم التالي غير المستعمل: العدّاد + ١، مع تخطّي أي رقم موجود فعلاً
+   بالقائمة. العدّاد وحده ما كان يضمن التفرّد (بيانات مستوردة أو مرحّلة)
+   فيطلع رقمان متطابقان لوثيقتين. يرجّع الرقم وقيمة العدّاد التي تخصّه. */
+function freshDocNo(prefix,list,seq,iso){
+  const used={}; (list||[]).forEach(x=>{ if(x && x.no) used[x.no]=1; });
+  let n=Math.max(0,Number(seq)||0)+1, no=docNo(prefix,n,iso), guard=0;
+  while(used[no] && guard++<100000){ n++; no=docNo(prefix,n,iso); }
+  return {no:no, n:n};
 }
 const ZONE_COLORS=["#4B2E83","#B8912E","#2C6E49","#9B1C31","#1D6A8C","#7A3E9D","#B5651D","#3E5C76"];
 
-/* ==================== حالات العمل ====================
+/* ==================== [نموذج] حالات العمل ====================
    مصدر واحد للحقيقة: أي نص حالة بالبرنامج يخرج من هنا، فلا تتكرّر
    السلاسل النصية بعشرة أماكن وتنحرف إحداها بحرف فينكسر الفلتر. */
 const WS_ACTIVE="مستمر", WS_MOVE="منقول", WS_END="إنهاء خدمات",
@@ -1326,7 +1450,7 @@ function workerOptionLabel(w){
 }
 function normName(v){ return String(v==null?"":v).trim().replace(/\s+/g," "); }
 
-/* ==================== الترتيب الأبجدي العربي ====================
+/* ==================== [أدوات] الترتيب الأبجدي العربي ====================
    الترتيب الافتراضي لجافاسكربت يقارن رموز يونيكود، فيطلع «آلاء» قبل
    «إبراهيم» و«ىوسف» بعد «ياسر» — انحراف واضح على ورقة رسمية.
    Intl.Collator("ar") يرتّب بقواعد العربية، ومفتاح الفرز يُطبَّع قبله:
@@ -1415,6 +1539,7 @@ function normalizeWorker(w){
   if(w.statusChangedAt==null) w.statusChangedAt="";
   if(w.statusNote==null) w.statusNote="";
   if(w.status===WS_ACTIVE && w.statusChangedAt) w.statusChangedAt="";
+  if(!Array.isArray(w.statusHistory)) w.statusHistory=[];
   return w;
 }
 /* عامل جديد بكل الحقول المعتمدة */
@@ -1424,12 +1549,18 @@ function newWorker(o){
     createdAt:o.createdAt||todayISO(),
     phone:normPhone(o.phone), phone2:normPhone(o.phone2), address:String(o.address||"").trim(),
     motherName:normName(o.motherName), dob:normDob(o.dob), status:normStatus(o.status),
-    statusChangedAt:"", statusNote:"" });
+    statusChangedAt:"", statusNote:"", statusHistory:[] });
 }
-/* تغيير الحالة بمسار واحد: يضبط التاريخ والملاحظة ولا يمسّ أي سجل تاريخي */
+/* تغيير الحالة بمسار واحد: يضبط التاريخ والملاحظة، ويسجّل القيد في
+   w.statusHistory، ولا يمسّ أي سجل تاريخي آخر. كل مسار يغيّر الحالة
+   (القائمة، نافذة الحالة، قرار إنهاء الخدمة، حذف القرار) يمرّ من هنا،
+   فيبقى سجل التغييرات كاملاً للجرد التفصيلي وصفحة «التغييرات خلال الشهر».
+   opts: date (تاريخ السريان: آخر يوم عمل، أو يوم الرجوع لـ«مستمر»)، note،
+   ref (رقم الوثيقة المسبّبة)، undo (قيد يلغي قراراً)، noLog. */
 function setWorkerStatus(w, next, opts){
   if(!w) return false;
   opts=opts||{};
+  const from=getWorkerStatus(w), fromDate=w.statusChangedAt||"";
   const nx=normStatus(next);
   w.status=nx;
   if(nx===WS_ACTIVE){
@@ -1438,6 +1569,13 @@ function setWorkerStatus(w, next, opts){
   }else{
     w.statusChangedAt = opts.date || w.statusChangedAt || todayISO();
     if(opts.note!==undefined) w.statusNote=String(opts.note||"");
+  }
+  if(!opts.noLog && (from!==nx || fromDate!==(w.statusChangedAt||""))){
+    if(!Array.isArray(w.statusHistory)) w.statusHistory=[];
+    const e={ from:from, to:nx, date:(nx===WS_ACTIVE ? (opts.date||todayISO()) : w.statusChangedAt),
+      note:String(w.statusNote||""), ref:String(opts.ref||""), at:todayISO() };
+    if(opts.undo) e.undo=true;
+    w.statusHistory.push(e);
   }
   return true;
 }
@@ -1459,7 +1597,9 @@ function blankCompany(name){
             {id:z2,name:"الأقسام الخارجية",short:"خارجي",color:"#B8912E"} ],
     sections:[], workers:[], days:{}, leaves:[], leaveSeq:0,
     penalties:[], penSeq:0, achievements:[], achSeq:0,
-    materials:defaultMaterials(), issues:[], issueSeq:0, matSeeded:true, payV3:true, payV5:true
+    materials:defaultMaterials(), issues:[], issueSeq:0, matSeeded:true, payV3:true, payV5:true,
+    /* شركة جديدة: قاعدة شهر الـ٣١ يوماً تسري دائماً (راجع buildReport) */
+    payV6:true, pay31From:"0000-00"
   };
 }
 function defaultState(){ const c=blankCompany("شركتي"); return { v:2, companies:[c], active:c.id }; }
@@ -1567,6 +1707,42 @@ function ensureFields(st){
       });
       c.payV5=true;
     }
+    /* ترحيل ٦ (v4) — متكرر بلا أثر، لا يحذف ولا يعدّل أي سجل قائم:
+       - سجل الحالة: كل عامل يأخذ مصفوفة statusHistory، وغير المستمر بلا
+         سجل يأخذ قيداً واحداً من حالته وتاريخه الحاليين معلَّماً migrated —
+         لا نخترع تاريخاً سابقاً لا نعرفه.
+       - غير المستمر بلا تاريخ تغيير (بيانات مستوردة): يُثبَّت له تاريخ يوم
+         الترحيل مرة واحدة، لأن inService كان يستبعده «من اليوم فصاعداً»
+         فيتغيّر ماضيه كل يوم يُفتح فيه البرنامج.
+       - وثيقة «بأيام» بلا أجر يوم مجمَّد: يُجمَّد بالقاعدة التي كانت تُطبَّق
+         عليها قبل الترحيل، ثم تتوحّد القاعدة للوثائق الجديدة على dailyRateFor
+         — فلا يتغيّر مبلغ أي وثيقة محفوظة.
+       - pay31From: شهر بدء إصلاح أشهر الـ٣١ يوماً؛ الأشهر السابقة تبقى
+         تُحسب كما صُرفت. */
+    if(!c.payV6){
+      const mToday=todayISO(), S6=c.settings||{};
+      const salOf=w=>(w && w.salary!=null && w.salary!=="") ? Number(w.salary)||0 : Number(S6.salary)||0;
+      const rateOf=w=>{ const d=Number(S6.workDays)||30; return d>0 ? salOf(w)/d : 0; };
+      const dedOf=w=>(w && w.deduct!=null && w.deduct!=="") ? Number(w.deduct)||0
+        : (S6.dedMode==="auto" ? rateOf(w) : Number(S6.deduct)||0);
+      const wOf=id=>(c.workers||[]).find(x=>x && x.id===id)||null;
+      (c.workers||[]).forEach(w=>{
+        if(!w || typeof w!=="object") return;
+        if(!Array.isArray(w.statusHistory)) w.statusHistory=[];
+        const st=normStatus(w.status);
+        if(st!==WS_ACTIVE && !w.statusChangedAt){
+          w.statusChangedAt=mToday;
+          if(!w.statusNote) w.statusNote="تاريخ مثبّت عند الترحيل";
+        }
+        if(st!==WS_ACTIVE && !w.statusHistory.length)
+          w.statusHistory.push({ from:"", to:st, date:w.statusChangedAt, note:String(w.statusNote||""),
+            ref:"", at:mToday, migrated:true });
+      });
+      (c.penalties||[]).forEach(x=>{ if(x && x.kind==="days" && (x.dayRate==null||x.dayRate==="")) x.dayRate=dedOf(wOf(x.workerId)); });
+      (c.achievements||[]).forEach(x=>{ if(x && x.kind==="days" && (x.dayRate==null||x.dayRate==="")) x.dayRate=rateOf(wOf(x.workerId)); });
+      if(!c.pay31From) c.pay31From=mToday.slice(0,7);
+      c.payV6=true;
+    }
     (c.zones||[]).forEach((z,i)=>{ if(!z.color) z.color=ZONE_COLORS[i%ZONE_COLORS.length]; });
     /* ترحيل ٤: التولد واسم الأم وحالة العمل.
        كل عامل قديم يحصل على القيم الافتراضية، وأي status غير رسمي يُصحَّح
@@ -1593,13 +1769,17 @@ function migrate(obj){
   return defaultState();
 }
 
-/* ==================== الحفظ التلقائي ==================== */
+/* ==================== [تخزين] الحفظ التلقائي ==================== */
 function queueSave(){
+  if(roLocked){ badge("ro"); return; }
   clearTimeout(saveTimer);
   badge("saving");
   saveTimer=setTimeout(async()=>{
-    await persistState();
-    if(fileHandle){ const ok=await writeFile(); badge(ok?"file":"err"); }
+    const ok=await persistState();
+    /* فشل الحفظ بالمخزنين معاً (متصفح خاص ممتلئ أو ممنوع) يُعلَن بوضوح،
+       لأن البيانات عندها موجودة بالذاكرة فقط وتضيع بإغلاق الصفحة. */
+    if(!ok && stateLoaded && !roLocked){ badge("fail"); return; }
+    if(fileHandle){ const f=await writeFile(); badge(f?"file":"err"); }
     else badge("local");
   },250);
 }
@@ -1608,11 +1788,13 @@ function badge(m){
   if(m==="saving"){ b.textContent="يحفظ…"; b.className="dbbadge"; return; }
   if(m==="file"){ b.textContent="محفوظ تلقائياً + الملف ✓"; b.className="dbbadge ok"; return; }
   if(m==="err"){ b.textContent="الملف غير متاح — محفوظ محلياً"; b.className="dbbadge warn"; return; }
+  if(m==="fail"){ b.textContent="تعذّر الحفظ — نزّل نسخة الآن"; b.className="dbbadge bad"; return; }
+  if(m==="ro"){ b.textContent="للقراءة فقط — نافذة ثانية مفتوحة"; b.className="dbbadge warn"; return; }
   b.textContent="محفوظ تلقائياً ✓"; b.className="dbbadge ok";
 }
 function updateReminder(){ /* أُزيل الشريط التذكيري — التبسيط */ }
 
-/* ==================== أرقام وتواريخ ==================== */
+/* ==================== [أدوات] أرقام وتواريخ ==================== */
 const AR="٠١٢٣٤٥٦٧٨٩";
 function fmtNum(n){ const s=String(n); return S().numerals==="arab"? s.replace(/\d/g,d=>AR[+d]) : s; }
 function dayNameOf(iso){ try{ return new Intl.DateTimeFormat("ar-IQ",{weekday:"long"}).format(parseISO(iso)); }catch(e){ return ""; } }
@@ -1625,7 +1807,7 @@ function dateSlash(iso){
   return p.length<3 ? "" : fmtNum(p[0])+"/"+fmtNum(p[1])+"/"+fmtNum(p[2]);
 }
 
-/* ==================== الحسابات ==================== */
+/* ==================== [محرّك] الحسابات ==================== */
 function dayRec(iso){ const c=C(); if(!c.days[iso]) c.days[iso]={states:{},notes:""}; return c.days[iso]; }
 function stateOf(iso,wid){ const c=C(); const r=c.days[iso]; return (r&&r.states[wid])?r.states[wid]:"present"; }
 function sectionOf(id){ return C().sections.find(s=>s.id===id); }
@@ -1641,8 +1823,12 @@ function compute(iso){
   const c=C(), st=c.settings;
   // العمال ضمن الخدمة في هذا اليوم فقط (لا يظهر عامل جديد في جرد سابق)
   const ws=c.workers.filter(w=>inService(w,iso));
+  /* فهرس الإجازات لكل عامل: كان كل عامل يمسح قائمة الإجازات كاملة،
+     فيوم واحد بـ٨٠٠ عامل و٣٢٠٠ إجازة = ٢٫٥ مليون مقارنة، وتبويب السجل
+     (يومان بكل شهر محفوظ) يتجمّد خمس ثوانٍ. */
+  const lvIdx=indexByWorker(c.leaves||[]);
   const o={ total:ws.length, present:0, absent:0, misc:0, leave:0, off:0,
-    absentNames:[], miscNames:[], offNames:[], byZone:{}, none:0, sections:0 };
+    absentNames:[], miscNames:[], leaveNames:[], offNames:[], byZone:{}, none:0, sections:0 };
   c.zones.forEach(z=>o.byZone[z.id]=0);
   const act=new Set();
   const asPresent=w=>{
@@ -1652,15 +1838,14 @@ function compute(iso){
     else o.none++;
   };
   ws.forEach(w=>{
-    // نفس ترتيب الأولوية المعتمد في كشف الرواتب: أوف ← إجازة ← تأشير الجرد
-    // الأوف يوم راحة من الشركة: مدفوع بالكامل ولا يُستقطع عنه،
-    // لكنه ليس حضوراً فعلياً — فلا يدخل «الحضور الكلي» ولا أعداد المناطق
-    if(isOffDay(w,iso)){ o.off++; o.offNames.push(w.name); return; }
-    const _lv=leaveAt(w.id,iso);
-    if(_lv && !isTimedLeave(_lv)){ o.leave++; o.miscNames.push(w.name+" (إجازة)"); return; }
-    const s=stateOf(iso,w.id);
-    if(s==="absent"){ o.absent++; o.absentNames.push(w.name); return; }
-    if(s==="misc"){ o.misc++; o.miscNames.push(w.name); return; }
+    /* نفس التصنيف الذي يقرأ منه كشف الرواتب حرفاً بحرف (classifyDay):
+       أوف ← إجازة غير زمنية ← تأشير الجرد. الأوف يوم راحة مدفوع لكنه
+       ليس حضوراً فعلياً — فلا يدخل «الحضور الكلي» ولا أعداد المناطق. */
+    const k=classifyDay(w,iso,lvIdx.get(w.id)||null).k;
+    if(k==="off"){ o.off++; o.offNames.push(w.name); return; }
+    if(k==="leave"){ o.leave++; o.leaveNames.push(w.name); o.miscNames.push(w.name+" (إجازة)"); return; }
+    if(k==="absent"){ o.absent++; o.absentNames.push(w.name); return; }
+    if(k==="misc"){ o.misc++; o.miscNames.push(w.name); return; }
     asPresent(w);
   });
   o.attendance = st.miscInTotal==="yes" ? o.present+o.misc : o.present;
@@ -1668,17 +1853,19 @@ function compute(iso){
   return o;
 }
 
-/* ==================== العدّاد ==================== */
+/* ==================== [واجهة] العدّاد ==================== */
 function renderTally(){
   const c=compute(curDate), zs=C().zones;
   let items=[["الحضور الكلي",c.attendance,"t-hero"],["عدد الأقسام",c.sections,""]];
   zs.forEach(z=>items.push([z.short||z.name,c.byZone[z.id],""]));
   if(c.none) items.push(["بدون قسم",c.none,""]);
-  items.push(["الغياب",c.absent,"t-absent"],["المتفرقة",c.misc,"t-misc"],["المجموع الكلي",c.total,"t-total"]);
+  /* الإجازة والأوف خانتان مستقلتان: بدونهما لا يساوي مجموع الخانات «المجموع الكلي» */
+  items.push(["الغياب",c.absent,"t-absent"],["المتفرقة",c.misc,"t-misc"],
+    ["إجازة",c.leave,"t-leave"],["أوف",c.off,"t-off"],["المجموع الكلي",c.total,"t-total"]);
   el("tally").innerHTML=items.map(i=>'<div class="'+i[2]+'"><div class="k">'+esc(i[0])+'</div><div class="v">'+fmtNum(i[1])+'</div></div>').join("");
 }
 
-/* ==================== كشف العمال ==================== */
+/* ==================== [واجهة] كشف العمال ==================== */
 function renderRoster(){
   const host=el("roster"), c=C();
   if(c.workers.length===0){
@@ -1691,6 +1878,7 @@ function renderRoster(){
     return;
   }
   const q=el("search").value.trim();
+  const today=compute(curDate);          // مرة واحدة للكشف كله لا لكل منطقة
   let html="";
   c.zones.forEach(z=>{
     const secs=sortedSections().filter(s=>s.zoneId===z.id);
@@ -1700,15 +1888,15 @@ function renderRoster(){
       if(q) list=list.filter(w=>w.name.indexOf(q)!==-1);
       if(!list.length) return;
       const pres=list.filter(w=>stateOf(curDate,w.id)==="present").length;
-      any+='<div class="sec"><div class="sec-head"><h3>'+esc(sec.name)+'</h3>'+
+      any+='<div class="sec" data-sec="'+sec.id+'"><div class="sec-head"><h3>'+esc(sec.name)+'</h3>'+
         '<span class="cnt">حاضر '+fmtNum(pres)+' من '+fmtNum(list.length)+'</span></div>'+
         '<div class="grid">'+list.map(wcard).join("")+'</div></div>';
     });
     if(any){
-      const zc=compute(curDate).byZone[z.id]||0;
+      const zc=today.byZone[z.id]||0;
       const col=z.color||ZONE_COLORS[c.zones.indexOf(z)%ZONE_COLORS.length];
       html+='<div class="zbar" style="background:'+esc(col)+';color:'+esc(readable(col))+'"><b>'+esc(z.name)+
-        '</b><span class="zc" style="color:'+esc(readable(col))+';opacity:.85">حضور '+fmtNum(zc)+'</span></div>'+any;
+        '</b><span class="zc" data-zc="'+z.id+'" style="color:'+esc(readable(col))+';opacity:.85">حضور '+fmtNum(zc)+'</span></div>'+any;
     }
   });
   let orph=c.workers.filter(w=>!sectionOf(w.sectionId) && inService(w,curDate));
@@ -1719,20 +1907,49 @@ function renderRoster(){
 function wcard(w){
   const st=stateOf(curDate,w.id);
   const off=isOffDay(w,curDate);
-  return '<div class="wcard" data-s="'+st+'"><span class="nm" title="'+esc(w.name)+'">'+esc(w.name)+
+  const pr=v=>' aria-pressed="'+(st===v?"true":"false")+'"';
+  return '<div class="wcard" data-s="'+st+'" data-wid="'+w.id+'"><span class="nm" title="'+esc(w.name)+'">'+esc(w.name)+
     (off?' <span class="offtag">أوف</span>':'')+'</span>'+
-    '<span class="states">'+
-    '<button class="st-p" data-w="'+w.id+'" data-set="present" title="حاضر">ح</button>'+
-    '<button class="st-a" data-w="'+w.id+'" data-set="absent" title="غائب">غ</button>'+
-    '<button class="st-m" data-w="'+w.id+'" data-set="misc" title="متفرقة">م</button></span></div>';
+    '<span class="states" role="group" aria-label="تأشير '+esc(w.name)+'">'+
+    '<button class="st-p" data-w="'+w.id+'" data-set="present" title="حاضر" aria-label="حاضر"'+pr("present")+'>ح</button>'+
+    '<button class="st-a" data-w="'+w.id+'" data-set="absent" title="غائب" aria-label="غائب"'+pr("absent")+'>غ</button>'+
+    '<button class="st-m" data-w="'+w.id+'" data-set="misc" title="متفرقة" aria-label="متفرقة"'+pr("misc")+'>م</button></span></div>';
 }
+/* ٨٠٠ عامل يُؤشَّرون يومياً: النقرة تحدّث بطاقتها وعدّاد قسمها ومنطقتها
+   والعدّاد العام فقط، والورقة تُرسم بعد توقّف النقر. إعادة بناء الكشف كله
+   مع كل نقرة كانت تأخذ ٩٠ مللي ثانية وتُفقد مكان التمرير والتركيز. */
+let sheetTimer=null;
 el("roster").addEventListener("click",e=>{
   const b=e.target.closest("button[data-set]"); if(!b)return;
   const rec=dayRec(curDate); rec.states[b.dataset.w]=b.dataset.set; rec.confirmed=true;
-  queueSave(); refresh();
+  queueSave();
+  const card=b.closest(".wcard");
+  if(!card){ refresh(); return; }
+  card.dataset.s=b.dataset.set;
+  card.querySelectorAll("button[data-set]").forEach(x=>x.setAttribute("aria-pressed",x===b?"true":"false"));
+  const secBox=card.closest("[data-sec]");
+  if(secBox){
+    const ids=[...secBox.querySelectorAll(".wcard")].map(x=>x.dataset.wid);
+    const pres=ids.filter(id=>stateOf(curDate,id)==="present").length;
+    const cnt=secBox.querySelector(".cnt"); if(cnt) cnt.textContent="حاضر "+fmtNum(pres)+" من "+fmtNum(ids.length);
+  }
+  const today=compute(curDate);
+  document.querySelectorAll("#roster [data-zc]").forEach(z=>{ z.textContent="حضور "+fmtNum(today.byZone[z.dataset.zc]||0); });
+  renderTally(); renderDayStatus(); syncConfirmBtn();
+  clearTimeout(sheetTimer); sheetTimer=setTimeout(drawSheet,350);
 });
 el("search").addEventListener("input",renderRoster);
-el("allPresent").onclick=()=>{ const r=dayRec(curDate); r.states={}; r.confirmed=true; queueSave(); refresh(); };
+/* «الكل حاضر» يمسح كل تأشيرات اليوم — ما ينضغط سهواً على يوم مؤشَّر */
+el("allPresent").onclick=()=>{
+  const r=dayRec(curDate), st=r.states||{};
+  let a=0, m=0;
+  Object.keys(st).forEach(k=>{ if(st[k]==="absent") a++; else if(st[k]==="misc") m++; });
+  const go=()=>{ r.states={}; r.confirmed=true; queueSave(); refresh(); };
+  if(!a && !m){ go(); return; }
+  const parts=[]; if(a) parts.push(fmtNum(a)+" غياب"); if(m) parts.push(fmtNum(m)+" متفرقة");
+  confirmBox("الكل حاضر","باليوم "+dateTextOf(curDate)+" مؤشّر "+parts.join(" و")+".\n"+
+    "«الكل حاضر» يمسحها كلها ويعتبر الجميع حاضرين.",{ok:"امسح واعتبر الكل حاضر",danger:true}).then(ok=>{ if(ok) go(); });
+};
 el("confirmDay").onclick=()=>{
   const r=dayRec(curDate); r.confirmed=true; queueSave(); refresh();
   el("savedNote").textContent="تم اعتماد اليوم ✓"; setTimeout(()=>el("savedNote").textContent="",1600);
@@ -1761,7 +1978,7 @@ function renderDayStatus(){
   }
 }
 
-/* ==================== رسم ورقة A4 ==================== */
+/* ==================== [رسم] رسم ورقة A4 ==================== */
 const SH_W=1240, SH_H=1754, PAD=62;
 const FF='"Dubai","Segoe UI","Noto Naskh Arabic",Tahoma,Arial,sans-serif';
 /* لوحة أبيض وأسود للطابعات غير الملوّنة.
@@ -1787,13 +2004,20 @@ function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x
   c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
 function line(c,x1,y1,x2,y2){ c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke(); }
 
-/* ---- التوقيع المحفوظ: يُرسم فوق خط التوقيع بنسبة محفوظة ---- */
+/* ---- التوقيع المحفوظ: يُرسم فوق خط التوقيع بنسبة محفوظة ----
+   الكاشان مفتاحهما نص الصورة نفسه (src)، فلا يمكن أن تُرسم صورة شركة على
+   ورقة شركة أخرى؛ ويُصفَّران عند تبديل الشركة احتياطاً. المؤقّت مستقل عن
+   drawTimer حتى لا يلغي تحميلُ صورة إعادةَ رسم كان ينتظرها نموذج آخر. */
 const sigCache={};
+let imgTimer=null;
+function redrawSheets(){ drawSheet(); drawLeave(); drawPenalty(); drawAchievement(); drawIssue(); }
 function sigImage(){
   const d=S().signature; if(!d) return null;
   if(sigCache.src===d && sigCache.img && sigCache.img.complete) return sigCache.img;
   const im=new Image();
-  im.onload=()=>{ clearTimeout(drawTimer); drawTimer=setTimeout(()=>{ drawSheet(); drawLeave(); },40); };
+  /* بعد تحميل الصورة تُعاد كل المعاينات — لا ورقة الجرد والإجازة وحدهما،
+     وإلا تطلع معاينة العقوبة والمكافأة والمواد أول مرة بلا توقيع. */
+  im.onload=()=>{ clearTimeout(imgTimer); imgTimer=setTimeout(redrawSheets,40); };
   im.src=d; sigCache.src=d; sigCache.img=im;
   return im.complete?im:null;
 }
@@ -1805,8 +2029,7 @@ function logoImage(){
   const d=S().logo; if(!d) return null;
   if(logoCache.src===d && logoCache.img && logoCache.img.complete) return logoCache.img;
   const im=new Image();
-  im.onload=()=>{ clearTimeout(drawTimer); drawTimer=setTimeout(()=>{
-    drawSheet(); drawLeave(); drawPenalty(); drawAchievement(); drawIssue(); },40); };
+  im.onload=()=>{ clearTimeout(imgTimer); imgTimer=setTimeout(redrawSheets,40); };
   im.src=d; logoCache.src=d; logoCache.img=im;
   return im.complete?im:null;
 }
@@ -2041,7 +2264,7 @@ function nameBlock(ctx,title,names,x,y,W,color,bg,fs,cols,realCount){
   return y+bodyH;
 }
 
-/* ==================== أزرار الورقة ==================== */
+/* ==================== [تصدير] أزرار الورقة ==================== */
 function dl(url,name){ const a=document.createElement("a"); a.href=url; a.download=name;
   document.body.appendChild(a); a.click(); a.remove(); }
 /* يرسم الورقة على لوحة منفصلة بالدقة المطلوبة — المعاينة تبقى خفيفة */
@@ -2057,8 +2280,12 @@ el("dlPng").onclick=()=>{
 el("printBtn").onclick=()=>{
   const img=sheetHiRes().toDataURL("image/png");
   const w=window.open("","_blank");
-  if(!w){ alert("المتصفح منع فتح النافذة. اسمح بالنوافذ المنبثقة."); return; }
-  w.document.write('<html><head><title>جرد '+curDate+'</title><style>@page{size:A4;margin:0}body{margin:0}img{width:100%;display:block}</style></head><body><img src="'+img+'"></body></html>');
+  if(!w){ alertBox("المتصفح منع فتح النافذة. اسمح بالنوافذ المنبثقة."); return; }
+  /* الصورة بنسبة ١٢٤٠:١٧٥٤ تطلع بعرض ٢١٠مم أطول من ٢٩٧مم بجزء من المليمتر،
+     فكانت تُطبع على صفحتين والثانية فارغة. المقاس مثبّت والفائض مقصوص. */
+  w.document.write('<html><head><meta charset="utf-8"><title>جرد '+curDate+'</title><style>@page{size:A4 portrait;margin:0}'+
+    'html,body{margin:0;padding:0;width:210mm;height:297mm;overflow:hidden}'+
+    'img{width:210mm;height:297mm;display:block;object-fit:contain}</style></head><body><img src="'+img+'"></body></html>');
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
 el("copyTxt").onclick=()=>{
@@ -2073,10 +2300,10 @@ el("copyTxt").onclick=()=>{
     "الملاحظات: "+(rec.notes||"—"),"",s.signer||"");
   navigator.clipboard.writeText(L.join("\n")).then(
     ()=>{ el("savedNote").textContent="انتسخ النص"; setTimeout(()=>el("savedNote").textContent="",1800); },
-    ()=>alert("تعذّر النسخ."));
+    ()=>alertBox("تعذّر النسخ."));
 };
 
-/* ==================== السجل ==================== */
+/* ==================== [واجهة] السجل ==================== */
 /* السجل مرتّب بمجلدات شهرية — الشهر الأحدث مفتوح والباقي مطوي */
 let openMonths=null;
 function monthLabel(ym){
@@ -2103,6 +2330,8 @@ function renderHistory(){
   if(openMonths===null) openMonths=new Set([order[0]]);   // الأحدث مفتوح
 
   const q=(el("histSearch").value||"").trim();
+  /* نتيجة كل يوم تُحسب مرة واحدة بالرسم الواحد (الخلاصة والجدول يقرآن منها) */
+  const memo={}; const cmp=k=>memo[k]||(memo[k]=compute(k));
   let html="";
   order.forEach(ym=>{
     let list=groups[ym];
@@ -2111,7 +2340,7 @@ function renderHistory(){
     const open=q?true:openMonths.has(ym);
     // خلاصة الشهر
     let conf=0, abs=0, msc=0;
-    groups[ym].forEach(k=>{ const x=compute(k); abs+=x.absent; msc+=x.misc;
+    groups[ym].forEach(k=>{ const x=cmp(k); abs+=x.absent; msc+=x.misc;
       if(c.days[k].confirmed) conf++; });
     const notConf=groups[ym].length-conf;
     html+='<div class="mfold'+(open?" open":"")+'">'+
@@ -2125,7 +2354,7 @@ function renderHistory(){
     if(open){
       html+='<div class="mbody"><table><thead><tr><th>التاريخ</th><th>اليوم</th><th>الحضور</th>'+
         '<th>الغياب</th><th>المتفرقة</th><th>الحالة</th><th></th></tr></thead><tbody>';
-      list.forEach(k=>{ const x=compute(k), ok=!!c.days[k].confirmed;
+      list.forEach(k=>{ const x=cmp(k), ok=!!c.days[k].confirmed;
         html+='<tr><td>'+dateTextOf(k)+'</td><td>'+dayNameOf(k)+'</td><td>'+fmtNum(x.attendance)+
           '</td><td>'+fmtNum(x.absent)+'</td><td>'+fmtNum(x.misc)+'</td>'+
           '<td>'+(ok?'<span class="stag ok">معتمد</span>':'<span class="stag warn">غير معتمد</span>')+'</td>'+
@@ -2152,10 +2381,19 @@ el("histExpand").onclick=()=>{
 el("historyBody").addEventListener("click",e=>{
   const o=e.target.closest("[data-open]"), d=e.target.closest("[data-del]");
   if(o){ curDate=o.dataset.open; el("dateInput").value=curDate; switchView("daily"); refresh(); }
-  if(d && confirm("يتحذف جرد يوم "+dateTextOf(d.dataset.del)+"؟")){ delete C().days[d.dataset.del]; queueSave(); refresh(); renderHistory(); }
+  if(d){
+    const k=d.dataset.del, rec=C().days[k]||{}, st=rec.states||{};
+    const n=Object.keys(st).length;
+    confirmBox("حذف يوم جرد","يتحذف جرد يوم "+dateTextOf(k)+"؟"+
+      (n?"\nفيه "+fmtNum(n)+" تأشير غياب أو متفرقة.":"")+
+      (rec.confirmed?"\nاليوم معتمد: حذفه يخرجه من حساب الرواتب.":""),{ok:"حذف",danger:true}).then(go=>{
+      if(!go) return;
+      delete C().days[k]; queueSave(); refresh(); renderHistory();
+    });
+  }
 });
 
-/* ==================== المناطق ==================== */
+/* ==================== [واجهة] المناطق ==================== */
 function renderZones(){
   const c=C();
   el("zoneList").innerHTML=c.zones.map((z,i)=>{
@@ -2213,7 +2451,7 @@ el("zoneList").addEventListener("click",e=>{
     ]}).then(v=>{
       if(!v) return;
       const n=normName(v.dzName);
-      if(!n){ alert("اسم المنطقة ما يصير فارغ."); return; }
+      if(!n){ alertBox("اسم المنطقة ما يصير فارغ."); return; }
       z.name=n; z.short=normName(v.dzShort)||n;
       queueSave(); refresh(); renderPeople();
     });
@@ -2236,7 +2474,7 @@ el("zoneList").addEventListener("click",e=>{
   if(up||dn){ queueSave(); refresh(); renderPeople(); }
 });
 
-/* ==================== الأقسام والعمال ==================== */
+/* ==================== [واجهة] الأقسام والعمال ==================== */
 function renderPeople(){
   const c=C();
   renderZones();
@@ -2313,7 +2551,7 @@ function renderPeople(){
 }
 el("addSec").onclick=()=>{
   const n=el("secName").value.trim(); if(!n){ el("secName").focus(); return; }
-  if(!C().zones.length){ alert("أضف منطقة أولاً (مثل: داخل البناية القديمة)."); return; }
+  if(!C().zones.length){ alertBox("أضف منطقة أولاً (مثل: داخل البناية القديمة)."); return; }
   C().sections.push({id:uid(),name:n,zoneId:el("secZone").value||C().zones[0].id});
   el("secName").value=""; queueSave(); refresh(); renderPeople();
 };
@@ -2323,7 +2561,7 @@ function commitSectionRename(id,val){
   const c=C(), s=c.sections.find(x=>x.id===id);
   if(!s){ editSecId=null; renderPeople(); return; }
   const name=String(val||"").trim().replace(/\s+/g," ");
-  if(!name){ alert("اسم القسم ما يصير فارغ."); return; }
+  if(!name){ alertBox("اسم القسم ما يصير فارغ."); return; }
   const dup=(name!==s.name && c.sections.some(x=>x.id!==id && x.name===name));
   const apply=()=>{
     s.name=name; editSecId=null;
@@ -2345,7 +2583,7 @@ el("secTable").addEventListener("click",e=>{
   const zn=e.target.closest("[data-seczone]");
   if(zn){
     const sec=c.sections.find(x=>x.id===zn.dataset.seczone); if(!sec) return;
-    if(!c.zones.length){ alert("ماكو مناطق مسجّلة."); return; }
+    if(!c.zones.length){ alertBox("ماكو مناطق مسجّلة."); return; }
     dlgShow({title:"منطقة القسم", message:"القسم: "+sec.name, ok:"حفظ", fields:[
       {id:"dsZone",label:"المنطقة",type:"select",value:sec.zoneId,
        options:c.zones.map(z=>({v:z.id,t:z.name}))}
@@ -2388,32 +2626,53 @@ el("addBulk").onclick=()=>{
   lines.forEach(n=>C().workers.push(newWorker({name:n,sectionId:sid})));
   el("bulk").value=""; queueSave(); refresh(); renderPeople(); renderVariables();
 };
+/* ---- حذف العامل ----
+   العامل الذي له سجل ما ينحذف بضغطة: حذفه يمحو أيام جرد ووصولات
+   وعقوبات دخلت كشوف رواتب موقّعة، فتتغيّر أرقام أشهر صُرفت. النافذة
+   تقترح «تغيير الحالة» (يختفي من الجرد ويبقى سجله)، والحذف النهائي
+   لعامل له سجل يشترط كتابة اسمه كاملاً. */
+function workerRecordCounts(w){
+  const c=C(), id=w.id;
+  return {
+    days:Object.keys(c.days).filter(k=>c.days[k] && c.days[k].states && c.days[k].states[id]).length,
+    lv:(c.leaves||[]).filter(l=>l.workerId===id).length,
+    pn:(c.penalties||[]).filter(l=>l.workerId===id).length,
+    ac:(c.achievements||[]).filter(l=>l.workerId===id).length,
+    iss:(c.issues||[]).filter(l=>l.workerId===id).length };
+}
+function purgeWorker(w){
+  const c=C(), id=w.id;
+  c.workers=c.workers.filter(x=>x.id!==id);
+  // لا نترك وصلاً يشير لعامل ما عاد موجوداً
+  c.leaves=(c.leaves||[]).filter(l=>l.workerId!==id);
+  c.penalties=(c.penalties||[]).filter(l=>l.workerId!==id);
+  c.achievements=(c.achievements||[]).filter(l=>l.workerId!==id);
+  c.issues=(c.issues||[]).filter(l=>l.workerId!==id);
+  Object.keys(c.days).forEach(k=>{ if(c.days[k]&&c.days[k].states) delete c.days[k].states[id]; });
+  queueSave(); refresh(); renderPeople(); renderVariables(); renderSalTable(); if(RP) runReport();
+}
 el("wTable").addEventListener("click",e=>{
   const d=e.target.closest("[data-wdel]"); if(!d)return;
-  const c=C(), w=c.workers.find(x=>x.id===d.dataset.wdel);
-  const days=Object.keys(c.days).filter(k=>c.days[k].states&&c.days[k].states[w.id]).length;
-  const lv=(c.leaves||[]).filter(l=>l.workerId===w.id).length;
-  const pn=(c.penalties||[]).filter(l=>l.workerId===w.id).length+
-           (c.achievements||[]).filter(l=>l.workerId===w.id).length;
-  const iss=(c.issues||[]).filter(l=>l.workerId===w.id).length;
-  let msg="يتحذف «"+w.name+"» نهائياً من الكشف؟";
-  if(days||lv||pn||iss){
-    msg+="\n\nراح يختفي من:";
-    if(days) msg+="\n· "+fmtNum(days)+" يوم مؤشّر بالجرد";
-    if(lv)   msg+="\n· "+fmtNum(lv)+" وصل إجازة";
-    if(pn)   msg+="\n· "+fmtNum(pn)+" إشعار عقوبة أو مكافأة";
-    if(iss)  msg+="\n· "+fmtNum(iss)+" وصل صرف مواد";
-    msg+="\n\nإذا الغرض تصحيح الاسم فقط، استعمل «تعديل الاسم» — يحافظ على كل سجله.";
+  const c=C(), w=c.workers.find(x=>x.id===d.dataset.wdel); if(!w) return;
+  const n=workerRecordCounts(w), total=n.days+n.lv+n.pn+n.ac+n.iss;
+  if(!total){
+    confirmBox("حذف عامل","يتحذف «"+w.name+"» نهائياً؟\nماكو أي سجل مرتبط بيه — ولا يوم جرد ولا وصل.",
+      {ok:"حذف نهائي",danger:true}).then(go=>{ if(go) purgeWorker(w); });
+    return;
   }
-  if(confirm(msg)){
-    c.workers=c.workers.filter(x=>x.id!==w.id);
-    // لا نترك وصلاً يشير لعامل ما عاد موجوداً
-    c.leaves=(c.leaves||[]).filter(l=>l.workerId!==w.id);
-    c.penalties=(c.penalties||[]).filter(l=>l.workerId!==w.id);
-    c.achievements=(c.achievements||[]).filter(l=>l.workerId!==w.id);
-    c.issues=(c.issues||[]).filter(l=>l.workerId!==w.id);
-    Object.keys(c.days).forEach(k=>{ if(c.days[k]&&c.days[k].states) delete c.days[k].states[w.id]; });
-    queueSave(); refresh(); renderPeople(); renderVariables(); if(RP) runReport(); }
+  const rows=[];
+  if(n.days) rows.push("· "+fmtNum(n.days)+" يوم مؤشّر بالجرد");
+  if(n.lv)   rows.push("· "+fmtNum(n.lv)+" وصل إجازة");
+  if(n.pn)   rows.push("· "+fmtNum(n.pn)+" إشعار عقوبة");
+  if(n.ac)   rows.push("· "+fmtNum(n.ac)+" إشعار مكافأة");
+  if(n.iss)  rows.push("· "+fmtNum(n.iss)+" وصل صرف مواد");
+  dlgShow({title:"حذف عامل له سجل", danger:true, ok:"حذف نهائي مع كل سجله",
+    message:"«"+w.name+"» عنده "+fmtNum(total)+" سجل مرتبط، وحذفه يمحيها كلها من كشوف سابقة:\n"+rows.join("\n")+
+      "\n\nإذا العامل ترك العمل أو انتقل، الصحيح هو «تغيير الحالة»: يختفي من الجرد الجديد ويبقى كل سجله ورواتبه."+
+      "\nإذا الغرض تصحيح الاسم، استعمل «تعديل الاسم».",
+    fields:[{id:"dwName",label:"للحذف النهائي اكتب اسم العامل كاملاً",placeholder:w.name}],
+    needWord:{field:"dwName",word:normName(w.name)}
+  }).then(v=>{ if(v) purgeWorker(w); });
 });
 el("wTable").addEventListener("change",e=>{
   const s=e.target.closest("[data-wsec]");
@@ -2426,7 +2685,7 @@ el("wTable").addEventListener("change",e=>{
   if(st) changeWorkerStatus(st.dataset.wstat, st.value);
 });
 
-/* ==================== تغيير حالة العامل ====================
+/* ==================== [واجهة] تغيير حالة العامل ====================
    مسار واحد تستعمله كل الواجهات (جدول العمال، دليل العمال، تبويب حالات العمال)
    حتى يبقى الأثر واحداً: لا يُحذف أي حضور ولا راتب ولا وصل — فقط تتوقف
    احتسابه في الأيام الجديدة من تاريخ التغيير. */
@@ -2435,34 +2694,66 @@ function statusOptions(sel, allLabel){
   return head+WSTATUSES.map(t=>
     '<option value="'+esc(t)+'"'+(t===sel?" selected":"")+'>'+esc(t)+'</option>').join("");
 }
+/* تطبيق التغيير ثم تحديث كل الواجهات المعنية */
+function applyStatusChange(w,nx,when,note){
+  setWorkerStatus(w,nx,{date:when, note:note});
+  queueSave(); refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable();
+  if(RP) runReport();
+  flash("انتغيّرت حالة «"+w.name+"» إلى «"+nx+"» ✓");
+}
+/* ---- نافذة تغيير الحالة: الحالة + تاريخ السريان + الملاحظة ----
+   كان التغيير من القائمة يأخذ تاريخ اليوم دائماً، فنقل حصل قبل أسبوعين
+   ويُسجَّل اليوم يُحسب راتبه لليوم. التاريخ الآن بيد المستخدم، والقيد يدخل
+   سجل الحالة (statusHistory) للجرد التفصيلي. تُرجع Promise<boolean>. */
+function statusExplain(w,nx,d){
+  return nx===WS_ACTIVE
+    ? "ترجع حالة «"+w.name+"» إلى «"+WS_ACTIVE+"».\n· يرجع للجرد اليومي والحضور والغياب\n"+
+      "· أيامه ورواتبه وإجازاته وعقوباته السابقة تبقى محفوظة كما هي"
+    : "تتغيّر حالة «"+w.name+"» إلى «"+nx+"».\n· يبقى بالجرد والراتب لغاية آخر يوم عمل ويختفي بعده\n"+
+      "· تاريخ سابق لليوم يعيد حساب الكشوف السابقة لغايته\n· كل سجله السابق يبقى محفوظاً";
+}
 function changeWorkerStatus(id,next,opts){
   opts=opts||{};
   const c=C(), w=c.workers.find(x=>x.id===id);
-  if(!w){ renderPeople(); renderVariables(); return false; }
+  const reset=()=>{ renderPeople(); renderVariables(); renderSalTable(); };
+  if(!w){ reset(); return Promise.resolve(false); }
   const cur=getWorkerStatus(w), nx=normStatus(next);
-  if(cur===nx){ renderPeople(); renderVariables(); return false; }
-  const back=(nx===WS_ACTIVE);
-  const when=opts.date||todayISO();
-  if(!opts.silent){
-    const msg = back
-      ? "ترجع حالة «"+w.name+"» إلى «"+WS_ACTIVE+"»؟\n\n"+
-        "· يرجع للجرد اليومي والحضور والغياب\n"+
-        "· أيامه ورواتبه وإجازاته وعقوباته السابقة تبقى محفوظة كما هي"
-      : "تتغيّر حالة «"+w.name+"» إلى «"+nx+"»؟\n\n"+
-        "· ما يظهر بالجرد اليومي الجديد بعد "+dateTextOf(when)+"\n"+
-        "· راتبه ينحسب لغاية ذلك اليوم\n"+
-        "· كل سجله السابق يبقى محفوظاً بلا أي تغيير";
-    if(!confirm(msg)){ renderPeople(); renderVariables(); return false; }
+  if(opts.silent){
+    if(cur===nx && !opts.date) return Promise.resolve(false);
+    applyStatusChange(w,nx,opts.date||todayISO(),opts.note);
+    return Promise.resolve(true);
   }
-  setWorkerStatus(w,nx,{date:when, note:opts.note});
-  queueSave(); refresh(); renderPeople(); renderVariables(); renderDirectory();
-  if(RP) runReport();
-  el("savedNote").textContent="انتغيّرت الحالة إلى «"+nx+"» ✓";
-  setTimeout(()=>el("savedNote").textContent="",2400);
-  return true;
+  if(cur===nx){ reset(); return Promise.resolve(false); }
+  const dateLbl=t=>normStatus(t)===WS_ACTIVE ? "تاريخ الرجوع للعمل" : "تاريخ السريان — آخر يوم عمل";
+  return dlgShow({ title:"تغيير حالة العمل — "+w.name, ok:"حفظ الحالة",
+    message:statusExplain(w,nx),
+    fields:[
+      {id:"dsStatus",label:"الحالة الجديدة",type:"select",value:nx,options:WSTATUSES.map(t=>({v:t,t:t}))},
+      {id:"dsDate",label:dateLbl(nx),type:"date",value:opts.date||todayISO()},
+      {id:"dsNote",label:"ملاحظة — سبب التغيير",type:"textarea",value:"",placeholder:"مثال: نُقل إلى موقع البصرة"}],
+    onOpen:()=>{
+      const sel=document.getElementById("dsStatus"), dt=document.getElementById("dsDate");
+      if(!sel||!dt) return;
+      sel.addEventListener("change",()=>{
+        const lb=dt.previousElementSibling; if(lb) lb.textContent=dateLbl(sel.value);
+        const p=el("dlgBody").querySelector("p"); if(p) p.textContent=statusExplain(w,normStatus(sel.value));
+      });
+    }
+  }).then(v=>{
+    if(!v){ reset(); return false; }
+    const nx2=normStatus(v.dsStatus), d=String(v.dsDate||"")||todayISO();
+    if(nx2===cur){ reset(); return false; }
+    const s0=serviceStart(w);
+    if(nx2!==WS_ACTIVE && s0 && d<s0){
+      alertBox("آخر يوم عمل ("+dateTextOf(d)+") قبل مباشرة «"+w.name+"» ("+dateTextOf(s0)+"). صحّح التاريخ.");
+      reset(); return false;
+    }
+    applyStatusChange(w,nx2,d,v.dsNote);
+    return true;
+  });
 }
 
-/* ==================== الإعدادات ==================== */
+/* ==================== [واجهة] الإعدادات ==================== */
 const setMap={ setCompany:"company", setTitle:"title", setAddress:"address", setSigner:"signer",
   setRole:"role", setMark:"mark", setDefNote:"defNote", setNumerals:"numerals",
   setCmT1:"cmT1", setCmN1:"cmN1", setCmT2:"cmT2", setCmN2:"cmN2",
@@ -2486,7 +2777,7 @@ Object.keys(setMap).forEach(id=>{
   el(id).addEventListener("input",()=>{
     S()[setMap[id]]=el(id).value;
     if(setMap[id]==="company"){ C().name=el(id).value; renderCompanies(); }
-    if(setMap[id]==="printMode"){ sigCache.src=null; drawSheet(); drawLeave(); if(RP) renderReport(); }
+    if(setMap[id]==="printMode"){ sigCache.src=null; redrawSheets(); if(RP) renderReport(); }
     el("tbCompany").textContent=S().company;
     queueSave(); refresh();
   });
@@ -2540,11 +2831,12 @@ function sigEnd(){
 }
 function saveSignature(){
   const cv=el("sigPad"); if(!cv.toDataURL)return;
+  sigLoadGen++;                       // أي تحميل متأخر ما عاد يرسم فوق ما رسمه المستخدم
   const trimmed=trimSig(cv);
   S().signature=trimmed||"";
   sigCache.src=null;
   el("sigState").textContent=S().signature?"توقيع محفوظ ✓":"";
-  queueSave(); drawSheet();
+  queueSave(); redrawSheets();
 }
 /* قص الفراغ حول التوقيع حتى يطلع مضبوط بالورقة */
 function trimSig(cv){
@@ -2564,12 +2856,20 @@ function trimSig(cv){
     return o.toDataURL("image/png");
   }catch(e){ return cv.toDataURL("image/png"); }
 }
+/* تحميل التوقيع إلى لوحة الرسم غير متزامن. التبديل السريع بين شركتين كان
+   يترك onload المتأخر للأولى يرسم توقيعها على لوحة الثانية، وأول خط يرسمه
+   مستخدم الثانية يحفظ اللوحة كلها — بتوقيع الأولى — كتوقيع لشركته.
+   كل تحميل يحمل رقم جيل، ولا يرسم إلا إذا بقي هو الأحدث لنفس الشركة ونفس الصورة. */
+let sigLoadGen=0;
 function loadSigToPad(){
   const cv=el("sigPad"), c=sigCtx(); if(!c)return;
+  const gen=++sigLoadGen;
   c.clearRect(0,0,cv.width,cv.height);
-  const d=S().signature; if(!d)return;
+  const co=C(), d=co.settings.signature; if(!d)return;
   const im=new Image();
-  im.onload=()=>{ const r=Math.min(cv.width/im.width,(cv.height-40)/im.height,1);
+  im.onload=()=>{
+    if(gen!==sigLoadGen || C()!==co || co.settings.signature!==d) return;
+    const r=Math.min(cv.width/im.width,(cv.height-40)/im.height,1);
     c.drawImage(im,(cv.width-im.width*r)/2,(cv.height-40-im.height*r)/2,im.width*r,im.height*r); };
   im.src=d;
 }
@@ -2583,8 +2883,9 @@ function loadSigToPad(){
 })();
 el("sigClear").onclick=()=>{
   const cv=el("sigPad"), c=sigCtx(); if(c) c.clearRect(0,0,cv.width,cv.height);
+  sigLoadGen++;
   S().signature=""; sigCache.src=null;
-  el("sigState").textContent=""; queueSave(); drawSheet();
+  el("sigState").textContent=""; queueSave(); redrawSheets();
 };
 
 /* ---- شعار الشركة ---- */
@@ -2595,7 +2896,10 @@ function fillLogoPrev(){
   const d=S().logo||"";
   if(d){ img.src=d; img.classList.add("on"); } else { img.removeAttribute("src"); img.classList.remove("on"); }
 }
-function setLogoFromDataUrl(src){
+/* الشركة الهدف تُثبَّت لحظة اختيار الملف: فكّ صورة كبيرة يأخذ وقتاً، وتبديل
+   الشركة خلاله كان يضع الشعار على الشركة الثانية. */
+function setLogoFromDataUrl(src, co){
+  co=co||C();
   const im=new Image();
   im.onload=()=>{
     const max=420, r=Math.min(1, max/Math.max(im.width||1, im.height||1));
@@ -2604,32 +2908,33 @@ function setLogoFromDataUrl(src){
     cv.height=Math.max(1,Math.round((im.height||1)*r));
     const cx=cv.getContext&&cv.getContext("2d"); if(!cx) return;
     cx.drawImage(im,0,0,cv.width,cv.height);
-    const st=S();
+    const st=co.settings;
     st.logo=cv.toDataURL("image/png"); st.logoW=cv.width; st.logoH=cv.height;
-    logoCache.src=null; queueSave(); fillLogoPrev();
-    drawSheet(); drawLeave(); drawPenalty(); drawAchievement(); drawIssue();
+    logoCache.src=null; queueSave();
+    if(co!==C()) return;
+    fillLogoPrev(); redrawSheets();
     el("logoState").textContent="\u0627\u0646\u062d\u0641\u0638 \u0627\u0644\u0634\u0639\u0627\u0631 \u2713";
     setTimeout(()=>el("logoState").textContent="",2200);
   };
-  im.onerror=()=>alert("\u062a\u0639\u0630\u0651\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0635\u0648\u0631\u0629.");
+  im.onerror=()=>alertBox("\u062a\u0639\u0630\u0651\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0635\u0648\u0631\u0629.");
   im.src=src;
 }
 el("setLogoFile").addEventListener("change",e=>{
   const fl=e.target.files && e.target.files[0]; if(!fl) return;
-  if(fl.size>6*1024*1024){ alert("\u0627\u0644\u0635\u0648\u0631\u0629 \u0643\u0628\u064a\u0631\u0629 \u062c\u062f\u0627\u064b \u2014 \u062e\u0644\u0651\u064a\u0647\u0627 \u0623\u0642\u0644 \u0645\u0646 \u0666 \u0645\u064a\u063a\u0627."); e.target.value=""; return; }
-  const rd=new FileReader();
-  rd.onload=()=>setLogoFromDataUrl(rd.result);
+  if(fl.size>6*1024*1024){ alertBox("\u0627\u0644\u0635\u0648\u0631\u0629 \u0643\u0628\u064a\u0631\u0629 \u062c\u062f\u0627\u064b \u2014 \u062e\u0644\u0651\u064a\u0647\u0627 \u0623\u0642\u0644 \u0645\u0646 \u0666 \u0645\u064a\u063a\u0627."); e.target.value=""; return; }
+  const rd=new FileReader(), co=C();
+  rd.onload=()=>setLogoFromDataUrl(rd.result, co);
   rd.readAsDataURL(fl);
   e.target.value="";
 });
 el("logoClear").onclick=()=>{
   const st=S(); st.logo=""; st.logoW=0; st.logoH=0;
   logoCache.src=null; queueSave(); fillLogoPrev();
-  drawSheet(); drawLeave(); drawPenalty(); drawAchievement(); drawIssue();
+  redrawSheets();
   el("logoState").textContent="";
 };
 
-/* ==================== الشركات ==================== */
+/* ==================== [واجهة] الشركات ==================== */
 function renderCompanies(){
   const sel=el("coSelect");
   sel.innerHTML=state.companies.map(c=>'<option value="'+c.id+'"'+(c.id===state.active?" selected":"")+'>'+esc(c.name)+'</option>').join("");
@@ -2662,7 +2967,7 @@ el("coTable").addEventListener("click",e=>{
       fields:[{id:"dcName",label:"اسم الشركة",value:co.name}]}).then(v=>{
       if(!v) return;
       const n=normName(v.dcName);
-      if(!n){ alert("اسم الشركة ما يصير فارغ."); return; }
+      if(!n){ alertBox("اسم الشركة ما يصير فارغ."); return; }
       co.name=n; co.settings.company=n;
       queueSave(); bootView();
     });
@@ -2702,7 +3007,7 @@ el("coTable").addEventListener("click",e=>{
   }
 });
 
-/* ==================== ملف الداتا والنسخ ==================== */
+/* ==================== [تخزين] ملف الداتا والنسخ ==================== */
 function refreshDbState(){
   const st=el("dbState");
   if(fileHandle) st.innerHTML="محفوظ تلقائياً بالجهاز + مربوط بملف: <b dir='ltr'>"+esc(fileHandle.name)+"</b>";
@@ -2720,13 +3025,14 @@ el("linkOpen").onclick=async()=>{ try{
   const obj=JSON.parse(await (await h.getFile()).text());
   const looksValid = (obj && obj.v===2 && Array.isArray(obj.companies) && obj.companies.length) ||
                      (obj && (Array.isArray(obj.workers) || (obj.settings && typeof obj.settings==="object")));
-  if(!looksValid){ alert("هذا الملف لا يبدو نسخة بيانات صادرة من هذا البرنامج. لم يتغيّر أي شيء."); return; }
-  if(!confirm("فتح هذا الملف يستبدل كل البيانات الحالية بهذا الجهاز. نكمل؟")) return;
+  if(!looksValid){ alertBox("هذا الملف لا يبدو نسخة بيانات صادرة من هذا البرنامج. لم يتغيّر أي شيء."); return; }
+  if(!await confirmBox("فتح ملف داتا","فتح هذا الملف يستبدل كل البيانات الحالية بهذا الجهاز.\nتنحفظ لقطة أمان من الحالي قبل الاستبدال. نكمل؟",{ok:"افتح واستبدل",danger:true})) return;
+  await pushSafetySnap("preopen","قبل فتح ملف داتا");
   state=migrate(obj); fileHandle=h; await idbSet(HKEY,h);
   await persistState(); bootView(); refreshDbState(); updateReminder();
-}catch(e){ if(e&&e.name!=="AbortError") alert("تعذّر فتح الملف. تأكد أنه ملف بيانات صالح وبصيغة JSON."); } };
+}catch(e){ if(e&&e.name!=="AbortError") alertBox("تعذّر فتح الملف. تأكد أنه ملف بيانات صالح وبصيغة JSON."); } };
 el("linkSaveNow").onclick=async()=>{
-  if(!fileHandle){ alert("ماكو ملف مرتبط. اضغط «ربط ملف داتا» أولاً."); return; }
+  if(!fileHandle){ alertBox("ماكو ملف مرتبط. اضغط «ربط ملف داتا» أولاً."); return; }
   badge(await writeFile()?"file":"err");
 };
 el("backupOut").onclick=()=>{
@@ -2742,22 +3048,87 @@ el("backupFile").onchange=e=>{
     // تحقق أن الملف نسخة جرد فعلية (v2 بشركات، أو نسخة قديمة فيها عمال/إعدادات)
     const looksValid = (obj && obj.v===2 && Array.isArray(obj.companies) && obj.companies.length) ||
                        (obj && (Array.isArray(obj.workers) || (obj.settings && typeof obj.settings==="object")));
-    if(!looksValid){ alert("هذا الملف لا يبدو نسخة بيانات صادرة من هذا البرنامج. لم يتغيّر أي شيء."); return; }
-    if(!confirm("الاستعادة تستبدل كل البيانات الحالية. نكمل؟"))return;
-    state=migrate(obj); persistState(); bootView();
-    alert("تمت الاستعادة بنجاح.");
-  }catch(err){ alert("الملف تالف أو ليس بصيغة JSON صالحة. لم يتغيّر أي شيء."); } };
+    if(!looksValid){ alertBox("هذا الملف لا يبدو نسخة بيانات صادرة من هذا البرنامج. لم يتغيّر أي شيء."); return; }
+    confirmBox("استعادة نسخة","الاستعادة تستبدل كل البيانات الحالية بكل الشركات.\nتنحفظ لقطة أمان من الحالي قبلها. نكمل؟",
+      {ok:"استعد",danger:true}).then(async go=>{
+      if(!go) return;
+      await pushSafetySnap("prerestore","قبل استعادة نسخة من ملف");
+      state=migrate(obj); await persistState(); bootView(); renderSnaps();
+      alertBox("تمت الاستعادة بنجاح.");
+    });
+  }catch(err){ alertBox("الملف تالف أو ليس بصيغة JSON صالحة. لم يتغيّر أي شيء."); } };
   rd.readAsText(f2); e.target.value="";
 };
 el("wipeAll").onclick=async()=>{
-  if(!confirm("مسح كل البيانات نهائياً من هذا الجهاز؟"))return;
-  if(!confirm("تأكيد أخير: ما راح تكدر ترجعها إلا من نسخة منزّلة."))return;
+  const v=await dlgShow({title:"مسح كل البيانات", danger:true, ok:"مسح نهائي",
+    message:"كل الشركات والعمال والأيام والوصولات تنمسح من هذا الجهاز.\nما تكدر ترجعها إلا من نسخة منزّلة أو من لقطة الأمان التي تنحفظ الآن.",
+    fields:[{id:"dwipe",label:"اكتب كلمة «مسح» للتأكيد",placeholder:"مسح"}], needWord:{field:"dwipe",word:"مسح"}});
+  if(!v) return;
+  await pushSafetySnap("prewipe","قبل مسح كل البيانات");
   state=defaultState(); fileHandle=null;
   await idbSet(HKEY,null); await persistState(); bootView();
 };
 
-/* ==================== الإجازات ==================== */
-function nextLeaveNo(){ return docNo("إ",(C().leaveSeq||0)+1); }
+/* ==================== [نموذج] تعديل الوثائق المحفوظة ====================
+   فتح وثيقة بزر «عرض» ثم «حفظ» كان ينشئ وثيقة ثانية (وأحياناً بنفس الرقم)،
+   فيتضاعف الاستقطاع: عقوبة ٢٥٬٠٠٠ عُدّلت إلى ٣٠٬٠٠٠ صارت ٥٥٬٠٠٠. والإجازة
+   ما كانت تُعدَّل أصلاً — الحفظ يُرفض لأنها «تتداخل» مع نفسها. الآن كل نموذج
+   يتتبّع الوثيقة المفتوحة، والحفظ يعدّل نفس السجل بنفس رقمه بعد نسخ نسخته
+   السابقة إلى revisions — فلا يضيع أثر أي تعديل. */
+function reviseRecord(rec, fields){
+  if(!rec) return null;
+  if(!Array.isArray(rec.revisions)) rec.revisions=[];
+  const snap=Object.assign({},rec);
+  delete snap.revisions;                 // ما ننسخ التاريخ داخل التاريخ
+  rec.revisions.push(snap);
+  Object.assign(rec, fields);
+  rec.editedAt=todayISO();
+  return rec;
+}
+/* نص زر الحفظ يقول بالضبط شنو راح يصير */
+function syncSaveBtn(id, editing, newText){
+  const b=el(id);
+  if(b && b.textContent!==undefined) b.textContent = editing ? "حفظ التعديل" : newText;
+}
+/* الوثيقة المحفوظة تُعاد طباعتها بتاريخ إصدارها لا بتاريخ الجهاز يوم الطباعة،
+   ومعها تاريخ التعديل إن عُدّلت — وثيقة قد تُعرض أمام جهة رسمية. */
+function recOf(list, id){ return id ? (list||[]).find(x=>x.id===id)||null : null; }
+function docIssued(rec){ return (rec && rec.issued) ? rec.issued : todayISO(); }
+function editedLine(rec){ return (rec && rec.editedAt) ? "عُدّل بتاريخ "+dateTextOf(rec.editedAt) : ""; }
+
+/* ---- الوثائق المالية داخل مدة الخدمة فقط ----
+   الكشف يفلتر العقوبات والمكافآت بتاريخها وحده، فوثيقة بعد آخر يوم عمل بنفس
+   الشهر تُستقطع فعلاً من راتبه الأخير، ووثيقة قبل المباشرة كذلك — بينما التحذير
+   القديم كان يقول إنها «ما تنزل على أي كشف». الرفض هنا قاطع، والاستثناء الوحيد
+   قرار إنهاء الخدمة نفسه لأنه هو من يرسم النهاية. يرجّع سبب الرفض أو "". */
+function serviceGuardMsg(w, date, what, dateLabel){
+  if(!w || !date) return "";
+  const s=serviceStart(w), e=serviceEnd(w), lbl=dateLabel||"تاريخ";
+  if(s && date<s)
+    return "مرفوض: "+lbl+" "+what+" ("+dateTextOf(date)+") قبل مباشرة «"+w.name+"» بتاريخ "+dateTextOf(s)+".\n\n"+
+      "الوثيقة تنزل على كشف الرواتب بتاريخها، فتُحسب عن يوم لم يكن فيه موظفاً.\n"+
+      "صحّح التاريخ، أو صحّح تاريخ المباشرة من جدول إعداد الرواتب.";
+  if(e && date>e)
+    return "مرفوض: "+lbl+" "+what+" ("+dateTextOf(date)+") بعد آخر يوم عمل لـ«"+w.name+"» ("+
+      getWorkerStatus(w)+" بتاريخ "+dateTextOf(e)+").\n\n"+
+      "لو كانت بنفس الشهر لنزلت على راتبه الأخير وهو خارج الخدمة.\n"+
+      "صحّح التاريخ، أو غيّر حالة العامل أولاً.";
+  return "";
+}
+/* رسالة حفظ قصيرة تظهر بأي تبويب (الخانة القديمة كانت بتبويب الجرد وحده) */
+let flashTimer=null;
+function flash(msg){
+  const n=el("savedNote");
+  if(n && n.textContent!==undefined){ n.textContent=msg; setTimeout(()=>{ if(n.textContent===msg) n.textContent=""; },2400); }
+  const t=document.getElementById("toast");
+  if(t){ t.textContent=msg; t.classList.add("on"); clearTimeout(flashTimer); flashTimer=setTimeout(()=>t.classList.remove("on"),2600); }
+}
+
+/* ==================== [واجهة] الإجازات ==================== */
+let lvEditId=null;
+function lvRec(){ return recOf(C().leaves, lvEditId); }
+function lvSyncSave(){ syncSaveBtn("lvSave", !!lvEditId, "حفظ الإجازة"); }
+function nextLeaveNo(){ return freshDocNo("إ", C().leaves, C().leaveSeq, el("lvFrom").value||curDate).no; }
 function initLeaveView(){
   const c=C(), sel=el("lvWorker"), keep=sel.value;
   sel.innerHTML='<option value="">— اختر العامل —</option>'+workersAZ().map(w=>
@@ -2767,7 +3138,7 @@ function initLeaveView(){
   if(!el("lvAdmin").value) el("lvAdmin").value=S().signer||"";
   if(!el("lvNo").value) el("lvNo").value=nextLeaveNo();
   if(!el("lvPolicy").value) el("lvPolicy").value=defaultLeavePolicy(el("lvType").value);
-  lvSyncType();
+  lvSyncType(); lvSyncSave();
   renderLeaves(); drawLeave(); lvHint();
 }
 el("lvWorker").addEventListener("change",()=>{
@@ -2786,15 +3157,19 @@ function lvAmount(){ return Math.max(1,parseInt(el("lvDays").value,10)||1); }
 function lvDaysCount(){ return lvIsTimed()?1:lvAmount(); }
 function lvHoursCount(){ return lvIsTimed()?Math.min(12,lvAmount()):0; }
 function lvSyncType(){
-  const t=lvIsTimed(), lb=el("lvDaysLbl"), inp=el("lvDays");
+  const t=lvIsTimed(), lb=el("lvDaysLbl"), inp=el("lvDays"), pol=el("lvPolicy");
   if(lb && lb.textContent!==undefined) lb.textContent = t ? "المدة (ساعات)" : "المدة (أيام)";
   if(inp && inp.setAttribute){ inp.setAttribute("max", t?"12":"365"); }
+  /* الزمنية لا يُستقطع عنها شيء أبداً: السياسة مقفلة على «بلا استقطاع» */
+  if(pol && pol.value!==undefined){ if(t) pol.value="none"; pol.disabled=!!t; }
 }
 el("lvType").addEventListener("change",()=>{
   el("lvPolicy").value=defaultLeavePolicy(el("lvType").value);
   lvSyncType(); drawLeave(); lvHint(); });
 el("lvPolicy").addEventListener("change",()=>{ lvHint(); drawLeave(); });
 ["lvDays","lvFrom"].forEach(id=>el(id).addEventListener("input",lvHint));
+/* سنة الترقيم تتبع تاريخ الوثيقة — تتحدّث للوصل الجديد فقط، لا للمفتوح */
+el("lvFrom").addEventListener("change",()=>{ if(!lvEditId) el("lvNo").value=nextLeaveNo(); });
 el("lvWorker").addEventListener("change",lvHint);
 /* حصيلة أيام المتفرقة والإجازات للعامل داخل شهر معيّن، مصنّفة حسب السياسة.
    تُقرأ من وصولات الإجازة مباشرة حتى تظهر حتى لو الأيام ما انعتمدت بعد. */
@@ -2811,10 +3186,14 @@ function excusedTally(workerId, from, to, skipLeaveId){
     workdaysBetween(a,b).forEach(d=>{ if(!isOffDay(w,d)) by[p]++; });
   });
   // المتفرقة المؤشّرة بالجرد تتبع سياسة العامل/الشركة
+  if(!w) return by;
   const pol=leavePolicyFor(w);
+  /* المتفرقة تُعدّ بنفس تصنيف الكشف (classifyDay): يوم عليه إجازة زمنية
+     يبقى متفرقة، لأن الزمنية ساعات لا يوم إجازة. */
+  const my=indexByWorker(c.leaves||[]).get(workerId)||null;
   recordedDays(from,to).forEach(d=>{
-    if(!inService(w,d)||isOffDay(w,d)||leaveAt(workerId,d)) return;
-    if(stateOf(d,w.id)==="misc") by[pol]++;
+    if(!inService(w,d)) return;
+    if(classifyDay(w,d,my).k==="misc") by[pol]++;
   });
   return by;
 }
@@ -2831,16 +3210,20 @@ function lvHint(){
   const wid=el("lvWorker").value;
   const w=C().workers.find(x=>x.id===wid);
   const from=el("lvFrom").value||todayISO();
+  if(lvIsTimed()){
+    h.innerHTML="إجازة زمنية: <b>بلا أي استقطاع</b>."+
+      '<br><span class="mini">تُخزَّن بالساعات ('+hoursText(lvHoursCount())+
+      ") ولا تُعدّ يوم إجازة بالعدّاد ولا بالكشف. بالجرد اليومي يبقى العامل حسب تأشيره.</span>";
+    return;
+  }
   if(!w){ h.innerHTML="اختر العامل حتى يظهر أثر الإجازة على راتبه."; return; }
   const to=addDays(from,n-1);
   // أيام هذه الإجازة فعلياً (بلا عطل ولا أوف)
-  const own=lvIsTimed()?0:workdaysBetween(from,to).filter(d=>!isOffDay(w,d)).length;
+  const own=workdaysBetween(from,to).filter(d=>!isOffDay(w,d)).length;
   const skipped=n-own;
   const [ms,me]=monthOf(from);
   // لو الوصل المفتوح محفوظ أصلاً، لا نحسبه مرتين
-  const openNo=el("lvNo").value;
-  const opened=(C().leaves||[]).find(l=>l.no===openNo);
-  const before=excusedTally(wid,ms,me,opened?opened.id:null);
+  const before=excusedTally(wid,ms,me,lvEditId||null);
   const after=Object.assign({},before); after[p]+=own;
   const dedOf=t=>leaveDeductDays(t.half,"half")+t.full;
   const d0=dedOf(before), d1=dedOf(after);
@@ -2857,52 +3240,69 @@ function lvHint(){
         " · بزيادة <b>"+fmtMoney(roundPay(d1*ded)-roundPay(d0*ded))+"</b> "+esc(cur);
     if(p==="half"&&add===0&&own>0)
       msg+='<br><span class="mini">النصف يُحسب على مجموع الشهر لا على الوصل لوحده — إجازة ثانية بنفس الشهر راح تزيد الاستقطاع.</span>';
+    msg+='<br><span class="mini">تقدير حسب الوصل؛ الكشف يحسب الأيام المعتمدة من الجرد فقط.</span>';
   }
   h.innerHTML=msg;
 }
 el("lvNew").onclick=()=>{
+  lvEditId=null;
   el("lvWorker").value=""; el("lvSection").value=""; el("lvReason").value="";
   el("lvDays").value=1; el("lvFrom").value=curDate; el("lvNo").value=nextLeaveNo();
   el("lvPolicy").value=defaultLeavePolicy(el("lvType").value);
-  lvSyncType(); drawLeave(); lvHint();
+  lvSyncType(); lvSyncSave(); drawLeave(); lvHint();
 };
 el("lvSave").onclick=()=>{
   const c=C(), w=c.workers.find(x=>x.id===el("lvWorker").value);
-  if(!w){ alert("اختر اسم العامل أولاً."); return; }
+  if(!w){ alertBox("اختر اسم العامل أولاً."); return; }
   const days=lvDaysCount(), hours=lvHoursCount();
   const from=el("lvFrom").value||curDate;
   const to=addDays(from,days-1);
-  if(!warnIfEnded(w,from,"الإجازة")) return;
-  const clash=overlappingLeave(w.id,from,to);
+  const open=lvRec();
+  if(lvEditId && !open){ lvEditId=null; }
+  const g=serviceGuardMsg(w,from,"الإجازة","بداية")||serviceGuardMsg(w,to,"الإجازة","نهاية");
+  if(g){ alertBox(g,"إجازة خارج مدة الخدمة"); return; }
+  const clash=overlappingLeave(w.id,from,to,open?open.id:null);
   if(clash){
-    alert("«"+w.name+"» عنده إجازة مسجّلة تتداخل مع هذه المدة:\n"+
+    alertBox("«"+w.name+"» عنده إجازة مسجّلة تتداخل مع هذه المدة:\n"+
       "وصل "+clash.no+" — من "+dateTextOf(clash.from)+" إلى "+dateTextOf(leaveEnd(clash))+"\n\n"+
       "الحفظ مرفوض: الأيام المتداخلة تنحسب مرتين ويصير استقطاع مضاعف.\n"+
-      "احذف الوصل القديم أو غيّر التاريخ.");
+      "افتح ذاك الوصل وعدّله، أو غيّر التاريخ.","إجازة متداخلة");
     return;
   }
-  // ضمان رقم فريد: إذا كان الرقم الحالي مستعملاً (فتحت وصلاً قديماً)، ولّد رقماً جديداً
-  let no=el("lvNo").value;
-  if(!no || c.leaves.some(l=>l.no===no)) no=nextLeaveNo();
-  c.leaves.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
-    section:el("lvSection").value, type:el("lvType").value, from:from, days:days, hours:hours||null,
-    to:to, policy:el("lvPolicy").value||defaultLeavePolicy(el("lvType").value),
-    reason:el("lvReason").value, admin:el("lvAdmin").value, issued:todayISO() });
-  c.leaveSeq=(c.leaveSeq||0)+1;
-  queueSave(); el("lvNo").value=nextLeaveNo(); renderLeaves();
+  const type=el("lvType").value;
+  const data={ workerId:w.id, name:w.name,
+    section:el("lvSection").value, type:type, from:from, days:days, hours:hours||null, to:to,
+    policy: lvIsTimed() ? "none" : (el("lvPolicy").value||defaultLeavePolicy(type)),
+    reason:el("lvReason").value, admin:el("lvAdmin").value };
+  let note;
+  if(open){
+    reviseRecord(open,data);
+    note="انحفظ التعديل على وصل "+open.no+" ✓";
+  }else{
+    const f=freshDocNo("إ",c.leaves,c.leaveSeq,from);
+    const rec=Object.assign({ id:uid(), no:f.no, issued:todayISO() }, data);
+    c.leaves.unshift(rec);
+    c.leaveSeq=f.n;
+    lvEditId=rec.id;                 // يبقى مفتوحاً: ضغطة ثانية تعدّل ولا تكرّر
+    el("lvNo").value=rec.no;
+    note="انحفظت الإجازة ✓";
+  }
+  lvSyncSave();
+  queueSave(); renderLeaves(); drawLeave();
   if(RP) runReport(); refresh();
-  el("savedNote").textContent="انحفظت الإجازة ✓";
+  flash(note);
 };
 function renderLeaves(){
   const c=C(), q=el("lvSearch").value.trim();
   let list=c.leaves;
-  if(q) list=list.filter(l=>l.name.indexOf(q)!==-1);
+  if(q) list=list.filter(l=>String(l.name||"").indexOf(q)!==-1);
   if(!list.length){ el("leavesList").innerHTML='<div class="empty"><p>ماكو إجازات محفوظة بعد.</p></div>'; return; }
   let h='<table><thead><tr><th>الرقم</th><th>العامل</th><th>النوع</th><th>الاستقطاع</th><th>من</th><th>أيام</th><th></th></tr></thead><tbody>';
-  list.forEach(l=>{ h+='<tr><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+'</td><td>'+
-    esc(l.type||"—")+'</td><td class="mini">'+esc(policyName(l.policy||defaultLeavePolicy(l.type)))+
+  list.forEach(l=>{ h+='<tr'+(l.id===lvEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+'</td><td>'+
+    esc(l.type||"—")+(l.editedAt?' <span class="stag warn" title="'+esc(editedLine(l))+'">معدّل</span>':'')+
+    '</td><td class="mini">'+esc(policyName(l.policy||defaultLeavePolicy(l.type)))+
     '</td><td>'+dateTextOf(l.from)+'</td><td>'+(l.hours?hoursText(l.hours):fmtNum(l.days))+'</td>'+
-    '<td style="text-align:left;white-space:nowrap"><button class="btn sm" data-lopen="'+l.id+'">عرض</button> '+
+    '<td class="actcell"><button class="btn sm" data-lopen="'+l.id+'">عرض</button> '+
     '<button class="btn sm danger" data-ldel="'+l.id+'">حذف</button></td></tr>'; });
   el("leavesList").innerHTML=h+'</tbody></table>';
 }
@@ -2910,18 +3310,25 @@ el("lvSearch").addEventListener("input",renderLeaves);
 el("leavesList").addEventListener("click",e=>{
   const o=e.target.closest("[data-lopen]"), d=e.target.closest("[data-ldel]");
   const c=C();
-  if(o){ const l=c.leaves.find(x=>x.id===o.dataset.lopen);
+  if(o){ const l=c.leaves.find(x=>x.id===o.dataset.lopen); if(!l) return;
+    lvEditId=l.id;
     el("lvNo").value=l.no; el("lvWorker").value=l.workerId||""; el("lvSection").value=l.section||"";
     el("lvType").value=l.type||"اعتيادية"; el("lvFrom").value=l.from;
     el("lvDays").value=l.hours?l.hours:l.days; lvSyncType();
     el("lvPolicy").value=l.policy||defaultLeavePolicy(l.type);
-    el("lvReason").value=l.reason||""; el("lvAdmin").value=l.admin||""; drawLeave(); lvHint(); }
-  if(d){ const l=c.leaves.find(x=>x.id===d.dataset.ldel);
-    if(confirm("يتحذف وصل "+l.no+"؟")){ c.leaves=c.leaves.filter(x=>x.id!==l.id); queueSave(); renderLeaves();
-      if(RP) runReport(); refresh(); } }
+    el("lvReason").value=l.reason||""; el("lvAdmin").value=l.admin||"";
+    lvSyncSave(); renderLeaves(); drawLeave(); lvHint(); }
+  if(d){ const l=c.leaves.find(x=>x.id===d.dataset.ldel); if(!l) return;
+    confirmBox("حذف وصل إجازة","يتحذف وصل "+l.no+" («"+(l.name||"")+"»)؟\nأيامه ترجع تُحسب حسب تأشير الجرد.",
+      {ok:"حذف",danger:true}).then(go=>{
+      if(!go) return;
+      if(lvEditId===l.id){ lvEditId=null; lvSyncSave(); }
+      c.leaves=c.leaves.filter(x=>x.id!==l.id); queueSave(); renderLeaves();
+      if(RP) runReport(); refresh();
+    }); }
 });
 
-/* رسم وصل الإجازة — نصف A4 أفقي، ألوان أخف */
+/* [رسم] وصل الإجازة — نصف A4 أفقي، ألوان أخف */
 const LV_W=1000, LV_H=560, LP=46;
 /* ترويسة واحدة لكل الوصولات — تكبر تلقائياً لو اكو شعار */
 function docHeaderH(){ return 40 + (S().logo?104:78); }
@@ -2940,7 +3347,8 @@ function drawDocHeader(ctx,o){
   ctxCenter(ctx,o.title,LV_W/2,hTop+(hasLogo?90:62));
   ctx.fillStyle=CLR.ink2; ctx.font=f(600,15);
   ctx.fillText("\u0631\u0642\u0645: "+(o.no||""),R-14,hTop+26);
-  ctx.textAlign="left"; ctx.direction="ltr"; ctx.fillText(dateNumeric(todayISO()),L+14,hTop+26);
+  /* تاريخ إصدار الوثيقة المحفوظة، لا تاريخ الجهاز يوم إعادة الطباعة */
+  ctx.textAlign="left"; ctx.direction="ltr"; ctx.fillText(dateNumeric(o.date||todayISO()),L+14,hTop+26);
   ctx.direction="rtl"; ctx.textAlign="right";
   return hTop+hH;
 }
@@ -2963,10 +3371,11 @@ function drawLeave(target,k){
   /* اللون المميّز للإجازة: لون الشركة الأساسي — مقابل الأحمر للعقوبة
      والأخضر للمكافأة. والتخطيط نفسه حرفاً بحرف. */
   const PUR=isMono()?CLR.ink:CLR.purple;
-  let y=drawDocHeader(ctx,{title:"وصل إجازة",accent:PUR,no:el("lvNo").value})+34;
+  const lvR=lvRec(), lvIss=docIssued(lvR), lvEd=editedLine(lvR);
+  let y=drawDocHeader(ctx,{title:"وصل إجازة",accent:PUR,no:el("lvNo").value,date:lvIss})+34;
   ctx.font=f(500,15); ctx.fillStyle=CLR.ink2;
-  ctx.fillText("تاريخ التحرير: "+dateTextOf(todayISO())+
-    "   —   استقطاع الراتب: "+leavePolicyText(el("lvPolicy").value),R,y);
+  ctx.fillText("تاريخ التحرير: "+dateTextOf(lvIss)+(lvEd?"   —   "+lvEd:"")+
+    "   —   استقطاع الراتب: "+leavePolicyText(lvIsTimed()?"none":el("lvPolicy").value),R,y);
   y+=30;
 
   const rowH=46;
@@ -3014,18 +3423,18 @@ function leaveSeats(){
   ];
 }
 el("lvWord").onclick=()=>{
-  if(!el("lvWorker").value){ alert("اختر العامل أولاً."); return; }
+  if(!el("lvWorker").value){ alertBox("اختر العامل أولاً."); return; }
   try{ saveDocx(leaveDocx(),"وصل-اجازة-"+(el("lvNo").value||todayISO())+".docx");
     el("savedNote").textContent="انصدّر وصل Word ✓";
     setTimeout(()=>el("savedNote").textContent="",2200);
-  }catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+  }catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 function leaveHiRes(){ const cv=document.createElement("canvas"); drawLeave(cv,dpiScale()); return cv; }
 el("lvPng").onclick=()=>{ leaveHiRes().toBlob(b=>dl(URL.createObjectURL(b),"وصل-اجازة-"+(el("lvNo").value||"")+".png"),"image/png"); };
 el("lvPrint").onclick=()=>{
   const img=leaveHiRes().toDataURL("image/png");
   const w=window.open("","_blank");
-  if(!w){ alert("المتصفح منع فتح النافذة."); return; }
+  if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const no=el("lvNo").value||"";
   w.document.write(
     '<html><head><meta charset="utf-8"><title>وصل إجازة '+no+'</title><style>'+
@@ -3047,14 +3456,15 @@ el("lvPrint").onclick=()=>{
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
 
-/* ==================== العقوبات ==================== */
+/* ==================== [واجهة] العقوبات ==================== */
 /* إشعار العقوبة يمشي بنفس منطق وصل الإجازة: وثيقة مرقّمة تُحفظ
    بسجل الشركة، وتنزل تلقائياً على كشف الرواتب للمدة التي يقع فيها تاريخها.
    المبلغ يُخزن بطريقتين: مبلغ مقطوع، أو عدد أيام تُضرب بأجر يوم العامل
-   وقت الحساب — لا وقت الإصدار — حتى يبقى الخصم مطابقاً لراتبه الفعلي. */
+   المجمَّد وقت الإصدار (dayRate) — فيبقى الخصم مطابقاً للإشعار الموقّع مهما
+   تغيّر راتبه بعدها. */
 const PN_TYPES=["لفت نظر","إنذار أول","إنذار أخير","عقوبة انضباطية","استقطاع من الراتب","إنهاء الخدمات"];
 
-function nextPenaltyNo(){ return docNo("ع",(C().penSeq||0)+1); }
+function nextPenaltyNo(){ return freshDocNo("ع", C().penalties, C().penSeq, el("pnDate").value||curDate).no; }
 /* الأثر الافتراضي حسب النوع — يُقترح فقط ويبقى قابلاً للتغيير */
 function defaultPenKind(type){
   const t=String(type||"");
@@ -3065,12 +3475,13 @@ function defaultPenKind(type){
 }
 /* قرار إنهاء الخدمات: ليس استقطاعاً مالياً بل يُغلق خدمة العامل
    بتاريخ القرار، فيختفي من الجرد بعده وينحسب راتبه لغاية ذلك اليوم. */
-/* تحذير: إصدار وثيقة بتاريخ بعد انتهاء الخدمة — ما تنزل على أي كشف */
+/* تحذير لوصل المواد وحده (لا يمسّ الراتب): صرف مواد لعامل خدمته منتهية.
+   الوثائق المالية لا تمرّ من هنا — لها رفض قاطع (serviceGuardMsg). */
 function warnIfEnded(w,date,what){
   const e=serviceEnd(w);
-  if(!w || !e || date<=e) return true;
-  return confirm("حالة «"+w.name+"» هي «"+getWorkerStatus(w)+"» وآخر يوم عمل له "+dateTextOf(e)+".\n\n"+
-    what+" بتاريخ بعد ذلك ما ينزل على أي كشف رواتب — المبلغ يضيع بلا أثر.\nتكمل؟");
+  if(!w || !e || date<=e) return Promise.resolve(true);
+  return confirmBox("خدمة منتهية","حالة «"+w.name+"» هي «"+getWorkerStatus(w)+"» وآخر يوم عمل له "+dateTextOf(e)+".\n\n"+
+    what+" بتاريخ بعد ذلك يُسجَّل بملفه ولا يمسّ أي راتب.\nتكمل؟",{ok:"أكمل"});
 }
 function isTerminationType(t){ return String(t||"").indexOf("إنهاء الخدم") >= 0; }
 /* السند القانوني يننكتب لوحده بصندوق السبب متى اخترت إنهاء الخدمات،
@@ -3104,7 +3515,9 @@ function penaltyAmount(pn,w){
     // أجر اليوم مجمّد وقت الإصدار: لو تغيّر راتب العامل بعدين،
     // يبقى المبلغ مطابقاً للإشعار الموقّع بيد العامل.
     // والناتج مقرَّب لأقرب ٢٥٠ حتى يطابق الإشعار المطبوع ما يُستقطع.
-    const rate = (pn.dayRate!=null && pn.dayRate!=="") ? Number(pn.dayRate) : dayDeductFor(w);
+    // عند غيابه: dailyRateFor — «أجر اليوم» نفسه المعتمد بالمكافأة، فلا
+    // يختلف سعر اليوم بين عقوبة ومكافأة لنفس العامل (AUDIT.md ب-١٣).
+    const rate = (pn.dayRate!=null && pn.dayRate!=="") ? Number(pn.dayRate) : dailyRateFor(w);
     return Math.max(0, roundPay(Math.max(0,Number(pn.days)||0)*(rate||0)));
   }
   return 0;
@@ -3120,14 +3533,39 @@ function monthNameOf(iso){
    بدون هذا العلم تبقى القائمة على أول خيار عند فتح التبويب،
    فيظهر «لا يُطلب مبلغ» مع نوع المفروض له مبلغ. */
 let pnKindManual=false;
+let pnEditId=null;
+function pnRec(){ return recOf(C().penalties, pnEditId); }
+function pnSyncSave(){ syncSaveBtn("pnSave", !!pnEditId, "حفظ العقوبة"); }
 function pnKindV(){ return el("pnKind").value||"none"; }
 function pnVal(){ return Math.max(0,Number(el("pnAmount").value)||0); }
 function pnWorkerObj(){ return C().workers.find(x=>x.id===el("pnWorker").value)||null; }
+/* أجر اليوم للإشعار المعروض: المجمَّد إن كان إشعاراً محفوظاً لنفس العامل
+   (فتطابق إعادة الطباعة ما يُستقطع فعلاً)، وإلا أجر يومه الحالي. */
+function pnRate(){
+  const r=pnRec(), w=pnWorkerObj();
+  if(r && w && r.workerId===w.id && r.dayRate!=null && r.dayRate!=="") return Number(r.dayRate)||0;
+  return dailyRateFor(w);
+}
 function pnCurrentAmount(){
   const k=pnKindV();
   if(k==="amount") return Math.round(pnVal());
-  if(k==="days")   return roundPay(pnVal()*dayDeductFor(pnWorkerObj()));
+  if(k==="days")   return roundPay(pnVal()*pnRate());
   return 0;
+}
+/* هل هذا القرار هو صاحب حالة العامل الحالية؟ حالة غيّرها المستخدم بعده
+   بيده لا تُمسّ عند حذف القرار. */
+function ownsStatus(w,rec){
+  return !!(w && rec && rec.terminates && getWorkerStatus(w)===WS_END && (w.statusChangedAt||"")===rec.date);
+}
+/* إرجاع أثر قرار إنهاء خدمة إلى ما قبله — الحالة والتاريخ والملاحظة كاملة.
+   القيد الأصلي بسجل الحالة يُعلَّم ملغى، والرجوع يُسجَّل قيد إلغاء، فيبقى
+   الأثر للتدقيق ولا يظهر القرار الملغى كتغيير فعلي بكشف «التغييرات». */
+function undoTermination(w,rec){
+  if(!ownsStatus(w,rec)) return false;
+  const back = rec.prevStatus ? normStatus(rec.prevStatus) : (rec.prevEnd ? WS_MOVE : WS_ACTIVE);
+  (w.statusHistory||[]).forEach(e=>{ if(e && e.ref===rec.no && e.to===WS_END && !e.undo) e.voided=true; });
+  return setWorkerStatus(w, back, { date: back===WS_ACTIVE ? rec.date : (rec.prevChangedAt||rec.prevEnd||rec.date),
+    note: rec.prevNote||"", ref: rec.no, undo:true });
 }
 /* صيغة العقوبة بجملة يفهمها العامل بلا شرح */
 function pnKindPhrase(k,n){
@@ -3164,7 +3602,7 @@ function pnHintRender(){
   if(!w){ h.innerHTML="اختر العامل حتى يظهر أثر العقوبة على راتبه."; return; }
   const amt=pnCurrentAmount(), sal=salaryFor(w);
   let msg = k==="days"
-    ? "يُستقطع أجر <b>"+daysText(pnVal())+"</b> · أجر اليوم "+fmtRate(dayDeductFor(w))+
+    ? "يُستقطع أجر <b>"+daysText(pnVal())+"</b> · أجر اليوم "+fmtRate(pnRate())+
       " ← مقرَّباً لأقرب "+fmtNum(PAY_STEP)+" ← <b>"+fmtMoney(amt)+"</b> "+esc(cur)
     : "يُستقطع <b>"+fmtMoney(amt)+"</b> "+esc(cur);
   if(sal>0) msg+='<br><span class="mini">يعادل '+fmtNum(Math.round(amt/sal*100))+"% من راتبه الشهري.</span>";
@@ -3181,7 +3619,7 @@ function initPenView(){
   if(!el("pnAdmin").value) el("pnAdmin").value=S().signer||"";
   if(!el("pnNo").value) el("pnNo").value=nextPenaltyNo();
   if(!pnKindManual) el("pnKind").value=defaultPenKind(el("pnType").value);
-  pnSyncTermNote(); pnSyncKind();
+  pnSyncTermNote(); pnSyncKind(); pnSyncSave();
   renderPenalties(); drawPenalty(); pnHintRender();
 }
 el("pnWorker").addEventListener("change",()=>{
@@ -3197,54 +3635,98 @@ el("pnType").addEventListener("change",()=>{
   el("pnKind").value=defaultPenKind(el("pnType").value);
   pnSyncTermNote(); pnSyncKind(); drawPenalty(); pnHintRender(); });
 el("pnKind").addEventListener("change",()=>{ pnKindManual=true; pnSyncKind(); drawPenalty(); pnHintRender(); });
-el("pnDate").addEventListener("change",pnHintRender);
+el("pnDate").addEventListener("change",()=>{
+  if(!pnEditId) el("pnNo").value=nextPenaltyNo();
+  pnHintRender(); });
 el("pnAmount").addEventListener("input",()=>{ drawPenalty(); pnHintRender(); });
 
 el("pnNew").onclick=()=>{
+  pnEditId=null;
   el("pnWorker").value=""; el("pnSection").value=""; el("pnReason").value="";
   el("pnAmount").value=0; el("pnDate").value=curDate; el("pnNo").value=nextPenaltyNo();
   pnKindManual=false;
   el("pnKind").value=defaultPenKind(el("pnType").value);
-  pnSyncTermNote(); pnSyncKind(); drawPenalty(); pnHintRender();
+  pnSyncTermNote(); pnSyncKind(); pnSyncSave(); drawPenalty(); pnHintRender();
 };
-el("pnSave").onclick=()=>{
+/* مبلغ مقطوع بكسر أقل من ٢٥٠ لا يمكن دفعه باليد: يُقرَّب قبل الحفظ بموافقة
+   المستخدم، فيطابق الإشعار الموقّع ما يُستقطع فعلاً. المحفوظ سابقاً لا يُمسّ. */
+async function roundAmountField(inputId, v){
+  if(!(v>0) || v%PAY_STEP===0) return v;
+  const r=Math.max(PAY_STEP,roundPay(v));
+  const go=await confirmBox("تقريب المبلغ","المبلغ "+fmtMoney(v)+" يُقرَّب إلى "+fmtMoney(r)+
+    " — أصغر فئة متداولة "+fmtNum(PAY_STEP)+" دينار، والوثيقة الموقّعة لازم تطابق ما يُصرف أو يُستقطع فعلاً.\nنكمل بالمبلغ المقرَّب؟",
+    {ok:"نعم، قرّب المبلغ"});
+  if(!go) return null;
+  el(inputId).value=r;
+  return r;
+}
+el("pnSave").onclick=async()=>{
   const c=C(), w=pnWorkerObj();
-  if(!w){ alert("اختر اسم العامل أولاً."); return; }
-  const k=pnKindV(), v=pnVal();
-  if(k!=="none" && v<=0){ alert("اكتب مقدار العقوبة أولاً."); el("pnAmount").focus(); return; }
+  if(!w){ alertBox("اختر اسم العامل أولاً."); return; }
+  const k=pnKindV(); let v=pnVal();
+  if(k!=="none" && v<=0){ alertBox("اكتب مقدار العقوبة أولاً."); el("pnAmount").focus(); return; }
   const type=el("pnType").value, date=el("pnDate").value||curDate;
   const term=isTerminationType(type);
-  if(!term && !warnIfEnded(w,date,"\u0627\u0644\u0639\u0642\u0648\u0628\u0629")) return;
+  const open=pnRec();
+  if(pnEditId && !open){ pnEditId=null; }
+  /* تبديل العامل داخل قرار إنهاء خدمة ممنوع: القرار غيّر حالة عامل معيّن،
+     ونقله لعامل ثاني يترك الأول منتهي الخدمة بلا قرار. */
+  if(open && open.terminates && open.workerId!==w.id){
+    alertBox("ما يصير تبدّل العامل داخل قرار إنهاء خدمة.\n\n"+
+      "احذف القرار — ترجع حالة العامل الأول كما كانت — ثم أنشئ قراراً جديداً باسم العامل الصحيح.");
+    return;
+  }
+  if(!term){ const g=serviceGuardMsg(w,date,"العقوبة"); if(g){ alertBox(g,"عقوبة خارج مدة الخدمة"); return; } }
+  if(k==="amount"){ v=await roundAmountField("pnAmount",v); if(v==null) return; }
   if(term){
     const prevEnd=serviceEnd(w);
-    const already = prevEnd && prevEnd!==date;
-    if(!confirm("راح تنتهي خدمة «"+w.name+"» بتاريخ "+dateTextOf(date)+".\n\n"+
+    const own=open && ownsStatus(w,open);
+    const already = prevEnd && prevEnd!==date && !own;
+    const go=await confirmBox("قرار إنهاء خدمة","راح تنتهي خدمة «"+w.name+"» بتاريخ "+dateTextOf(date)+".\n\n"+
       "· ما يظهر بالجرد بعد هذا اليوم\n"+
       "· راتبه ينحسب لغاية هذا اليوم فقط\n"+
       "· حالته تصير «"+WS_END+"» ويظهر بتبويب حالات العمال"+
       (already?"\n· حالته الآن «"+getWorkerStatus(w)+"» بتاريخ "+dateTextOf(prevEnd)+" وراح تنستبدل":"")+
-      "\n\nتكمل؟")) return;
+      "\n\nتكمل؟",{ok:"حفظ القرار"});
+    if(!go) return;
   }
-  let no=el("pnNo").value;
-  if(!no || c.penalties.some(x=>x.no===no)) no=nextPenaltyNo();
-  c.penalties.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
+  /* تعديل قرار قائم: نرفع أثره القديم أولاً حتى تكون الحالة السابقة
+     المخزّنة صحيحة، ثم نعيد تطبيقه بالتاريخ الجديد. */
+  if(open && open.terminates) undoTermination(w,open);
+  /* الأجر المجمَّد يبقى عند التعديل لنفس العامل — تعديل السبب لا يغيّر المبلغ */
+  const rate=(open && open.workerId===w.id && open.dayRate!=null && open.dayRate!=="") ? Number(open.dayRate) : dailyRateFor(w);
+  const data={ workerId:w.id, name:w.name,
     section:el("pnSection").value, type:type,
-    kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:dayDeductFor(w),
+    kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:rate,
     date:date, terminates:term,
+    /* الحالة السابقة كاملة — حذف القرار يرجّعها كما كانت بالضبط */
     prevStatus:term?getWorkerStatus(w):undefined,
     prevChangedAt:term?(w.statusChangedAt||""):undefined,
     prevNote:term?(w.statusNote||""):undefined,
-    reason:el("pnReason").value,
-    admin:el("pnAdmin").value, issued:todayISO() });
-  c.penSeq=(c.penSeq||0)+1;
-  /* قرار إنهاء الخدمة يوحّد المسارين: تاريخ نهاية الخدمة وحالة العمل معاً،
-     فلا يبقى عامل منتهي الخدمة ظاهراً بحالة «مستمر». */
-  if(term) setWorkerStatus(w,WS_END,{date:date,note:"قرار إنهاء خدمة رقم "+no});
-  queueSave(); el("pnNo").value=nextPenaltyNo(); renderPenalties();
-  if(term){ refresh(); renderPeople(); renderVariables(); }
+    reason:el("pnReason").value, admin:el("pnAdmin").value };
+  let no, note;
+  if(open){
+    reviseRecord(open,data);
+    no=open.no;
+    note="انحفظ التعديل على إشعار "+no+" ✓";
+  }else{
+    const f=freshDocNo("ع",c.penalties,c.penSeq,date);
+    no=f.no;
+    const rec=Object.assign({ id:uid(), no:no, issued:todayISO() }, data);
+    c.penalties.unshift(rec);
+    c.penSeq=f.n;
+    pnEditId=rec.id;                 // يبقى مفتوحاً: ضغطة ثانية تعدّل ولا تكرّر
+    el("pnNo").value=no;
+    note = term ? "انحفظ قرار إنهاء الخدمة ✓" : "انحفظت العقوبة ✓";
+  }
+  /* قرار إنهاء الخدمة يمرّ من نفس دالة تغيير الحالة الموحّدة، فيُسجَّل
+     بسجل الحالة ولا يبقى عامل منتهي الخدمة ظاهراً بحالة «مستمر». */
+  if(term) setWorkerStatus(w,WS_END,{date:date,note:"قرار إنهاء خدمة رقم "+no,ref:no});
+  pnSyncSave();
+  queueSave(); renderPenalties(); drawPenalty(); pnHintRender();
+  if(term||open){ refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable(); }
   if(RP) runReport();
-  el("savedNote").textContent = term ? "انحفظ قرار إنهاء الخدمة ✓" : "انحفظت العقوبة ✓";
-  setTimeout(()=>el("savedNote").textContent="",2400);
+  flash(note);
 };
 function renderPenalties(){
   const c=C(), q=el("pnSearch").value.trim(), cur=S().currency||"";
@@ -3255,12 +3737,13 @@ function renderPenalties(){
   list.forEach(l=>{
     const w=c.workers.find(x=>x.id===l.workerId);
     const amt=penaltyAmount(l,w);
-    h+='<tr><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+
-      (w?"":' <span class="stag out">محذوف</span>')+'</td><td>'+esc(l.type||"—")+(l.terminates?' <span class="stag out">إنهاء خدمة</span>':'')+'</td>'+
+    h+='<tr'+(l.id===pnEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+
+      (w?"":' <span class="stag out">محذوف</span>')+'</td><td>'+esc(l.type||"—")+(l.terminates?' <span class="stag out">إنهاء خدمة</span>':'')+
+      (l.editedAt?' <span class="stag warn" title="'+esc(editedLine(l))+'">معدّل</span>':'')+'</td>'+
       '<td class="mini">'+esc(penKindName(l.kind))+(l.kind==="days"?" ("+daysText(l.days)+")":"")+'</td>'+
       '<td>'+dateTextOf(l.date)+'</td>'+
-      '<td style="color:var(--absent);font-weight:700">'+(amt?"-"+fmtMoney(amt)+" "+esc(cur):fmtNum(0))+'</td>'+
-      '<td style="text-align:left;white-space:nowrap"><button class="btn sm" data-popen="'+l.id+'">عرض</button> '+
+      '<td class="num" style="color:var(--absent);font-weight:700">'+(amt?"-"+fmtMoney(amt)+" "+esc(cur):fmtNum(0))+'</td>'+
+      '<td class="actcell"><button class="btn sm" data-popen="'+l.id+'">عرض</button> '+
       '<button class="btn sm danger" data-pdel="'+l.id+'">حذف</button></td></tr>'; });
   el("penaltiesList").innerHTML=h+'</tbody></table>';
 }
@@ -3269,29 +3752,31 @@ el("penaltiesList").addEventListener("click",e=>{
   const o=e.target.closest("[data-popen]"), d=e.target.closest("[data-pdel]");
   const c=C();
   if(o){ const l=(c.penalties||[]).find(x=>x.id===o.dataset.popen); if(!l) return;
+    pnEditId=l.id;
     el("pnNo").value=l.no; el("pnWorker").value=l.workerId||""; el("pnSection").value=l.section||"";
     el("pnType").value=l.type||PN_TYPES[0]; el("pnDate").value=l.date;
     el("pnKind").value=l.kind||"none"; pnKindManual=true;
     el("pnAmount").value = l.kind==="days" ? (l.days||0) : (l.amount||0);
     el("pnReason").value=l.reason||""; el("pnAdmin").value=l.admin||"";
-    pnSyncKind(); drawPenalty(); pnHintRender(); }
+    pnSyncKind(); pnSyncSave(); renderPenalties(); drawPenalty(); pnHintRender(); }
   if(d){ const l=(c.penalties||[]).find(x=>x.id===d.dataset.pdel); if(!l) return;
     const w=c.workers.find(x=>x.id===l.workerId);
-    /* حذف قرار إنهاء الخدمة لازم يرجع حالة العمل أيضاً، لا تاريخها فقط —
-       بدونها يبقى العامل «إنهاء خدمات» وراتبه ناقصاً رغم إلغاء القرار. */
-    const undoTerm = l.terminates && w && getWorkerStatus(w)===WS_END && w.statusChangedAt===l.date;
-    if(confirm("يتحذف إشعار "+l.no+"؟"+
-      (undoTerm?"\n\nهذا هو قرار إنهاء خدمة «"+w.name+"» — بحذفه ترجع حالته وراتبه كما كانا قبله.":""))){
+    /* حذف قرار إنهاء الخدمة يرجّع الحالة والتاريخ والملاحظة معاً — فقط إن
+       كان هذا القرار هو صاحب الحالة الحالية فعلاً */
+    const undoTerm = ownsStatus(w,l);
+    const back = l.prevStatus ? normStatus(l.prevStatus) : (l.prevEnd ? WS_MOVE : WS_ACTIVE);
+    confirmBox("حذف إشعار","يتحذف إشعار "+l.no+" («"+(l.name||"")+"»)؟"+
+      (undoTerm?"\n\nهذا هو قرار إنهاء خدمة «"+w.name+"» — بحذفه ترجع حالته «"+back+"»"+
+        (back===WS_ACTIVE?" ويرجع للجرد والراتب.":" بتاريخ "+((l.prevChangedAt||l.prevEnd)?dateTextOf(l.prevChangedAt||l.prevEnd):"—")+"."):""),
+      {ok:"حذف",danger:true}).then(go=>{
+      if(!go) return;
+      if(pnEditId===l.id){ pnEditId=null; pnSyncSave(); }
       c.penalties=c.penalties.filter(x=>x.id!==l.id);
-      if(undoTerm){
-        const prev = l.prevStatus ? normStatus(l.prevStatus) : (l.prevEnd ? WS_MOVE : WS_ACTIVE);
-        w.status=prev;
-        w.statusChangedAt = (prev===WS_ACTIVE) ? "" : (l.prevChangedAt||l.prevEnd||"");
-        w.statusNote = l.prevNote||"";
-      }
+      if(undoTerm) undoTermination(w,l);
       queueSave(); renderPenalties();
-      if(undoTerm){ refresh(); renderPeople(); renderVariables(); }
-      if(RP) runReport(); } }
+      if(undoTerm){ refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable(); }
+      if(RP) runReport();
+    }); }
 });
 
 /* ---- رسم إشعار العقوبة — نفس قياس وصل الإجازة بلون إنذار ---- */
@@ -3309,10 +3794,12 @@ function drawPenalty(target,k){
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
   ctx.strokeStyle=CLR.line; ctx.lineWidth=2; ctx.strokeRect(16,16,LV_W-32,LV_H-32);
 
+  const pnR=pnRec(), pnIss=docIssued(pnR), pnEd=editedLine(pnR);
   let y=drawDocHeader(ctx,{title:isTerminationType(el("pnType").value)?"قرار إنهاء خدمات":"إشعار عقوبة",
-    accent:RED,no:el("pnNo").value})+34;
+    accent:RED,no:el("pnNo").value,date:pnIss})+34;
   ctx.font=f(500,15); ctx.fillStyle=CLR.ink2;
-  ctx.fillText("تاريخ التحرير: "+dateTextOf(todayISO())+"   —   يُنفّذ ضمن راتب "+monthNameOf(el("pnDate").value||curDate),R,y);
+  ctx.fillText("تاريخ التحرير: "+dateTextOf(pnIss)+(pnEd?"   —   "+pnEd:"")+
+    "   —   يُنفّذ ضمن راتب "+monthNameOf(el("pnDate").value||curDate),R,y);
   y+=30;
 
   const rowH=46;
@@ -3361,18 +3848,18 @@ function drawCommittee(ctx,L,R,W,y,CLR,custom){
 }
 function penHiRes(){ const cv=document.createElement("canvas"); drawPenalty(cv,dpiScale()); return cv; }
 el("pnWord").onclick=()=>{
-  if(!el("pnWorker").value){ alert("اختر العامل أولاً."); return; }
+  if(!el("pnWorker").value){ alertBox("اختر العامل أولاً."); return; }
   try{ saveDocx(penaltyDocx(),"اشعار-عقوبة-"+(el("pnNo").value||todayISO())+".docx");
     el("savedNote").textContent="انصدّر الإشعار Word ✓";
     setTimeout(()=>el("savedNote").textContent="",2200);
-  }catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+  }catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("pnPng").onclick=()=>{ penHiRes().toBlob(b=>dl(URL.createObjectURL(b),
   "اشعار-عقوبة-"+(el("pnNo").value||"")+".png"),"image/png"); };
 el("pnPrint").onclick=()=>{
   const img=penHiRes().toDataURL("image/png");
   const w=window.open("","_blank");
-  if(!w){ alert("المتصفح منع فتح النافذة."); return; }
+  if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const no=el("pnNo").value||"";
   w.document.write(
     '<html><head><meta charset="utf-8"><title>إشعار عقوبة '+no+'</title><style>'+
@@ -3394,12 +3881,12 @@ el("pnPrint").onclick=()=>{
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
 
-/* ==================== الإنجازات والمكافآت ==================== */
+/* ==================== [واجهة] الإنجازات والمكافآت ==================== */
 /* نفس بنية العقوبات تماماً — وثيقة مرقّمة بلجنة ثلاثية تُحفظ بسجل الشركة
    وتُضاف إلى راتب المدة التي يقع فيها تاريخها، لكن بالموجب لا بالسالب. */
 const AC_TYPES=["أفضل عامل بالشهر","مكافأة التزام ودوام","مكافأة جهد إضافي","مكافأة إنتاجية","مكافأة استثنائية","شهادة تقديرية"];
 
-function nextAchNo(){ return docNo("م",(C().achSeq||0)+1); }
+function nextAchNo(){ return freshDocNo("م", C().achievements, C().achSeq, el("acDate").value||curDate).no; }
 function defaultAchKind(type){
   const t=String(type||"");
   if(t.indexOf("شهادة")>=0) return "none";
@@ -3422,13 +3909,22 @@ function achAmount(a,w){
 }
 
 let acKindManual=false;
+let acEditId=null;
+function acRec(){ return recOf(C().achievements, acEditId); }
+function acSyncSave(){ syncSaveBtn("acSave", !!acEditId, "حفظ المكافأة"); }
 function acKindV(){ return el("acKind").value||"none"; }
 function acVal(){ return Math.max(0,Number(el("acAmount").value)||0); }
 function acWorkerObj(){ return C().workers.find(x=>x.id===el("acWorker").value)||null; }
+/* أجر اليوم للإشعار المعروض: المجمَّد إن كان محفوظاً لنفس العامل */
+function acRate(){
+  const r=acRec(), w=acWorkerObj();
+  if(r && w && r.workerId===w.id && r.dayRate!=null && r.dayRate!=="") return Number(r.dayRate)||0;
+  return dailyRateFor(w);
+}
 function acCurrentAmount(){
   const k=acKindV();
   if(k==="amount") return Math.round(acVal());
-  if(k==="days")   return roundPay(acVal()*dailyRateFor(acWorkerObj()));
+  if(k==="days")   return roundPay(acVal()*acRate());
   return 0;
 }
 function acSyncKind(){
@@ -3460,7 +3956,7 @@ function acHintRender(){
   if(!w){ h.innerHTML="اختر العامل حتى يظهر أثر المكافأة على راتبه."; return; }
   const amt=acCurrentAmount(), sal=salaryFor(w);
   let msg = k==="days"
-    ? "يُضاف أجر <b>"+daysText(acVal())+"</b> · أجر اليوم "+fmtRate(dailyRateFor(w))+
+    ? "يُضاف أجر <b>"+daysText(acVal())+"</b> · أجر اليوم "+fmtRate(acRate())+
       " ← مقرَّباً لأقرب "+fmtNum(PAY_STEP)+" ← <b>"+fmtMoney(amt)+"</b> "+esc(cur)
     : "يُضاف <b>"+fmtMoney(amt)+"</b> "+esc(cur);
   if(sal>0) msg+='<br><span class="mini">راتبه يصير '+fmtMoney(sal+amt)+" "+esc(cur)+
@@ -3477,7 +3973,7 @@ function initAchView(){
   if(!el("acAdmin").value) el("acAdmin").value=S().signer||"";
   if(!el("acNo").value) el("acNo").value=nextAchNo();
   if(!acKindManual) el("acKind").value=defaultAchKind(el("acType").value);
-  acSyncKind();
+  acSyncKind(); acSyncSave();
   renderAchievements(); drawAchievement(); acHintRender();
 }
 el("acWorker").addEventListener("change",()=>{
@@ -3494,33 +3990,49 @@ el("acType").addEventListener("change",()=>{
   acSyncKind(); drawAchievement(); acHintRender(); });
 el("acKind").addEventListener("change",()=>{ acKindManual=true; acSyncKind(); drawAchievement(); acHintRender(); });
 el("acAmount").addEventListener("input",()=>{ drawAchievement(); acHintRender(); });
+el("acDate").addEventListener("change",()=>{ if(!acEditId) el("acNo").value=nextAchNo(); });
 
 el("acNew").onclick=()=>{
+  acEditId=null;
   el("acWorker").value=""; el("acSection").value=""; el("acReason").value="";
   el("acAmount").value=0; el("acDate").value=curDate; el("acNo").value=nextAchNo();
   acKindManual=false;
   el("acKind").value=defaultAchKind(el("acType").value);
-  acSyncKind(); drawAchievement(); acHintRender();
+  acSyncKind(); acSyncSave(); drawAchievement(); acHintRender();
 };
-el("acSave").onclick=()=>{
+el("acSave").onclick=async()=>{
   const c=C(), w=acWorkerObj();
-  if(!w){ alert("اختر اسم العامل أولاً."); return; }
-  const k=acKindV(), v=acVal();
-  if(k!=="none" && v<=0){ alert("اكتب مقدار المكافأة أولاً."); el("acAmount").focus(); return; }
+  if(!w){ alertBox("اختر اسم العامل أولاً."); return; }
+  const k=acKindV(); let v=acVal();
+  if(k!=="none" && v<=0){ alertBox("اكتب مقدار المكافأة أولاً."); el("acAmount").focus(); return; }
   const acDate=el("acDate").value||curDate;
-  if(!warnIfEnded(w,acDate,"\u0627\u0644\u0645\u0643\u0627\u0641\u0623\u0629")) return;
-  let no=el("acNo").value;
-  if(!no || (c.achievements||[]).some(x=>x.no===no)) no=nextAchNo();
-  c.achievements.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
+  const open=acRec();
+  if(acEditId && !open){ acEditId=null; }
+  const g=serviceGuardMsg(w,acDate,"المكافأة");
+  if(g){ alertBox(g,"مكافأة خارج مدة الخدمة"); return; }
+  if(k==="amount"){ v=await roundAmountField("acAmount",v); if(v==null) return; }
+  const rate=(open && open.workerId===w.id && open.dayRate!=null && open.dayRate!=="") ? Number(open.dayRate) : dailyRateFor(w);
+  const data={ workerId:w.id, name:w.name,
     section:el("acSection").value, type:el("acType").value,
-    kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:dailyRateFor(w),
-    date:acDate, reason:el("acReason").value,
-    admin:el("acAdmin").value, issued:todayISO() });
-  c.achSeq=(c.achSeq||0)+1;
-  queueSave(); el("acNo").value=nextAchNo(); renderAchievements();
+    kind:k, amount:k==="amount"?v:0, days:k==="days"?v:0, dayRate:rate,
+    date:acDate, reason:el("acReason").value, admin:el("acAdmin").value };
+  let note;
+  if(open){
+    reviseRecord(open,data);
+    note="انحفظ التعديل على إشعار "+open.no+" ✓";
+  }else{
+    const f=freshDocNo("م",c.achievements,c.achSeq,acDate);
+    const rec=Object.assign({ id:uid(), no:f.no, issued:todayISO() }, data);
+    c.achievements.unshift(rec);
+    c.achSeq=f.n;
+    acEditId=rec.id;
+    el("acNo").value=rec.no;
+    note="انحفظت المكافأة ✓";
+  }
+  acSyncSave();
+  queueSave(); renderAchievements(); drawAchievement(); acHintRender();
   if(RP) runReport();
-  el("savedNote").textContent="انحفظت المكافأة ✓";
-  setTimeout(()=>el("savedNote").textContent="",2400);
+  flash(note);
 };
 function renderAchievements(){
   const c=C(), q=el("acSearch").value.trim(), cur=S().currency||"";
@@ -3531,12 +4043,13 @@ function renderAchievements(){
   list.forEach(l=>{
     const w=c.workers.find(x=>x.id===l.workerId);
     const amt=achAmount(l,w);
-    h+='<tr><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+
-      (w?"":' <span class="stag out">محذوف</span>')+'</td><td>'+esc(l.type||"—")+'</td>'+
+    h+='<tr'+(l.id===acEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+
+      (w?"":' <span class="stag out">محذوف</span>')+'</td><td>'+esc(l.type||"—")+
+      (l.editedAt?' <span class="stag warn" title="'+esc(editedLine(l))+'">معدّل</span>':'')+'</td>'+
       '<td class="mini">'+esc(achKindName(l.kind))+(l.kind==="days"?" ("+daysText(l.days)+")":"")+'</td>'+
       '<td>'+dateTextOf(l.date)+'</td>'+
-      '<td style="color:var(--present);font-weight:700">'+(amt?"+"+fmtMoney(amt)+" "+esc(cur):fmtNum(0))+'</td>'+
-      '<td style="text-align:left;white-space:nowrap"><button class="btn sm" data-aopen="'+l.id+'">عرض</button> '+
+      '<td class="num" style="color:var(--present);font-weight:700">'+(amt?"+"+fmtMoney(amt)+" "+esc(cur):fmtNum(0))+'</td>'+
+      '<td class="actcell"><button class="btn sm" data-aopen="'+l.id+'">عرض</button> '+
       '<button class="btn sm danger" data-adel="'+l.id+'">حذف</button></td></tr>'; });
   el("achList").innerHTML=h+'</tbody></table>';
 }
@@ -3545,16 +4058,20 @@ el("achList").addEventListener("click",e=>{
   const o=e.target.closest("[data-aopen]"), d=e.target.closest("[data-adel]");
   const c=C();
   if(o){ const l=(c.achievements||[]).find(x=>x.id===o.dataset.aopen); if(!l) return;
+    acEditId=l.id;
     el("acNo").value=l.no; el("acWorker").value=l.workerId||""; el("acSection").value=l.section||"";
     el("acType").value=l.type||AC_TYPES[0]; el("acDate").value=l.date;
     el("acKind").value=l.kind||"none"; acKindManual=true;
     el("acAmount").value = l.kind==="days" ? (l.days||0) : (l.amount||0);
     el("acReason").value=l.reason||""; el("acAdmin").value=l.admin||"";
-    acSyncKind(); drawAchievement(); acHintRender(); }
+    acSyncKind(); acSyncSave(); renderAchievements(); drawAchievement(); acHintRender(); }
   if(d){ const l=(c.achievements||[]).find(x=>x.id===d.dataset.adel); if(!l) return;
-    if(confirm("يتحذف إشعار "+l.no+"؟")){
+    confirmBox("حذف إشعار","يتحذف إشعار "+l.no+" («"+(l.name||"")+"»)؟",{ok:"حذف",danger:true}).then(go=>{
+      if(!go) return;
+      if(acEditId===l.id){ acEditId=null; acSyncSave(); }
       c.achievements=c.achievements.filter(x=>x.id!==l.id); queueSave(); renderAchievements();
-      if(RP) runReport(); } }
+      if(RP) runReport();
+    }); }
 });
 
 function drawAchievement(target,k){
@@ -3571,9 +4088,11 @@ function drawAchievement(target,k){
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
   ctx.strokeStyle=CLR.line; ctx.lineWidth=2; ctx.strokeRect(16,16,LV_W-32,LV_H-32);
 
-  let y=drawDocHeader(ctx,{title:"إشعار مكافأة وتقدير",accent:GRN,no:el("acNo").value})+34;
+  const acR=acRec(), acIss=docIssued(acR), acEd=editedLine(acR);
+  let y=drawDocHeader(ctx,{title:"إشعار مكافأة وتقدير",accent:GRN,no:el("acNo").value,date:acIss})+34;
   ctx.font=f(500,15); ctx.fillStyle=CLR.ink2;
-  ctx.fillText("تاريخ التحرير: "+dateTextOf(todayISO())+"   —   تُصرف ضمن راتب "+monthNameOf(el("acDate").value||curDate),R,y);
+  ctx.fillText("تاريخ التحرير: "+dateTextOf(acIss)+(acEd?"   —   "+acEd:"")+
+    "   —   تُصرف ضمن راتب "+monthNameOf(el("acDate").value||curDate),R,y);
   y+=30;
 
   const rowH=46;
@@ -3609,18 +4128,18 @@ function drawAchievement(target,k){
 }
 function achHiRes(){ const cv=document.createElement("canvas"); drawAchievement(cv,dpiScale()); return cv; }
 el("acWord").onclick=()=>{
-  if(!el("acWorker").value){ alert("اختر العامل أولاً."); return; }
+  if(!el("acWorker").value){ alertBox("اختر العامل أولاً."); return; }
   try{ saveDocx(achievementDocx(),"اشعار-مكافاة-"+(el("acNo").value||todayISO())+".docx");
     el("savedNote").textContent="انصدّر الإشعار Word ✓";
     setTimeout(()=>el("savedNote").textContent="",2200);
-  }catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+  }catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("acPng").onclick=()=>{ achHiRes().toBlob(b=>dl(URL.createObjectURL(b),
   "اشعار-مكافاة-"+(el("acNo").value||"")+".png"),"image/png"); };
 el("acPrint").onclick=()=>{
   const img=achHiRes().toDataURL("image/png");
   const w=window.open("","_blank");
-  if(!w){ alert("المتصفح منع فتح النافذة."); return; }
+  if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const no=el("acNo").value||"";
   w.document.write(
     '<html><head><meta charset="utf-8"><title>إشعار مكافأة '+no+'</title><style>'+
@@ -3642,7 +4161,7 @@ el("acPrint").onclick=()=>{
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
 
-/* ==================== مواد التنظيف ==================== */
+/* ==================== [واجهة] مواد التنظيف ==================== */
 /* وصل صرف مواد: وثيقة مرقّمة تُحفظ بسجل الشركة، تثبّت شنو أخذ العامل
    ولغاية أي تاريخ تكفيه، ومتى يستحق صرفة جديدة. لا تمسّ الرواتب إطلاقاً. */
 function defaultMaterials(){
@@ -3659,7 +4178,7 @@ function defaultMaterials(){
     {id:uid(),name:"دلو بلاستيك",unit:"قطعة",qty:1}
   ];
 }
-function nextIssueNo(){ return docNo("ت",(C().issueSeq||0)+1); }
+function nextIssueNo(){ return freshDocNo("ت", C().issues, C().issueSeq, el("mtFrom").value||curDate).no; }
 function periodName(d){
   d=Number(d)||0;
   return d===7?"أسبوع" : d===14?"أسبوعين" : d===30?"شهر"
@@ -3673,6 +4192,9 @@ function fmtQty(n){
 
 /* ---- حالة النموذج ---- */
 let mtSel={};                        // { materialId: الكمية }
+let mtEditId=null;
+function mtRec(){ return recOf(C().issues, mtEditId); }
+function mtSyncSave(){ syncSaveBtn("mtSave", !!mtEditId, "حفظ الوصل"); }
 function mtWorkerObj(){ return C().workers.find(x=>x.id===el("mtWorker").value)||null; }
 function mtFromDate(){ return el("mtFrom").value||curDate; }
 function mtToDate(){ return el("mtTo").value||mtFromDate(); }
@@ -3778,8 +4300,8 @@ function renderCatalog(){
 }
 el("catAdd").onclick=()=>{
   const c=C(), name=el("catName").value.trim();
-  if(!name){ alert("اكتب اسم المادة."); el("catName").focus(); return; }
-  if(c.materials.some(m=>m.name===name)){ alert("هذه المادة موجودة بالقائمة."); return; }
+  if(!name){ alertBox("اكتب اسم المادة."); el("catName").focus(); return; }
+  if(c.materials.some(m=>m.name===name)){ alertBox("هذه المادة موجودة بالقائمة."); return; }
   c.materials.push({ id:uid(), name:name, unit:el("catUnit").value.trim(),
     qty:Math.max(0,Number(el("catQty").value)||1) });
   el("catName").value=""; el("catUnit").value=""; el("catQty").value=1;
@@ -3796,8 +4318,8 @@ el("catList").addEventListener("click",e=>{
     ]}).then(v=>{
       if(!v) return;
       const nm=normName(v.dmName);
-      if(!nm){ alert("اسم المادة ما يصير فارغ."); return; }
-      if(c.materials.some(x=>x.id!==m.id && x.name===nm)){ alert("أكو مادة ثانية بنفس الاسم."); return; }
+      if(!nm){ alertBox("اسم المادة ما يصير فارغ."); return; }
+      if(c.materials.some(x=>x.id!==m.id && x.name===nm)){ alertBox("أكو مادة ثانية بنفس الاسم."); return; }
       m.name=nm; m.unit=String(v.dmUnit||"").trim(); m.qty=Math.max(0,Number(v.dmQty)||0);
       queueSave(); renderCatalog(); renderMatItems(); drawIssue();
     });
@@ -3823,7 +4345,7 @@ function initMatView(){
   if(!el("mtFrom").value) el("mtFrom").value=curDate;
   if(!el("mtAdmin").value) el("mtAdmin").value=S().signer||"";
   if(!el("mtNo").value) el("mtNo").value=nextIssueNo();
-  mtRecalc();
+  mtRecalc(); mtSyncSave();
   renderCatalog(); renderMatItems(); renderIssues(); mtStatusRender(); drawIssue();
 }
 el("mtWorker").addEventListener("change",()=>{
@@ -3835,40 +4357,55 @@ el("mtWorker").addEventListener("change",()=>{
 ["mtSection","mtNotes","mtAdmin"].forEach(id=>
   el(id).addEventListener("input",()=>{ drawIssue(); }));
 el("mtPeriod").addEventListener("change",()=>{ mtRecalc(); mtStatusRender(); drawIssue(); });
-el("mtFrom").addEventListener("change",()=>{ mtRecalc(); mtStatusRender(); drawIssue(); });
+el("mtFrom").addEventListener("change",()=>{
+  if(!mtEditId) el("mtNo").value=nextIssueNo();
+  mtRecalc(); mtStatusRender(); drawIssue(); });
 el("mtTo").addEventListener("change",()=>{
   el("mtPeriod").value="custom"; mtRecalc(); mtStatusRender(); drawIssue(); });
 
 el("mtNew").onclick=()=>{
+  mtEditId=null;
   el("mtWorker").value=""; el("mtSection").value=""; el("mtNotes").value="";
   el("mtFrom").value=curDate; el("mtPeriod").value="30";
   el("mtNo").value=nextIssueNo(); mtSel={};
-  mtRecalc(); renderMatItems(); mtStatusRender(); drawIssue();
+  mtRecalc(); mtSyncSave(); renderMatItems(); mtStatusRender(); drawIssue();
 };
-el("mtSave").onclick=()=>{
+el("mtSave").onclick=async()=>{
   const c=C(), w=mtWorkerObj();
-  if(!w){ alert("اختر اسم العامل أولاً."); return; }
+  if(!w){ alertBox("اختر اسم العامل أولاً."); return; }
   const items=mtItemsForDoc();
-  if(!items.length){ alert("أشّر على مادة واحدة على الأقل."); return; }
+  if(!items.length){ alertBox("أشّر على مادة واحدة على الأقل."); return; }
   const from=mtFromDate(), to=mtToDate();
-  if(!warnIfEnded(w,from,"وصل المواد")) return;
-  const prev=(c.issues||[]).filter(x=>x.workerId===w.id)
+  const open=mtRec();
+  if(mtEditId && !open){ mtEditId=null; }
+  if(!await warnIfEnded(w,from,"وصل المواد")) return;
+  const prev=(c.issues||[]).filter(x=>x.workerId===w.id && (!open || x.id!==open.id))
     .sort((a,b)=>String(b.to||"").localeCompare(String(a.to||"")))[0];
   if(prev && prev.to>=from){
-    if(!confirm("«"+w.name+"» مواده السابقة (وصل "+prev.no+") تكفي لغاية "+dateTextOf(prev.to)+".\n\n"+
-      "يستحق صرفة جديدة بتاريخ "+dateTextOf(addDays(prev.to,1))+".\nتريد تصرف له من هسّة؟")) return;
+    const go=await confirmBox("مواده السابقة سارية","«"+w.name+"» مواده السابقة (وصل "+prev.no+") تكفي لغاية "+dateTextOf(prev.to)+".\n\n"+
+      "يستحق صرفة جديدة بتاريخ "+dateTextOf(addDays(prev.to,1))+".\nتريد تصرف له من هسّة؟",{ok:"اصرف الآن"});
+    if(!go) return;
   }
-  let no=el("mtNo").value;
-  if(!no || (c.issues||[]).some(x=>x.no===no)) no=nextIssueNo();
-  c.issues.unshift({ id:uid(), no:no, workerId:w.id, name:w.name,
+  const data={ workerId:w.id, name:w.name,
     section:el("mtSection").value, from:from, to:to, days:mtSpanDays(),
     items:items.map(x=>({name:x.name,unit:x.unit,qty:x.qty})),
-    notes:el("mtNotes").value, admin:el("mtAdmin").value, issued:todayISO() });
-  c.issueSeq=(c.issueSeq||0)+1;
-  queueSave(); el("mtNo").value=nextIssueNo();
-  renderIssues(); mtStatusRender();
-  el("savedNote").textContent="انحفظ وصل المواد ✓";
-  setTimeout(()=>el("savedNote").textContent="",2400);
+    notes:el("mtNotes").value, admin:el("mtAdmin").value };
+  let note;
+  if(open){
+    reviseRecord(open,data);
+    note="انحفظ التعديل على وصل "+open.no+" ✓";
+  }else{
+    const f=freshDocNo("ت",c.issues,c.issueSeq,from);
+    const rec=Object.assign({ id:uid(), no:f.no, issued:todayISO() }, data);
+    c.issues.unshift(rec);
+    c.issueSeq=f.n;
+    mtEditId=rec.id;
+    el("mtNo").value=rec.no;
+    note="انحفظ وصل المواد ✓";
+  }
+  mtSyncSave();
+  queueSave(); renderIssues(); mtStatusRender(); drawIssue();
+  flash(note);
 };
 function renderIssues(){
   const c=C(), q=el("mtSearch").value.trim();
@@ -3880,12 +4417,12 @@ function renderIssues(){
   list.forEach(l=>{
     const w=c.workers.find(x=>x.id===l.workerId);
     const live = l.to>=today;
-    h+='<tr><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+
+    h+='<tr'+(l.id===mtEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+
       (w?"":' <span class="stag out">محذوف</span>')+'</td>'+
       '<td class="mini">'+fmtNum((l.items||[]).length)+" مادة"+'</td>'+
       '<td>'+dateTextOf(l.from)+'</td><td>'+dateTextOf(l.to)+'</td>'+
       '<td><span class="stag '+(live?"ok":"warn")+'">'+(live?"ساري":"منتهي")+'</span></td>'+
-      '<td style="text-align:left;white-space:nowrap"><button class="btn sm" data-iopen="'+l.id+'">عرض</button> '+
+      '<td class="actcell"><button class="btn sm" data-iopen="'+l.id+'">عرض</button> '+
       '<button class="btn sm danger" data-idel="'+l.id+'">حذف</button></td></tr>'; });
   el("issuesList").innerHTML=h+'</tbody></table>';
 }
@@ -3893,6 +4430,7 @@ el("mtSearch").addEventListener("input",renderIssues);
 el("issuesList").addEventListener("click",e=>{
   const o=e.target.closest("[data-iopen]"), d=e.target.closest("[data-idel]"), c=C();
   if(o){ const l=(c.issues||[]).find(x=>x.id===o.dataset.iopen); if(!l) return;
+    mtEditId=l.id; mtSyncSave();
     el("mtNo").value=l.no; el("mtWorker").value=l.workerId||""; el("mtSection").value=l.section||"";
     el("mtFrom").value=l.from; el("mtTo").value=l.to; el("mtPeriod").value="custom";
     el("mtNotes").value=l.notes||""; el("mtAdmin").value=l.admin||"";
@@ -3903,13 +4441,16 @@ el("issuesList").addEventListener("click",e=>{
       const m=(c.materials||[]).find(x=>x.name===it.name);
       if(m) mtSel[m.id]=it.qty;
     });
-    renderMatItems(); mtStatusRender(); drawIssue();
+    renderMatItems(); renderIssues(); mtStatusRender(); drawIssue();
     if((l.items||[]).some(it=>!(c.materials||[]).some(m=>m.name===it.name)))
-      alert("بعض مواد هذا الوصل ما عادت موجودة بقائمة المواد، فما انتأشّرت.");
+      alertBox("بعض مواد هذا الوصل ما عادت موجودة بقائمة المواد، فما انتأشّرت.");
   }
   if(d){ const l=(c.issues||[]).find(x=>x.id===d.dataset.idel); if(!l) return;
-    if(confirm("يتحذف وصل "+l.no+"؟")){
-      c.issues=c.issues.filter(x=>x.id!==l.id); queueSave(); renderIssues(); mtStatusRender(); } }
+    confirmBox("حذف وصل مواد","يتحذف وصل "+l.no+" («"+(l.name||"")+"»)؟",{ok:"حذف",danger:true}).then(go=>{
+      if(!go) return;
+      if(mtEditId===l.id){ mtEditId=null; mtSyncSave(); }
+      c.issues=c.issues.filter(x=>x.id!==l.id); queueSave(); renderIssues(); mtStatusRender();
+    }); }
 });
 
 /* ---- معاينة وصل المواد — ارتفاعها يطول مع عدد المواد ---- */
@@ -3930,7 +4471,7 @@ function drawIssue(target,k){
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
   ctx.strokeStyle=CLR.line; ctx.lineWidth=2; ctx.strokeRect(16,16,LV_W-32,H-32);
 
-  let y=drawDocHeader(ctx,{title:"\u0648\u0635\u0644 \u0635\u0631\u0641 \u0645\u0648\u0627\u062f",accent:GOLD,no:el("mtNo").value})+32;
+  let y=drawDocHeader(ctx,{title:"\u0648\u0635\u0644 \u0635\u0631\u0641 \u0645\u0648\u0627\u062f",accent:GOLD,no:el("mtNo").value,date:docIssued(mtRec())})+32;
 
   const rowH=46;
   function row(label,value){
@@ -4004,12 +4545,12 @@ function drawIssue(target,k){
 }
 function issueHiRes(){ const cv=document.createElement("canvas"); drawIssue(cv,dpiScale()); return cv; }
 el("mtWord").onclick=()=>{
-  if(!el("mtWorker").value){ alert("\u0627\u062e\u062a\u0631 \u0627\u0644\u0639\u0627\u0645\u0644 \u0623\u0648\u0644\u0627\u064b."); return; }
-  if(!mtItemsForDoc().length){ alert("\u0623\u0634\u0651\u0631 \u0639\u0644\u0649 \u0645\u0627\u062f\u0629 \u0648\u0627\u062d\u062f\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644."); return; }
+  if(!el("mtWorker").value){ alertBox("\u0627\u062e\u062a\u0631 \u0627\u0644\u0639\u0627\u0645\u0644 \u0623\u0648\u0644\u0627\u064b."); return; }
+  if(!mtItemsForDoc().length){ alertBox("\u0623\u0634\u0651\u0631 \u0639\u0644\u0649 \u0645\u0627\u062f\u0629 \u0648\u0627\u062d\u062f\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644."); return; }
   try{ saveDocx(issueDocx(),"\u0648\u0635\u0644-\u0645\u0648\u0627\u062f-"+(el("mtNo").value||todayISO())+".docx");
     el("savedNote").textContent="\u0627\u0646\u0635\u062f\u0651\u0631 \u0627\u0644\u0648\u0635\u0644 Word \u2713";
     setTimeout(()=>el("savedNote").textContent="",2200);
-  }catch(err){ alert("\u062a\u0639\u0630\u0651\u0631 \u0625\u0646\u0634\u0627\u0621 \u0645\u0644\u0641 \u0627\u0644\u0648\u0648\u0631\u062f: "+err.message); }
+  }catch(err){ alertBox("\u062a\u0639\u0630\u0651\u0631 \u0625\u0646\u0634\u0627\u0621 \u0645\u0644\u0641 \u0627\u0644\u0648\u0648\u0631\u062f: "+err.message); }
 };
 el("mtPng").onclick=()=>{ issueHiRes().toBlob(b=>dl(URL.createObjectURL(b),
   "\u0648\u0635\u0644-\u0645\u0648\u0627\u062f-"+(el("mtNo").value||"")+".png"),"image/png"); };
@@ -4019,7 +4560,7 @@ el("mtPrint").onclick=()=>{
   /* عرض الصورة ١٨٠مم — إذا ما توسع نسختان بورقة، كل نسخة بصفحة */
   const two = (180*ratio*2 + 34) <= 277;
   const w=window.open("","_blank");
-  if(!w){ alert("\u0627\u0644\u0645\u062a\u0635\u0641\u062d \u0645\u0646\u0639 \u0641\u062a\u062d \u0627\u0644\u0646\u0627\u0641\u0630\u0629."); return; }
+  if(!w){ alertBox("\u0627\u0644\u0645\u062a\u0635\u0641\u062d \u0645\u0646\u0639 \u0641\u062a\u062d \u0627\u0644\u0646\u0627\u0641\u0630\u0629."); return; }
   const no=el("mtNo").value||"";
   const copy=(tag)=>'<div class="copy"><div class="tag">'+tag+'</div><img src="'+img+'"></div>';
   const body = two
@@ -4047,7 +4588,7 @@ el("mtPrint").onclick=()=>{
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
 
-/* ==================== دليل العمال ==================== */
+/* ==================== [واجهة] دليل العمال ==================== */
 /* أرقام الهواتف والعناوين — تُحفظ مع العامل نفسه لا بسجل منفصل،
    فتبقى مرتبطة بمعرّفه مهما انتعدّل اسمه أو قسمه. */
 const AR_DIGITS={"\u0660":"0","\u0661":"1","\u0662":"2","\u0663":"3","\u0664":"4",
@@ -4207,7 +4748,7 @@ function dirSave(id){
   if(!w){ editDirId=null; renderDirectory(); return; }
   const g=i=>{ const n=document.getElementById(i); return n?String(n.value||"").trim():""; };
   const name=normName(g("dirName"));
-  if(!name){ alert("اسم العامل ما يصير فارغ."); return; }
+  if(!name){ alertBox("اسم العامل ما يصير فارغ."); return; }
   const secNode=document.getElementById("dirSec");
   const stNode=document.getElementById("dirStatus");
   const nextSt=stNode?normStatus(stNode.value):getWorkerStatus(w);
@@ -4259,27 +4800,27 @@ const DIR_LTR_COLS=[5,6];
 const DIR_STATUS_COL=9;
 el("dirXls").onclick=()=>{
   const list=dirList();
-  if(!list.length){ alert("ماكو عمال للتصدير."); return; }
+  if(!list.length){ alertBox("ماكو عمال للتصدير."); return; }
   try{
     const rows=[DIR_HEAD].concat(dirExportRows(true));
     saveXlsx(buildXlsx(rows,{sheet:"دليل العمال",widths:[5,26,24,14,22,16,16,34,16,16,18]}),
       "دليل-العمال-"+todayISO()+".xlsx");
     el("dirNote").textContent="انصدّر Excel ✓";
     setTimeout(()=>el("dirNote").textContent="",2200);
-  }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
+  }catch(err){ alertBox("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
 el("dirWord").onclick=()=>{
-  if(!dirList().length){ alert("ماكو عمال للتصدير."); return; }
+  if(!dirList().length){ alertBox("ماكو عمال للتصدير."); return; }
   try{ saveDocx(directoryDocx(),"دليل-العمال-"+todayISO()+".docx");
     el("dirNote").textContent="انصدّر Word ✓";
     setTimeout(()=>el("dirNote").textContent="",2200);
-  }catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+  }catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("dirPrint").onclick=()=>{
   const rows=dirExportRows();
-  if(!rows.length){ alert("ماكو عمال للطباعة."); return; }
+  if(!rows.length){ alertBox("ماكو عمال للطباعة."); return; }
   const s=S(), w=window.open("","_blank");
-  if(!w){ alert("المتصفح منع فتح النافذة."); return; }
+  if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const body=rows.map(r=>'<tr>'+r.map((v,i)=>{
     const cls = DIR_LTR_COLS.indexOf(i)>=0 ? ' class="ltr"'
       : (i===DIR_STATUS_COL ? ' class="'+statusPrintClass(v)+'"' : '');
@@ -4308,7 +4849,7 @@ el("dirPrint").onclick=()=>{
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
 
-/* ==================== تبويب حالات العمال ====================
+/* ==================== [واجهة] تبويب حالات العمال ====================
    كل الحالات الخمس: مستمر، منقول، إنهاء خدمات، انقطاع عن العمل، مفصول.
    هذا التبويب قراءة على سجل العمال نفسه — ما ينسخ بيانات ولا ينقلها،
    فأي تعديل هنا يرجع للعامل ذاته ويظهر فوراً بكل التبويبات الثانية. */
@@ -4480,16 +5021,16 @@ el("varXls").onclick=()=>{
     saveXlsx(buildXlsx(rows,{sheet:"حالات العمال",widths:[5,26,24,14,22,16,32,18,18,30]}),
       "حالات-العمال-"+todayISO()+".xlsx");
     varNote("انصدّر Excel ✓");
-  }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
+  }catch(err){ alertBox("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
 el("varWord").onclick=()=>{
   try{ saveDocx(variablesDocx(),"حالات-العمال-"+todayISO()+".docx"); varNote("انصدّر Word ✓"); }
-  catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+  catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("varPrint").onclick=()=>{
   const rows=varExportRows();
   const s=S(), w=window.open("","_blank");
-  if(!w){ alert("المتصفح منع فتح النافذة."); return; }
+  if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const data=rows.length?rows:[VAR_EMPTY_ROW];
   const body=data.map(r=>'<tr>'+r.map((v,i)=>{
     const cls = VAR_LTR_COLS.indexOf(i)>=0 ? ' class="ltr"'
@@ -4518,7 +5059,7 @@ el("varPrint").onclick=()=>{
     '<tbody>'+body+'</tbody></table></body></html>');
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
-/* ==================== الكشف الخارجي ====================
+/* ==================== [واجهة] الكشف الخارجي ====================
    مكتب الاستعلامات وغيره يطلب أسماء من لم يعودوا موظفين. معلومات
    العامل الشخصية ملك الشركة ولا تُسلَّم لجهة خارجية، فالأعمدة
    الشخصية ممنوعة افتراضياً وتحتاج تأشيراً واعياً بتحذير أحمر.
@@ -4613,7 +5154,14 @@ function closeExt(){ el("extBack").classList.add("hidden"); }
 el("dlgOk").onclick=dlgSubmit;
 el("dlgCancel").onclick=()=>dlgEnd(null);
 el("dlgBack").addEventListener("click",e=>{ if(e.target===el("dlgBack")) dlgEnd(null); });
-el("dlgBack").addEventListener("keydown",e=>{ if(e.key==="Enter" && e.target.tagName!=="TEXTAREA") dlgSubmit(); });
+/* Enter يؤكّد من خانة إدخال فقط. كان يؤكّد لأي عنصر داخل النافذة، فضغط
+   Enter والتركيز على «إلغاء» يحذف ما طلب المستخدم إلغاءه. زر التأكيد نفسه
+   يؤكّد بنقرته الأصلية، وزر الإلغاء يلغي بنقرته. */
+el("dlgBack").addEventListener("keydown",e=>{
+  if(e.key!=="Enter") return;
+  const tag=e.target && e.target.tagName;
+  if(tag==="INPUT"||tag==="SELECT"){ e.preventDefault(); dlgSubmit(); }
+});
 document.addEventListener("keydown",e=>{
   if(e.key!=="Escape") return;
   if(dlgResolve){ dlgEnd(null); return; }
@@ -4637,8 +5185,8 @@ function extNote(t){
   setTimeout(()=>{ el("extNote").textContent=""; },2200);
 }
 function extGuard(){
-  if(!varList().length){ alert("ماكو أسماء بهذا الاختيار. أشّر حالة واحدة على الأقل."); return false; }
-  if(!extCols().length){ alert("أشّر عموداً واحداً على الأقل."); return false; }
+  if(!varList().length){ alertBox("ماكو أسماء بهذا الاختيار. أشّر حالة واحدة على الأقل."); return false; }
+  if(!extCols().length){ alertBox("أشّر عموداً واحداً على الأقل."); return false; }
   return true;
 }
 el("extXls").onclick=()=>{
@@ -4648,18 +5196,18 @@ el("extXls").onclick=()=>{
       {sheet:"كشف خارجي", widths:extCols().map(c=>c.k==="name"?28:(c.k==="idx"?5:18))}),
       "كشف-خارجي-"+todayISO()+".xlsx");
     extNote("انصدّر Excel ✓");
-  }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
+  }catch(err){ alertBox("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
 el("extWord").onclick=()=>{
   if(!extGuard()) return;
   try{ saveDocx(externalDocx(),"كشف-خارجي-"+todayISO()+".docx"); extNote("انصدّر Word ✓"); }
-  catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+  catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("extPrint").onclick=()=>{
   if(!extGuard()) return;
   const s2=S(), head=extHead(), rows=extRows(false), cs=extCols();
   const w=window.open("","_blank");
-  if(!w){ alert("المتصفح منع فتح النافذة."); return; }
+  if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const stCol=cs.findIndex(c=>c.k==="status");
   const body=rows.map(r=>'<tr>'+r.map((v,i)=>{
     const cls = EXT_LTR[cs[i].k] ? ' class="ltr"'
@@ -4836,8 +5384,8 @@ function variablesDocx(){
   return buildDocx(b,{media:m.media,landscape:true,margin:640});
 }
 
-/* ==================== التقارير والرواتب ==================== */
-/* ==================== التقريب النقدي ====================
+/* ==================== [محرّك] التقارير والرواتب ==================== */
+/* ==================== [محرّك] التقريب النقدي ====================
    أصغر فئة متداولة بالعراق ٢٥٠ ديناراً؛ مبلغ فيه كسر لا يمكن دفعه
    بيد العامل. لذلك كل مبلغ يُستقطع أو يُضاف يُقرَّب لأقرب ٢٥٠،
    ثم يُطرح أو يُجمع — فيبقى حساب الورقة مطابقاً لما بالجيب:
@@ -5113,6 +5661,22 @@ function leaveAtIn(arr, iso){
   }
   return null;
 }
+/* ---- [محرّك] تصنيف يوم عمل واحد لعامل واحد ----
+   المصدر الوحيد لترتيب الأولوية داخل يوم العمل المعتمد:
+   أوف ← إجازة (غير زمنية) ← تأشير الجرد (غائب / متفرقة / حاضر).
+   يقرأ منه الجرد اليومي (compute) وكشف الرواتب (buildReport) والجرد
+   التفصيلي (buildWorkerLedger)، فلا يمكن أن يُصنَّف يوم بكشف غير تصنيفه
+   بآخر. العطلة وخارج الخدمة والأيام غير المعتمدة تُستبعد قبله كلٌّ بمكانه.
+   myLeaves: إجازات هذا العامل وحده (من indexByWorker)، بنفس ترتيب القائمة
+   الأصلية — فأول وصل يغطي اليوم هو نفسه بكل الكشوف. */
+function classifyDay(w, iso, myLeaves){
+  if(isOffDay(w,iso)) return {k:"off", leave:null, timed:null};
+  const lv=leaveAtIn(myLeaves,iso);
+  if(lv && !isTimedLeave(lv)) return {k:"leave", leave:lv, timed:null};
+  const s=stateOf(iso,w.id);
+  return {k:(s==="absent"?"absent":(s==="misc"?"misc":"present")), leave:null,
+    timed:(lv && isTimedLeave(lv))?lv:null};
+}
 function buildReport(from,to){
   const c=C(), st=S();
   // حارس: مدة مقلوبة تُنتج صفراً من أيام العمل ورواتب كاملة للجميع.
@@ -5138,14 +5702,13 @@ function buildReport(from,to){
     days.forEach(d=>{
       if(!inService(w,d)) return;            // خارج فترة خدمته
       eligible++;
-      // يوم الأوف الخاص بالعامل: يُحتسب حضوراً، ولا استقطاع ولا إجازة
-      if(isOffDay(w,d)){ off++; return; }
-      // الإجازة الرسمية لها الأولوية على تأشير الجرد
-      const lv=leaveAtIn(myLeaves,d);
-      if(lv && !isTimedLeave(lv)){ leave++; leaveBy[policyOfLeave(lv,w)]++; return; }
-      const s=stateOf(d,w.id);
-      if(s==="absent") absent++;
-      else if(s==="misc") misc++;
+      /* التصنيف من دالة واحدة مشتركة: يوم الأوف مدفوع بلا استقطاع،
+         والإجازة الرسمية لها الأولوية على تأشير الجرد */
+      const cd=classifyDay(w,d,myLeaves);
+      if(cd.k==="off"){ off++; return; }
+      if(cd.k==="leave"){ leave++; leaveBy[policyOfLeave(cd.leave,w)]++; return; }
+      if(cd.k==="absent") absent++;
+      else if(cd.k==="misc") misc++;
       else present++;
     });
 
@@ -5166,7 +5729,15 @@ function buildReport(from,to){
        كان من يباشر يوم ٢ يأخذ ٣٠١٬٥٠٠ بدل ٣٢٣٬٧٥٠ — نقص ٢٢٬٢٥٠ بلا سبب.
        والحسم مقرَّب لأقرب ٢٥٠ فيبقى الراتب المستحق عدداً صحيحاً. */
     const outDays = Math.max(0, periodDays - svcDays);
-    const proCut = (!proRate || fullService) ? 0 : roundPay(outDays*dailyRate);
+    /* الراتب ٣٠ «يوم أجر» مهما كان طول الشهر، فاليوم الحادي والثلاثون
+       لا يُحسم من أحد: المستمر طوال آب يأخذ راتبه كاملاً عن ٣١ يوماً، فمن
+       خدم ٣٠ يوماً منه لا يُحسم عنه يوم (كان يأخذ ٣٢٣٬٧٥٠ بدل ٣٣٥٬٠٠٠، ومن
+       خدم يوماً واحداً كان يأخذ صفراً). شباط يبقى كما قرّرته v3.6 (لا يُظلم
+       الشهر القصير). يسري من شهر الترحيل pay31From حتى يُعاد أي كشف صُرف
+       قبله بنفس أرقامه — راجع AUDIT.md ب-١. */
+    const extraDays = (c.pay31From && String(from).slice(0,7) >= c.pay31From) ? Math.max(0, periodDays-30) : 0;
+    const cutDays = Math.max(0, outDays - extraDays);
+    const proCut = (!proRate || fullService) ? 0 : roundPay(cutDays*dailyRate);
     const gross = Math.max(0, fullSal - proCut);
     const partial = proCut > 0;
 
@@ -5201,7 +5772,7 @@ function buildReport(from,to){
       eligible, totalDays, paidDays, svcDays, present, misc, absent, leave, off, leaveBy,
       excused, excusedDed, leavePolicy:pol, dailyRate, fullService,
       startDate:svcS, endDate:svcE, ended: !!(svcE && svcE < to),
-      deductDays, fullSalary:fullSal, salary:gross, partial, dayDed:ded, proCut, outDays, periodDays,
+      deductDays, fullSalary:fullSal, salary:gross, partial, dayDed:ded, proCut, outDays, cutDays, periodDays,
       absDeduction, penDed, penDays, penCount, pens,
       achAdd, achCount, achs, deduction,
       net:gross-deduction+achAdd,
@@ -5248,7 +5819,7 @@ function runReport(manual){
     if(!to){ to=r[1]; el("rpTo").value=to; }
   }
   if(from>to){
-    if(manual) alert("تاريخ البداية بعد تاريخ النهاية.");
+    if(manual) alertBox("تاريخ البداية بعد تاريخ النهاية.");
     return;
   }
   if(!sameMonth(from,to)){
@@ -5258,7 +5829,7 @@ function runReport(manual){
     el("rpWarn").innerHTML='<div class="errbox"><b>المدى يمتد على أكثر من شهر — الحساب مرفوض.</b><br>'+
       'الرواتب شهرية، وحساب مدى متعدد الأشهر يطبّق راتب شهر واحد على شهرين فيطلع نصف راتب لكل عامل.'+
       '<br><span class="mini">اختر شهراً واحداً: «هذا الشهر» أو «الشهر الماضي».</span></div>';
-    if(manual) alert("المدى يمتد على أكثر من شهر. الرواتب شهرية — اختر شهراً واحداً.");
+    if(manual) alertBox("المدى يمتد على أكثر من شهر. الرواتب شهرية — اختر شهراً واحداً.");
     return;
   }
   RP=buildReport(from,to);
@@ -5322,6 +5893,13 @@ function renderReport(){
   if(RP.rows.some(r=>r.partial))
     warn+='<div class="warnbox">بعض العمال راتبهم نسبي لأن مباشرتهم أو انتهاء خدمتهم داخل المدة — '+
       'يُحسم أجر الأيام التي كان فيها خارج الخدمة من راتبه الكامل، بأيام التقويم لا بأيام الجرد.</div>';
+  /* مدى جزئي داخل الشهر: الراتب يبقى شهرياً والحسم لأيام خارج الخدمة داخل
+     المدى فقط — فمن ينتهي بعد نهاية المدى يطلع براتب كامل. كشف للمتابعة لا للصرف. */
+  const mr=monthOf(RP.from);
+  if(RP.from!==mr[0] || RP.to!==mr[1])
+    warn+='<div class="warnbox"><b>كشف مرحلي</b> — المدى ('+dateNumeric(RP.from)+' ← '+dateNumeric(RP.to)+
+      ') لا يغطّي الشهر كاملاً. الرواتب فيه رواتب شهرية على أيام الجرد المعتمدة لحد الآن؛ '+
+      'لا تُصرف رواتب من كشف مرحلي — احسب الشهر كاملاً عند الصرف.</div>';
   if(RP.rows.some(r=>r.net<0))
     warn+='<div class="errbox">عامل أو أكثر صافيه بالسالب (الاستقطاعات تجاوزت راتبه). راجع الصفوف الحمراء.</div>';
   if(q) warn+='<div class="warnbox">الكشف مفلتر بالبحث «'+esc(q)+'» — البطاقات والمجموع '+
@@ -5488,9 +6066,12 @@ el("salTable").addEventListener("change",e=>{
 });
 el("salSort").addEventListener("change",renderSalTable);
 el("applyAllSalary").onclick=()=>{
-  if(!confirm("تطبيق الإعداد الافتراضي على كل العمال وإلغاء أي راتب أو استقطاع أو سياسة خاصة؟"))return;
-  C().workers.forEach(w=>{ w.salary=null; w.deduct=null; w.leavePolicy=null; });
-  queueSave(); renderSalTable(); if(RP) runReport();
+  confirmBox("تطبيق الراتب الافتراضي","تطبيق الإعداد الافتراضي على كل العمال وإلغاء أي راتب أو استقطاع أو سياسة خاصة؟",
+    {ok:"طبّق على الكل",danger:true}).then(go=>{
+    if(!go) return;
+    C().workers.forEach(w=>{ w.salary=null; w.deduct=null; w.leavePolicy=null; });
+    queueSave(); renderSalTable(); if(RP) runReport();
+  });
 };
 
 /* ---- تعديل اسم العامل ----
@@ -5501,11 +6082,17 @@ function commitWorkerRename(id,val){
   const c=C(), w=c.workers.find(x=>x.id===id);
   if(!w){ editWorkerId=null; renderPeople(); return; }
   const name=String(val||"").trim().replace(/\s+/g," ");
-  if(!name){ alert("الاسم ما يصير فارغ."); return; }
+  if(!name){ alertBox("الاسم ما يصير فارغ."); return; }
   if(name===w.name){ editWorkerId=null; renderPeople(); return; }
   const dup=c.workers.some(x=>x.id!==id && x.name===name);
-  if(dup && !confirm("أكو عامل ثاني بنفس الاسم «"+name+"». تكمل؟")) return;
-  const old=w.name;
+  if(dup){
+    confirmBox("اسم مكرر","أكو عامل ثاني بنفس الاسم «"+name+"». تكمل؟",{ok:"أكمل"}).then(go=>{ if(go) applyWorkerRename(w,name); });
+    return;
+  }
+  applyWorkerRename(w,name);
+}
+function applyWorkerRename(w,name){
+  const c=C(), id=w.id;
   w.name=name;
   // وصولات الإجازة تحفظ الاسم وقت الإصدار — نحدّثها حتى ما تبقى بالاسم الغلط
   let fixed=0;
@@ -5517,9 +6104,8 @@ function commitWorkerRename(id,val){
   editWorkerId=null;
   queueSave(); refresh(); renderPeople();
   if(RP) runReport();
-  el("savedNote").textContent="انتعدّل الاسم"+(fixed?" و"+fmtNum(fixed)+" وصل إجازة":"")+
-    (fixedP?" و"+fmtNum(fixedP)+" إشعار عقوبة أو مكافأة":"")+" ✓";
-  setTimeout(()=>el("savedNote").textContent="",2400);
+  flash("انتعدّل الاسم"+(fixed?" و"+fmtNum(fixed)+" وصل إجازة":"")+
+    (fixedP?" و"+fmtNum(fixedP)+" إشعار عقوبة أو مكافأة":"")+" ✓");
 }
 el("wTable").addEventListener("click",e=>{
   const ed=e.target.closest("[data-wedit]");
@@ -5555,9 +6141,9 @@ function renderHolidays(){
 }
 el("addHoliday").onclick=()=>{
   const d=el("hlDate").value;
-  if(!d){ alert("اختر تاريخ العطلة."); el("hlDate").focus(); return; }
+  if(!d){ alertBox("اختر تاريخ العطلة."); el("hlDate").focus(); return; }
   const d2=el("hlDate2").value;
-  if(d2 && d2<d){ alert("تاريخ النهاية قبل تاريخ البداية."); return; }
+  if(d2 && d2<d){ alertBox("تاريخ النهاية قبل تاريخ البداية."); return; }
   const st=S();
   if(!Array.isArray(st.holidays)) st.holidays=[];
   const name=el("hlName").value.trim()||"عطلة رسمية";
@@ -5570,7 +6156,7 @@ el("addHoliday").onclick=()=>{
   }
   el("hlDate").value=""; el("hlDate2").value=""; el("hlName").value="";
   queueSave(); renderHolidays(); if(RP) runReport(); refresh();
-  if(!added && skipped) alert("كل هذه التواريخ مضافة مسبقاً.");
+  if(!added && skipped) alertBox("كل هذه التواريخ مضافة مسبقاً.");
   else if(skipped) el("savedNote").textContent="أُضيفت "+fmtNum(added)+" وتُجوهلت "+fmtNum(skipped)+" مكررة";
 };
 el("holidayList").addEventListener("click",e=>{
@@ -5631,11 +6217,11 @@ el("offBoxes").addEventListener("click",e=>{
 });
 el("addOffDate").onclick=()=>{
   const w=currentOffWorker();
-  if(!w){ alert("اختر العامل أولاً."); return; }
+  if(!w){ alertBox("اختر العامل أولاً."); return; }
   const d=el("offDate").value;
   if(!d){ el("offDate").focus(); return; }
   if(!Array.isArray(w.offDates)) w.offDates=[];
-  if(w.offDates.indexOf(d)>=0){ alert("هذا التاريخ مضاف مسبقاً لهذا العامل."); return; }
+  if(w.offDates.indexOf(d)>=0){ alertBox("هذا التاريخ مضاف مسبقاً لهذا العامل."); return; }
   w.offDates.push(d); el("offDate").value="";
   queueSave(); renderOffDates(); renderOffSummary(); renderOffWorkerList();
   if(RP) runReport(); refresh();
@@ -5650,14 +6236,16 @@ el("offDateList").addEventListener("click",e=>{
 el("offSummary").addEventListener("click",e=>{
   const b=e.target.closest("[data-offclr]"); if(!b)return;
   const w=C().workers.find(x=>x.id===b.dataset.offclr); if(!w) return;
-  if(!confirm("إلغاء كل أيام الأوف لـ "+w.name+"؟")) return;
-  w.offWeekdays=[]; w.offDates=[];
-  queueSave(); renderOffAll(); if(RP) runReport(); refresh();
+  confirmBox("إلغاء أيام الأوف","إلغاء كل أيام الأوف لـ «"+w.name+"»؟",{ok:"إلغاء الأوف",danger:true}).then(go=>{
+    if(!go) return;
+    w.offWeekdays=[]; w.offDates=[];
+    queueSave(); renderOffAll(); if(RP) runReport(); refresh();
+  });
 });
 
 el("rpXls").onclick=()=>{
-  if(!RP){ alert("احسب التقرير أول."); return; }
-  if(!rpRows().length){ alert("ماكو عمال بالتقرير."); return; }
+  if(!RP){ alertBox("احسب التقرير أول."); return; }
+  if(!rpRows().length){ alertBox("ماكو عمال بالتقرير."); return; }
   const st=S(), cur=st.currency||"";
   const head=["ت","الاسم","حالة العمل","آخر يوم عمل","القسم","أيام مجرودة له","أيام العمل بالمدة","أيام خدمته بالتقويم",
     "حضور","غياب","متفرقة","إجازة","أوف",
@@ -5677,14 +6265,15 @@ el("rpXls").onclick=()=>{
     t.excused,t.excusedDed,Math.round(t.rate*100),"",n2(t.salary),"","","",
     n2(t.absDeduction),t.penCount,n2(t.penDed),
     t.achCount,n2(t.achAdd),n2(t.net)]);
+  if(!colsMatch(head, rows.slice(1), "كشف الرواتب Excel")){ alertBox("اختلال بأعمدة كشف الرواتب — التصدير أُلغي حتى لا تنزاح القيم."); return; }
   try{
     saveXlsx(buildXlsx(rows,{sheet:"كشف الرواتب",
       widths:[5,26,16,18,18,12,12,12,9,9,9,9,9,14,14,12,16,16,18,12,12,14,12,16,12,16,16]}),
       "كشف-الرواتب-"+RP.from+"_"+RP.to+".xlsx");
-  }catch(err){ alert("تعذّر إنشاء ملف الإكسل: "+err.message); }
+  }catch(err){ alertBox("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
 
-/* ---- تصدير PDF متعدد الصفحات ---- */
+/* ---- [رسم] تصدير PDF متعدد الصفحات ---- */
 function drawReportPage(rows, pageNo, pages, k){
   k=k||1;
   const cv=document.createElement("canvas");
@@ -5835,14 +6424,14 @@ function drawReportPage(rows, pageNo, pages, k){
   return cv.toDataURL("image/png");
 }
 el("rpWord").onclick=()=>{
-  if(!RP){ alert("احسب التقرير أول."); return; }
-  if(!rpRows().length){ alert("ماكو عمال بالتقرير."); return; }
+  if(!RP){ alertBox("احسب التقرير أول."); return; }
+  if(!rpRows().length){ alertBox("ماكو عمال بالتقرير."); return; }
   try{ saveDocx(payrollDocx(),"كشف-الرواتب-"+RP.from+"_"+RP.to+".docx"); }
-  catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+  catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("rpPdf").onclick=()=>{
-  if(!RP){ alert("احسب التقرير أول."); return; }
-  if(!rpRows().length){ alert("ماكو عمال بالتقرير."); return; }
+  if(!RP){ alertBox("احسب التقرير أول."); return; }
+  if(!rpRows().length){ alertBox("ماكو عمال بالتقرير."); return; }
   const per=26;
   const all=rpRows().map((r,i)=>Object.assign({},r,{idx:i+1}));
   const chunks=[];
@@ -5850,9 +6439,9 @@ el("rpPdf").onclick=()=>{
   const pages=chunks.length;
   const k=dpiScale();
   const imgs=chunks.map((ch,i)=>drawReportPage(ch,i+1,pages,k)).filter(Boolean);
-  if(!imgs.length){ alert("تعذّر إنشاء التقرير."); return; }
+  if(!imgs.length){ alertBox("تعذّر إنشاء التقرير."); return; }
   const w=window.open("","_blank");
-  if(!w){ alert("المتصفح منع فتح النافذة. اسمح بالنوافذ المنبثقة."); return; }
+  if(!w){ alertBox("المتصفح منع فتح النافذة. اسمح بالنوافذ المنبثقة."); return; }
   w.document.write('<html><head><meta charset="utf-8"><title>كشف الرواتب</title><style>'+
     '@page{size:A4 portrait;margin:0}html,body{margin:0;padding:0}'+
     'img{width:210mm;height:297mm;display:block;page-break-after:always}'+
@@ -5862,7 +6451,7 @@ el("rpPdf").onclick=()=>{
 };
 
 /* ==================================================================
-   مولّد ملفات وورد (.docx) — جافاسكربت خالص، بلا مكتبات ولا إنترنت
+   [تصدير] مولّد ملفات وورد (.docx) — جافاسكربت خالص، بلا مكتبات ولا إنترنت
    ملف DOCX هو أرشيف ZIP فيه ملفات XML. نكتب الأرشيف بلا ضغط
    (طريقة Store) لأن وورد يقبلها، وهذا يغنينا عن أي مكتبة ضغط.
    الناتج نص حقيقي متجه: جودة طباعة لا نهائية وقابل للتعديل بالوورد.
@@ -6092,7 +6681,9 @@ function buildDocx(bodyXml, opts){
 function docReset(){ wImage.n=0; }
 function wImage(rid, wIn, hIn, align){
   const cx=Math.round(wIn*EMU), cy=Math.round(hIn*EMU);
-  return '<w:p><w:pPr><w:bidi/><w:jc w:val="'+(align||"center")+'"/><w:spacing w:after="0"/></w:pPr>'+
+  /* ترتيب عناصر pPr مُلزم بمخطط OOXML: bidi ← spacing ← jc. كان jc قبل
+     spacing بكل صورة (توقيع أو شعار) — وورد قد يرفض الملف أو يطلب إصلاحه. */
+  return '<w:p><w:pPr><w:bidi/><w:spacing w:after="0"/><w:jc w:val="'+(align||"center")+'"/></w:pPr>'+
     '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'+
     '<wp:extent cx="'+cx+'" cy="'+cy+'"/><wp:docPr id="'+(wImage.n=(wImage.n||0)+1)+'" name="img'+wImage.n+'"/>'+
     '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
@@ -6103,7 +6694,7 @@ function wImage(rid, wIn, hIn, align){
     '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
 }
 
-/* ============ مولّد ملفات إكسل (.xlsx) — يعيد استعمال كاتب ZIP نفسه ============
+/* ============ [تصدير] مولّد ملفات إكسل (.xlsx) — يعيد استعمال كاتب ZIP نفسه ============
    CSV لا يحمل أي معلومة اتجاه، فيفتحه إكسل من اليسار لليمين دائماً.
    ملف xlsx حقيقي يسمح بضبط الورقة RTL، ويحفظ الأرقام كأرقام لا كنصوص. */
 function colRef(i){
@@ -6156,7 +6747,10 @@ function buildXlsx(rows, opts){
     '<alignment horizontal="center" vertical="center" wrapText="1"/></xf>'+
     '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
     '<xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
-    '</cellXfs></styleSheet>';
+    '</cellXfs>'+
+    /* نمط «Normal» المرجعي — بدونه تحذّر بعض القارئات أن الملف بلا نمط افتراضي */
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'+
+    '</styleSheet>';
   const ctypes='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
@@ -6192,7 +6786,7 @@ function saveDocx(bytes,name){
   dl(URL.createObjectURL(blob),name);
 }
 
-/* ============ مستندات وورد: ورقة الجرد وكشف الرواتب ============ */
+/* ============ [تصدير] مستندات وورد: ورقة الجرد وكشف الرواتب ============ */
 
 /* ترويسة موحّدة: اسم الشركة على خلفية بلون الشركة ثم عنوان المستند */
 function docHeader(title, sub, full){
@@ -6405,6 +6999,9 @@ function payrollDocx(){
   rows.push(wRow(totals.map((v,ci)=>
     wCell(v,{size:8,bold:true,width:grid[ci],shade:CLR.goldLite,ltr:ci!==1,
       align:ci===1?"right":"center",color:CLR.purpleDeep}))));
+  /* حارس البنية: الرأس والشبكة وكل صف بنفس عدد الأعمدة */
+  if(heads.length!==grid.length || !colsMatch(heads,[totals],"كشف الرواتب Word"))
+    throw new Error("اختلال بأعمدة كشف الرواتب");
 
   b+=wTable(rows,{border:CLR.line,grid:grid});
   b+=wPara("",{after:160});
@@ -6441,11 +7038,11 @@ el("dlWord").onclick=()=>{
   try{ saveDocx(dailyDocx(),"جرد-"+curDate+".docx");
     el("savedNote").textContent="انصدّر ملف Word ✓";
     setTimeout(()=>el("savedNote").textContent="",2200);
-  }catch(err){ alert("تعذّر إنشاء ملف الوورد: "+err.message); }
+  }catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 
 
-/* ---- طي الأقسام الثانوية: الواجهة تفتح على المهم فقط ---- */
+/* ---- [واجهة] طي الأقسام الثانوية: الواجهة تفتح على المهم فقط ---- */
 function makeFoldable(list){
   list.forEach(it=>{
     const panel=document.getElementById(it.id); if(!panel) return;
@@ -6475,59 +7072,86 @@ function initFolds(){
 }
 
 /* ==================================================================
-   أمان البيانات: لقطات يومية داخل البرنامج + نسخ مؤرّخة بمجلد حقيقي
+   [تخزين] أمان البيانات: لقطات يومية داخل البرنامج + نسخ مؤرّخة بمجلد حقيقي
    الخطر الذي نغطّيه: مسح بيانات المتصفح، أو خطأ بشري يمسح عاملاً
    أو يخربط أرقاماً، فنحتاج رجوعاً ليوم سابق لا مجرد ملف واحد مكرّر.
 ================================================================== */
 const SNAP_KEEP=14, SNAPK="snaps", BKDIR="backupDir";
 let backupDir=null;
 
-/* ---- لقطات داخلية (IndexedDB) ---- */
+/* ---- لقطات داخلية (IndexedDB) ----
+   نوعان: لقطة يومية تلقائية (أول تشغيل باليوم)، ولقطة أمان تُحفظ قبل أي
+   عملية تستبدل البيانات كلها — استعادة لقطة، استعادة نسخة، فتح ملف داتا،
+   مسح الكل، أو اعتماد ملف مرتبط أحدث عند الإقلاع. اللقطة تحمل كل الشركات،
+   فالاستعادة تستبدل الكل؛ لقطة الأمان هي طريق التراجع عنها. */
+const SAFETY_KEEP=6;
 async function getSnaps(){ const v=await idbGet(SNAPK); try{ return v?JSON.parse(v):[]; }catch(e){ return []; } }
 async function putSnaps(a){ return idbSet(SNAPK, JSON.stringify(a)); }
-/* لقطة واحدة لكل يوم: أول تشغيل باليوم يحفظ حالة ما قبل تعديلات اليوم */
+/* تقليم: آخر ١٤ لقطة يومية + آخر ٦ لقطات أمان، كلٌّ بحصّته */
+function trimSnaps(snaps){
+  const daily=snaps.filter(x=>!x.kind).sort((a,b)=>a.day<b.day?1:-1).slice(0,SNAP_KEEP);
+  const safe=snaps.filter(x=>x.kind).sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,SAFETY_KEEP);
+  return safe.concat(daily);
+}
+/* لقطة يومية واحدة: أول تشغيل باليوم يحفظ حالة ما قبل تعديلات اليوم */
 async function snapshotIfNeeded(){
   try{
     const today=todayISO();
     let snaps=await getSnaps();
-    if(snaps.some(x=>x.day===today)) return false;
+    if(snaps.some(x=>x.day===today && !x.kind)) return false;
     snaps.push({ day:today, at:Date.now(), data:JSON.stringify(state) });
-    snaps.sort((a,b)=>a.day<b.day?1:-1);
-    if(snaps.length>SNAP_KEEP) snaps=snaps.slice(0,SNAP_KEEP);
-    await putSnaps(snaps);
+    await putSnaps(trimSnaps(snaps));
     return true;
   }catch(e){ return false; }
 }
+async function pushSafetySnap(kind,label){
+  try{
+    if(!stateLoaded) return false;
+    let snaps=await getSnaps();
+    snaps.push({ day:todayISO(), at:Date.now(), kind:kind||"safety", label:label||"لقطة أمان", data:JSON.stringify(state) });
+    return await putSnaps(trimSnaps(snaps));
+  }catch(e){ return false; }
+}
+function snapKey(sn){ return String(sn.at||sn.day); }
 async function renderSnaps(){
   const box=el("snapList"); if(!box||box.innerHTML===undefined) return;
   const snaps=await getSnaps();
   if(!snaps.length){ box.innerHTML='<p class="hint">ماكو لقطات بعد. أول لقطة تنحفظ تلقائياً.</p>'; return; }
-  box.innerHTML=snaps.map(sn=>{
-    let n=0,w=0;
+  const list=snaps.slice().sort((a,b)=>(b.at||0)-(a.at||0));
+  box.innerHTML=list.map(sn=>{
+    let n=0,w=0,co=0;
     try{ const o=JSON.parse(sn.data);
-      (o.companies||[]).forEach(c=>{ w+=(c.workers||[]).length; n+=Object.keys(c.days||{}).length; });
+      (o.companies||[]).forEach(c=>{ co++; w+=(c.workers||[]).length; n+=Object.keys(c.days||{}).length; });
     }catch(e){}
-    return '<div class="adjrow"><div><b>'+dateTextOf(sn.day)+'</b>'+
-      '<div class="mini">'+fmtNum(w)+' عامل · '+fmtNum(n)+' يوم جرد · '+
-      Math.round(sn.data.length/1024)+' ك.ب</div></div>'+
-      '<div style="display:flex;gap:6px"><button class="btn sm" data-snapdl="'+sn.day+'">تنزيل</button>'+
-      '<button class="btn sm danger" data-snap="'+sn.day+'">استعادة</button></div></div>';
+    const when=sn.at?new Date(sn.at):null;
+    const hm=when?fmtNum(String(when.getHours()).padStart(2,"0")+":"+String(when.getMinutes()).padStart(2,"0")):"";
+    return '<div class="adjrow"><div><b>'+(sn.kind?'<span class="stag warn">'+esc(sn.label||"لقطة أمان")+'</span> ':'')+
+      dateTextOf(sn.day)+(sn.kind&&hm?' · '+hm:'')+'</b>'+
+      '<div class="mini">'+fmtNum(co)+' شركة · '+fmtNum(w)+' عامل · '+fmtNum(n)+' يوم جرد · '+
+      fmtNum(Math.round(sn.data.length/1024))+' ك.ب</div></div>'+
+      '<div style="display:flex;gap:6px"><button class="btn sm" data-snapdl="'+esc(snapKey(sn))+'">تنزيل</button>'+
+      '<button class="btn sm danger" data-snap="'+esc(snapKey(sn))+'">استعادة</button></div></div>';
   }).join("");
 }
 el("snapList").addEventListener("click",async e=>{
   const r=e.target.closest("[data-snap]"), d=e.target.closest("[data-snapdl]");
-  if(d){ const snaps=await getSnaps(); const sn=snaps.find(x=>x.day===d.dataset.snapdl); if(!sn)return;
-    dl(URL.createObjectURL(new Blob([sn.data],{type:"application/json"})),"لقطة-"+sn.day+".json"); return; }
+  if(d){ const snaps=await getSnaps(); const sn=snaps.find(x=>snapKey(x)===d.dataset.snapdl); if(!sn)return;
+    dl(URL.createObjectURL(new Blob([sn.data],{type:"application/json"})),"لقطة-"+sn.day+(sn.kind?"-"+sn.kind:"")+".json"); return; }
   if(!r)return;
-  const snaps=await getSnaps(), sn=snaps.find(x=>x.day===r.dataset.snap);
+  const snaps=await getSnaps(), sn=snaps.find(x=>snapKey(x)===r.dataset.snap);
   if(!sn)return;
-  if(!confirm("استعادة لقطة "+dateTextOf(sn.day)+"؟\n\nكل البيانات الحالية راح تنستبدل بحالة ذاك اليوم.\nينصح تنزّل نسخة من الحالي أول.")) return;
+  const go=await confirmBox("استعادة لقطة","استعادة لقطة "+(sn.label?"«"+sn.label+"» ":"")+dateTextOf(sn.day)+"؟\n\n"+
+    "كل البيانات الحالية بكل الشركات راح تنستبدل بحالة تلك اللحظة.\n"+
+    "تنحفظ لقطة أمان من الحالي قبل الاستعادة — منها تقدر ترجع لو غيّرت رأيك.",{ok:"استعد",danger:true});
+  if(!go) return;
   try{
-    state=migrate(JSON.parse(sn.data));
+    const parsed=JSON.parse(sn.data);
+    await pushSafetySnap("prerestore","قبل استعادة لقطة "+dateTextOf(sn.day));
+    state=migrate(parsed);
     await persistState(); if(fileHandle) await writeFile();
     bootView(); refreshDbState(); renderSnaps();
-    alert("انستعادت لقطة "+dateTextOf(sn.day)+" ✓");
-  }catch(err){ alert("تعذّرت الاستعادة: "+err.message); }
+    alertBox("انستعادت لقطة "+dateTextOf(sn.day)+" ✓\nلقطة الأمان «قبل استعادة لقطة» موجودة بالقائمة لو احتجت ترجع.");
+  }catch(err){ alertBox("تعذّرت الاستعادة: "+err.message); }
 });
 
 /* ---- مجلد نسخ حقيقي على القرص ---- */
@@ -6562,6 +7186,7 @@ function daysSinceBackup(){
   return Math.round((b-a)/86400000);
 }
 function refreshBackupState(){
+  const cb=el("corruptBox"); if(cb && cb.classList) cb.classList.toggle("hidden",!lsGet("jard_pro_corrupt_at"));
   const st=el("bkFolderState"), warn=el("bkWarn");
   if(!st||st.textContent===undefined) return;
   if(backupDir) st.innerHTML="المجلد مربوط: <b dir='ltr'>"+esc(backupDir.name)+"</b>"+
@@ -6577,29 +7202,34 @@ function refreshBackupState(){
     warn.innerHTML='<div class="warnbox">آخر نسخة خارجية صار لها <b>'+fmtNum(n)+'</b> يوم. اضغط «نسخة الآن».</div>';
   else warn.innerHTML="";
 }
+el("corruptDl").onclick=async()=>{
+  const raw=await idbGet("corrupt_last");
+  if(!raw){ alertBox("ما لقيت نسخة تالفة محفوظة."); return; }
+  dl(URL.createObjectURL(new Blob([String(raw)],{type:"application/json"})),"نسخة-تالفة-"+todayISO()+".json");
+};
 el("bkPick").onclick=async()=>{
-  if(!canDir){ alert("هذا المتصفح ما يدعم اختيار مجلد. استعمل Chrome أو Edge، أو نزّل نسخة يدوياً."); return; }
+  if(!canDir){ alertBox("هذا المتصفح ما يدعم اختيار مجلد. استعمل Chrome أو Edge، أو نزّل نسخة يدوياً."); return; }
   try{
     backupDir=await window.showDirectoryPicker({mode:"readwrite"});
-    if(!await dirPermOK(backupDir,true)){ backupDir=null; alert("ما انعطت صلاحية الكتابة بالمجلد."); return; }
+    if(!await dirPermOK(backupDir,true)){ backupDir=null; alertBox("ما انعطت صلاحية الكتابة بالمجلد."); return; }
     await idbSet(BKDIR,backupDir);
     const ok=await writeBackupFile(true);
     refreshBackupState();
-    alert(ok?"انربط المجلد وانكتبت أول نسخة ✓":"انربط المجلد، بس تعذّرت الكتابة. جرّب «نسخة الآن».");
-  }catch(e){ if(e&&e.name!=="AbortError") alert("تعذّر ربط المجلد."); }
+    alertBox(ok?"انربط المجلد وانكتبت أول نسخة ✓":"انربط المجلد، بس تعذّرت الكتابة. جرّب «نسخة الآن».");
+  }catch(e){ if(e&&e.name!=="AbortError") alertBox("تعذّر ربط المجلد."); }
 };
 el("bkNow").onclick=async()=>{
-  if(!backupDir){ alert("اختر مجلد النسخ أولاً."); return; }
-  if(!await dirPermOK(backupDir,true)){ alert("المتصفح سحب الصلاحية. اضغط «اختيار مجلد النسخ» مرة ثانية."); return; }
-  alert(await writeBackupFile(true) ? "انكتبت نسخة اليوم ✓" : "تعذّرت الكتابة بالمجلد.");
+  if(!backupDir){ alertBox("اختر مجلد النسخ أولاً."); return; }
+  if(!await dirPermOK(backupDir,true)){ alertBox("المتصفح سحب الصلاحية. اضغط «اختيار مجلد النسخ» مرة ثانية."); return; }
+  alertBox(await writeBackupFile(true) ? "انكتبت نسخة اليوم ✓" : "تعذّرت الكتابة بالمجلد.");
 };
 el("bkForget").onclick=async()=>{
-  if(!backupDir){ alert("ماكو مجلد مربوط."); return; }
-  if(!confirm("إلغاء ربط المجلد؟ الملفات المكتوبة تبقى مكانها.")) return;
+  if(!backupDir){ alertBox("ماكو مجلد مربوط."); return; }
+  if(!await confirmBox("إلغاء ربط المجلد","إلغاء ربط المجلد؟ الملفات المكتوبة تبقى مكانها.",{ok:"إلغاء الربط"})) return;
   backupDir=null; await idbSet(BKDIR,null); refreshBackupState();
 };
 
-/* ---------- ٣) وصولات مزدوجة (إجازة / عقوبة) — نسختان بورقة A4 ---------- */
+/* ---------- [تصدير] ٣) وصولات مزدوجة (إجازة / عقوبة) — نسختان بورقة A4 ---------- */
 /* ميزانية ارتفاع محسوبة بالتويب لكي لا تنزل النسخة الثانية لصفحة ثانية في وورد:
    طول A4 = ١٦٨٣٨ تويب ، الهامش ٥٦٧ فوق وتحت ← المتاح ١٥٧٠٤.
    نسختان × ٧٢٥٠ + خط قص ٥٤٠ = ١٥٠٤٠ ، فيبقى هامش أمان ٦٦٤ تويب.
@@ -6644,7 +7274,8 @@ function receiptCopyXml(o){
         {width:H2,raw:true,valign:"center"}),
       wCell(
         wPara("العدد: "+(o.no||"—"),{size:9,bold:true,align:"left",after:30})+
-        wPara("التاريخ: "+dateNumeric(todayISO()),{size:9,align:"left",after:60})+
+        wPara("التاريخ: "+dateNumeric(o.date||todayISO()),{size:9,align:"left",after:(o.edited?20:60)})+
+        (o.edited?wPara(o.edited,{size:8,color:CLR.ink2,align:"left",after:40}):"")+
         wPara(o.label,{size:9,bold:true,color:"#FFFFFF",shade:accent,align:"center",after:0}),
         {width:H3,raw:true,valign:"center"})
     ],{height:HEAD}),
@@ -6765,6 +7396,7 @@ function leaveCopyXml(label, sigRid, logoRid){
     title:"وصل إجازة",
     sub:"إجازة معتمدة صادرة عن إدارة الشركة",
     no:el("lvNo").value, label:label, accent:CLR.purple, hideAddress:true, logoRid:logoRid,
+    date:docIssued(lvRec()), edited:editedLine(lvRec()),
     rows:[
       [["اسم العامل", w?w.name:"—"],["القسم / مكان العمل", el("lvSection").value]],
       [["نوع الإجازة", el("lvType").value, 12]],
@@ -6814,6 +7446,7 @@ function penaltyCopyXml(label, sigRid, logoRid){
     title: term ? "\u0642\u0631\u0627\u0631 \u0625\u0646\u0647\u0627\u0621 \u062e\u062f\u0645\u0627\u062a" : "\u0625\u0634\u0639\u0627\u0631 \u0639\u0642\u0648\u0628\u0629",
     sub:"\u0625\u062c\u0631\u0627\u0621 \u0627\u0646\u0636\u0628\u0627\u0637\u064a \u0635\u0627\u062f\u0631 \u0639\u0646 \u0644\u062c\u0646\u0629 \u0627\u0644\u0627\u0646\u0636\u0628\u0627\u0637",
     no:el("pnNo").value, label:label, accent:RED, hideAddress:true, logoRid:logoRid,
+    date:docIssued(pnRec()), edited:editedLine(pnRec()),
     rows:rows,
     reasonLabel:"\u0648\u0635\u0641 \u0627\u0644\u0645\u062e\u0627\u0644\u0641\u0629", reason:el("pnReason").value,
     sigs:committeeSigsDoc(sigRid),
@@ -6839,6 +7472,7 @@ function achievementCopyXml(label, sigRid, logoRid){
     title:"\u0625\u0634\u0639\u0627\u0631 \u0645\u0643\u0627\u0641\u0623\u0629 \u0648\u062a\u0642\u062f\u064a\u0631",
     sub:"\u0643\u062a\u0627\u0628 \u0634\u0643\u0631 \u0635\u0627\u062f\u0631 \u0639\u0646 \u0644\u062c\u0646\u0629 \u062a\u0642\u064a\u064a\u0645 \u0627\u0644\u0623\u062f\u0627\u0621",
     no:el("acNo").value, label:label, accent:GRN, hideAddress:true, logoRid:logoRid,
+    date:docIssued(acRec()), edited:editedLine(acRec()),
     rows:[
       [["\u0627\u0633\u0645 \u0627\u0644\u0639\u0627\u0645\u0644", w?w.name:"\u2014"],["\u0627\u0644\u0642\u0633\u0645 / \u0645\u0643\u0627\u0646 \u0627\u0644\u0639\u0645\u0644", el("acSection").value]],
       [["\u0646\u0648\u0639 \u0627\u0644\u0625\u0646\u062c\u0627\u0632", el("acType").value, 12]],
@@ -6888,6 +7522,7 @@ function issueCopyXml(label,sigRid,logoRid,B,items){
   const n=items.length;
   const P=issueLayout(n,!!logoRid,B);
   const w=mtWorkerObj(), from=mtFromDate(), to=mtToDate();
+  const mtR=mtRec(), mtIssued=docIssued(mtR), mtEd=editedLine(mtR);
 
   /* \u0627\u0644\u062a\u0631\u0648\u064a\u0633\u0629 */
   const H1=Math.round(LV_FULL*0.31), H2=LV_FULL-2*Math.round(LV_FULL*0.31), H3=Math.round(LV_FULL*0.31);
@@ -6905,7 +7540,8 @@ function issueCopyXml(label,sigRid,logoRid,B,items){
         {width:H2,raw:true,valign:"center"}),
       wCell(
         wPara("\u0627\u0644\u0639\u062f\u062f: "+(el("mtNo").value||"\u2014"),{size:9,bold:true,align:"left",after:30})+
-        wPara("\u0627\u0644\u062a\u0627\u0631\u064a\u062e: "+dateNumeric(todayISO()),{size:9,align:"left",after:60})+
+        wPara("\u0627\u0644\u062a\u0627\u0631\u064a\u062e: "+dateNumeric(mtIssued),{size:9,align:"left",after:(mtEd?20:60)})+
+        (mtEd?wPara(mtEd,{size:8,color:CLR.ink2,align:"left",after:40}):"")+
         wPara(label,{size:9,bold:true,color:"#FFFFFF",shade:GOLD,align:"center",after:0}),
         {width:H3,raw:true,valign:"center"})
     ],{height:P.HEAD}),
@@ -7054,7 +7690,7 @@ function issueDocx(){
   return buildDocx(b,{media:m.media,margin:LV_MARGIN});
 }
 
-/* ==================== التبويبات ==================== */
+/* ==================== [واجهة] التبويبات ==================== */
 function switchView(v){
   ["daily","leaves","penalties","achievements","materials","history","people","variables","report","settings"].forEach(x=>
     el("view-"+x).classList.toggle("hidden",x!==v));
@@ -7075,7 +7711,7 @@ function switchView(v){
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 el("dateInput").addEventListener("change",()=>{ curDate=el("dateInput").value||todayISO(); refresh(); });
 
-/* ==================== بيانات تجريبية ==================== */
+/* ==================== [واجهة] بيانات تجريبية ==================== */
 function loadDemo(){
   const c=C();
   const zIn=c.zones[0]||{id:uid(),name:"داخل البناية القديمة",short:"داخلي"};
@@ -7096,7 +7732,14 @@ function loadDemo(){
   queueSave(); bootView();
 }
 
-/* ==================== التحديث والإقلاع ==================== */
+/* ==================== [واجهة] التحديث والإقلاع ==================== */
+function syncConfirmBtn(){
+  const cd=el("confirmDay");
+  if(cd && cd.textContent!==undefined){
+    if(dayRec(curDate).confirmed){ cd.textContent="اليوم معتمد ✓"; cd.classList.remove("gold"); cd.classList.add("ghost"); }
+    else{ cd.textContent="اعتماد اليوم"; cd.classList.add("gold"); cd.classList.remove("ghost"); }
+  }
+}
 function refresh(){
   el("dayName").textContent=dayNameOf(curDate);
   const hr=holidayReason(curDate);
@@ -7106,11 +7749,7 @@ function refresh(){
     else hb.classList.add("hidden");
   }
   el("notes").value=dayRec(curDate).notes||"";
-  const cd=el("confirmDay");
-  if(cd && cd.textContent!==undefined){
-    if(dayRec(curDate).confirmed){ cd.textContent="اليوم معتمد ✓"; cd.classList.remove("gold"); cd.classList.add("ghost"); }
-    else{ cd.textContent="اعتماد اليوم"; cd.classList.add("gold"); cd.classList.remove("ghost"); }
-  }
+  syncConfirmBtn();
   renderDayStatus();
   renderTally(); renderRoster(); drawSheet();
   if(!el("view-history").classList.contains("hidden")) renderHistory();
@@ -7137,13 +7776,29 @@ function resetReceiptForms(){
   const aw=el("acWorker"); if(aw && aw.value!==undefined) aw.value="";
   const aamt=el("acAmount"); if(aamt && aamt.value!==undefined) aamt.value=0;
   pnKindManual=false; acKindManual=false;
+  lvEditId=null; pnEditId=null; acEditId=null; mtEditId=null;
+  lvSyncSave(); pnSyncSave(); acSyncSave(); mtSyncSave();
   const mw=el("mtWorker"); if(mw && mw.value!==undefined) mw.value="";
   mtSel={};
   const d=el("lvDays"); if(d && d.value!==undefined) d.value=1;
 }
+/* كل حالة واجهة مربوطة بالشركة تُصفَّر عند التبديل، حتى لا يطلع رقم أو
+   فلتر أو صندوق تعديل أو صورة من شركة على شاشة شركة ثانية:
+   نص البحث كان يبقى، فكشف رواتب الشركة الثانية يطلع «٠ من ٢ عامل». */
+const COMPANY_SEARCH_IDS=["search","lvSearch","pnSearch","acSearch","mtSearch","histSearch",
+  "dirSearch","varSearch","rpSearch","lgSearch","extTo"];
+function resetCompanyUI(){
+  COMPANY_SEARCH_IDS.forEach(id=>{ const n=document.getElementById(id); if(n) n.value=""; });
+  openMonths=null;                 // مجلدات السجل: أحدث شهر للشركة الجديدة مفتوح
+  editWorkerId=null; editSecId=null; editDirId=null;
+  extSel=null;
+  sigCache.src=null; logoCache.src=null; sigLoadGen++;
+  const x=document.getElementById("extBack"); if(x && x.classList) x.classList.add("hidden");
+}
 function bootView(){
   RP=null;   // إلغاء تقرير الشركة السابقة عند التبديل
   varSel=null;   // اختيار الحالات محفوظ لكل شركة على حدة
+  resetCompanyUI();
   resetReceiptForms();
   applyTheme();
   el("tbCompany").textContent=S().company;
@@ -7151,11 +7806,25 @@ function bootView(){
   renderCompanies(); fillSettings(); refresh();
 }
 
+let bootNotice="";
+el("lockRetry").onclick=()=>{
+  /* لو انسكّرت النافذة الأولى بلا إشعار: نسأل من جديد، والفعّالة تردّ فنبقى مقفلين */
+  setReadOnly(false);
+  lockSend({t:"hello"});
+};
 (async function init(){
   idb=await openIDB();
   // البيانات تُقرأ فوراً من الجهاز — بدون فتح أي ملف
   const raw=await readState();
-  if(raw){ try{ state=migrate(JSON.parse(raw)); }catch(e){} }
+  let corrupt=false;
+  if(raw){ try{ state=migrate(JSON.parse(raw)); }
+    catch(e){
+      /* نسخة تالفة لا تُبلع بصمت: أول حفظ كان يكتب الحالة الفارغة فوقها
+         فتضيع نهائياً. النص الخام يُحفظ بمفتاح مستقل قبل أي كتابة، وقابل
+         للتنزيل من تبويب الإعدادات لإنقاذه يدوياً. */
+      corrupt=true;
+      try{ await idbSet("corrupt_last", raw); lsSet("jard_pro_corrupt_at", String(Date.now())); }catch(_){}
+    } }
   stateLoaded=true;   // من هنا فقط يُسمح بالحفظ
   // إعادة ربط ملف الداتا إن كان مسموحاً مسبقاً (بدون إزعاج)
   try{
@@ -7169,6 +7838,15 @@ function bootView(){
         const fT=Number(fobj&&fobj.savedAt)||0, lT=Number(state&&state.savedAt)||0;
         const fileValid=(fobj&&fobj.v===2&&Array.isArray(fobj.companies)&&fobj.companies.length);
         if(fileValid && fT>lT){
+          /* الملف أحدث (عُدّل على حاسبة ثانية): يُعتمد، لكن بعد لقطة أمان
+             للنسخة المحلية — كان يُستبدل بصمت فتضيع أي تعديلات لم تصل للملف. */
+          const localTxt=JSON.stringify(Object.assign({},state,{savedAt:0}));
+          const fileTxt=JSON.stringify(Object.assign({},fobj,{savedAt:0}));
+          if(localTxt!==fileTxt && !looksEmpty(JSON.stringify(state))){
+            await pushSafetySnap("presync","نسخة الجهاز قبل اعتماد الملف المرتبط");
+            bootNotice="الملف المرتبط أحدث من نسخة هذا الجهاز فاعتُمد. نسخة الجهاز السابقة محفوظة كلقطة أمان "+
+              "«نسخة الجهاز قبل اعتماد الملف المرتبط» بتبويب الإعدادات ← النسخ الاحتياطي.";
+          }
           state=migrate(fobj);
           await persistState();
         }
@@ -7186,6 +7864,11 @@ function bootView(){
     if(bd && await dirPermOK(bd,false)){ backupDir=bd; await writeBackupFile(false); }
   }catch(e){}
   refreshBackupState(); renderSnaps();
+  lockInit();
+  if(corrupt) alertBox("تعذّرت قراءة البيانات المحفوظة (الملف تالف)، فانفتح البرنامج فارغاً.\n\n"+
+    "النسخة التالفة محفوظة كما هي ولم تُمسح: من الإعدادات ← النسخ الاحتياطي ← «تنزيل النسخة التالفة» "+
+    "نزّلها وسلّمها للدعم، أو استعد لقطة يومية سابقة.","بيانات تالفة");
+  if(bootNotice) alertBox(bootNotice,"اعتماد الملف المرتبط");
   window.addEventListener("beforeunload",flushSync);
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushSync(); });
 })();
