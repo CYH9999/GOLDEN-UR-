@@ -455,6 +455,53 @@ try{
     'window.open=op; return out; })()');
   check("كل نوافذ الطباعة بـ DOCTYPE واتجاه عربي", pws.length>=9 && pws.every(h=>/^<!DOCTYPE html><html dir="rtl" lang="ar">/.test(h) && h.indexOf("direction:rtl")>0), true, pws.length+" نافذة");
 
+
+  /* ---- ١١) قياس الأعمدة: سطر واحد لكل صف ---- */
+  group("١١ · fitGrid — مجموع الأعمدة = عرض الصفحة، ولا عمود يتجاوز حدّه");
+  const FG=(h,r,t,o)=>JSON.parse(w10.eval("JSON.stringify(fitGrid("+JSON.stringify(h)+","+JSON.stringify(r)+","+t+","+JSON.stringify(o||{})+"))"));
+  const sumG=g=>g.reduce((a,b)=>a+b,0);
+  const LONG="ملاحظة طويلة جداً ".repeat(30), NAME="عبد الرحمن عبد الستار عبد الجبار الخزرجي";
+  const cases=[
+    ["جدول قصير يتسع بالحجم ١٠", ["ت","الاسم","الهاتف","ملاحظة"], [["١",NAME,"0770 123 4567","—"]], 10466,
+      {cols:[{fixed:420},{bold:true,min:1600},{min:1750},{flex:true,min:1100}]}],
+    ["ملاحظة طويلة تُقصّ وحدها", ["ت","الاسم","التاريخ","المبلغ","ملاحظة"], [["١",NAME,"2026/09/15","1,507,500",LONG]], 10466,
+      {cols:[{fixed:420},{bold:true,min:1600},{},{},{flex:true,min:1100}]}],
+    ["عمود مرن بحدّ أعلى لا يتجاوزه مع فائض كبير", ["ت","الاسم","ملاحظة"], [["١","علي","قصيرة"]], 10466,
+      {cols:[{fixed:420},{min:1600},{flex:true,min:1100,max:2000}]}],
+    ["١٢ عموداً محمياً لا تسع حتى بأصغر خط", Array(12).fill("الاسم الكامل"), [Array(12).fill(NAME)], 10466, {}],
+    ["عرض أفقي (landscape)", ["ت","الاسم","ملاحظة","العنوان"], [["١",NAME,LONG,LONG]], 15398,
+      {cols:[{fixed:420},{bold:true},{flex:true,min:1300},{flex:true,min:1300}]}]
+  ];
+  cases.forEach(c=>{
+    const [label,h,r,t,o]=c, R=FG(h,r,t,o), cols=(o.cols||[]);
+    check(label+" — مجموع الشبكة = العرض بالضبط", sumG(R.grid), t);
+    const minOk=R.squeezed || R.grid.every((g,j)=>g>=Math.min((cols[j]||{}).min||320, (cols[j]||{}).fixed||Infinity));
+    check(label+" — لا عمود تحت حدّه الأدنى", minOk, true, R.squeezed?"مضغوط: تصغير نسبي كحدّ أخير":"");
+    check(label+" — لا عمود فوق حدّه الأعلى", R.grid.every((g,j)=>g<=(((cols[j]||{}).max)||t)), true);
+    check(label+" — العمود الثابت بعرضه تماماً", cols.every((cc,j)=>!cc.fixed || R.grid[j]===cc.fixed), true);
+    check(label+" — غير المرن لا يُقصّ أبداً", R.truncate.every((x,j)=>!x || !!(cols[j]||{}).flex), true);
+    check(label+" — الخط بين ٨ و١٠", R.size>=8 && R.size<=10, true, "الحجم "+R.size);
+  });
+  const R2=FG(...cases[1].slice(1));
+  check("الملاحظة الطويلة: قصّ فعلي للعمود المرن فقط", R2.truncate[4]>0 && R2.truncate.slice(0,4).every(x=>!x), true);
+  check("الملاحظة الطويلة: الاسم بعرض يسعه كاملاً بسطر واحد",
+    R2.grid[1]>=w10.eval('fitNeed('+JSON.stringify(NAME)+','+R2.size+',true)'), true);
+  const R4=FG(...cases[3].slice(1));
+  check("١٢ عموداً محمياً: يُعلَم بالضغط (فيتحوّل الكشف لأفقي)", R4.squeezed, true);
+  check("fitCut يختم بـ«…» ويسع العرض", (function(){ const t=w10.eval('fitCut('+JSON.stringify(LONG)+',2000,9,false)');
+    return t.slice(-1)==="…" && w10.eval('fitNeed('+JSON.stringify(t)+',9,false)')<=2000; })(), true);
+  check("phoneNB: مسافات الهاتف غير قابلة للكسر", w10.eval('phoneNB("0770 123 4567")'), "0770\u00a0123\u00a04567");
+  /* كل جدول رئيسي بالمستندات المقاسة: مجموع أعمدته = عرض النص بين الهامشين بالضبط */
+  w10.eval('extSel=EXT_COLS.map(function(c){return c.k;})');   // كل الأعمدة، ومنها الهاتف
+  ["directoryDocx","variablesDocx","externalDocx","payrollDocx"].forEach(fn=>{
+    const z=unzipStored(new Uint8Array(w10.eval("Array.from("+fn+"())"))), d=z["word/document.xml"];
+    const pg=+(d.match(/<w:pgSz w:w="(\d+)"/)||[])[1], ml=+(d.match(/<w:pgMar[^>]*w:left="(\d+)"/)||[])[1], mr=+(d.match(/<w:pgMar[^>]*w:right="(\d+)"/)||[])[1];
+    const grids=(d.match(/<w:tblGrid>.*?<\/w:tblGrid>/g)||[]).map(g=>(g.match(/w:w="(\d+)"/g)||[]).map(x=>+x.slice(5,-1)));
+    const main=grids.reduce((b,g)=>g.length>b.length?g:b,[]);
+    check(fn+" — مجموع أعمدة الجدول الرئيسي = عرض النص ("+(pg-ml-mr)+")", sumG(main), pg-ml-mr);
+    check(fn+" — الجدول بتخطيط ثابت", /<w:tblLayout w:type="fixed"\/>/.test(d), true);
+    if(fn!=="payrollDocx") check(fn+" — الهاتف بلا التفاف", /<w:noWrap\/>/.test(d), true);
+  });
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
