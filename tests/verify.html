@@ -508,7 +508,7 @@ try{
   check("يفتح على بيانات فارغة بلا خطأ JS", wu.__errs.length, 0, (wu.__errs[0]||""));
   check("يفتح على بيانات فارغة بلا «عنصر مفقود»", wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0,
     (wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0)[0]||""));
-  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","settings"];
+  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form","settings"];
   setState(wu,fixture({workers:[WK({id:"w1"}),WK({id:"w2",name:"علي",status:"مفصول",statusChangedAt:"2026-09-02"})]}));
   wu.eval("bootView()");
   TABS.forEach(t=>{ try{ wu.eval('switchView("'+t+'")'); }catch(e){ wu.__errs.push(t+": "+e.message); } });
@@ -616,8 +616,8 @@ try{
   check("Excel الجرد التفصيلي — أربع أوراق", nSheets, 4);
   wl.eval('window.__pw=""; window.open=function(){ return {document:{write:function(h){window.__pw+=h;},close:function(){}},focus:function(){},print:function(){}}; };');
   wl.eval('el("lgPrint").click()');
-  check("الطباعة: صفحة لكل عامل + صفحة الخلاصة",
-    wl.eval('(__pw.match(/class="lgpg"/g)||[]).length'), wl.eval("lgList().length+1"));
+  check("الطباعة: كتلة لكل عامل", wl.eval('(__pw.match(/class="lgw/g)||[]).length'), wl.eval("lgList().length"));
+  check("الطباعة: التواقيع مرة واحدة بنهاية الجرد", wl.eval('(__pw.match(/class="sigs"/g)||[]).length'), 1);
   check("الجرد التفصيلي بلا «عنصر مفقود»", wl.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0,
     (wl.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0)[0]||""));
   check("الجرد التفصيلي بلا خطأ JS", wl.__errs.length, 0, (wl.__errs[0]||""));
