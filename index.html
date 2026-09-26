@@ -2569,6 +2569,10 @@ function nameBlock(ctx,title,names,x,y,W,color,bg,fs,cols,realCount){
 }
 
 /* ==================== [تصدير] أزرار الورقة ==================== */
+/* كل نافذة طباعة تُفتح من هنا: DOCTYPE (بدونه تعمل النافذة بوضع التوافق فلا ترث
+   الجداول حجم الخط)، واتجاه عربي صريح، وجداول محاذاتها يمين افتراضاً. */
+const PRINT_DOC_OPEN='<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">';
+const PRINT_BASE_CSS='html,body{direction:rtl}body{text-align:right}table{text-align:right}th,td{text-align:right}';
 function dl(url,name){ const a=document.createElement("a"); a.href=url; a.download=name;
   document.body.appendChild(a); a.click(); a.remove(); }
 /* يرسم الورقة على لوحة منفصلة بالدقة المطلوبة — المعاينة تبقى خفيفة */
@@ -2587,7 +2591,7 @@ el("printBtn").onclick=()=>{
   if(!w){ alertBox("المتصفح منع فتح النافذة. اسمح بالنوافذ المنبثقة."); return; }
   /* الصورة بنسبة ١٢٤٠:١٧٥٤ تطلع بعرض ٢١٠مم أطول من ٢٩٧مم بجزء من المليمتر،
      فكانت تُطبع على صفحتين والثانية فارغة. المقاس مثبّت والفائض مقصوص. */
-  w.document.write('<html><head><meta charset="utf-8"><title>جرد '+curDate+'</title><style>@page{size:A4 portrait;margin:0}'+
+  w.document.write(PRINT_DOC_OPEN+'<title>جرد '+curDate+'</title><style>'+PRINT_BASE_CSS+'@page{size:A4 portrait;margin:0}'+
     'html,body{margin:0;padding:0;width:210mm;height:297mm;overflow:hidden}'+
     'img{width:210mm;height:297mm;display:block;object-fit:contain}</style></head><body><img src="'+img+'"></body></html>');
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
@@ -3750,7 +3754,7 @@ el("lvPrint").onclick=()=>{
   if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const no=el("lvNo").value||"";
   w.document.write(
-    '<html><head><meta charset="utf-8"><title>وصل إجازة '+no+'</title><style>'+
+    PRINT_DOC_OPEN+'<title>وصل إجازة '+no+'</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:0}'+
     'html,body{margin:0;padding:0;background:#fff}'+
     '.page{width:210mm;height:297mm;display:flex;flex-direction:column;'+
@@ -4175,7 +4179,7 @@ el("pnPrint").onclick=()=>{
   if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const no=el("pnNo").value||"";
   w.document.write(
-    '<html><head><meta charset="utf-8"><title>إشعار عقوبة '+no+'</title><style>'+
+    PRINT_DOC_OPEN+'<title>إشعار عقوبة '+no+'</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:0}'+
     'html,body{margin:0;padding:0;background:#fff}'+
     '.page{width:210mm;height:297mm;display:flex;flex-direction:column;'+
@@ -4455,7 +4459,7 @@ el("acPrint").onclick=()=>{
   if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const no=el("acNo").value||"";
   w.document.write(
-    '<html><head><meta charset="utf-8"><title>إشعار مكافأة '+no+'</title><style>'+
+    PRINT_DOC_OPEN+'<title>إشعار مكافأة '+no+'</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:0}'+
     'html,body{margin:0;padding:0;background:#fff}'+
     '.page{width:210mm;height:297mm;display:flex;flex-direction:column;'+
@@ -4883,7 +4887,7 @@ el("mtPrint").onclick=()=>{
     : '<div class="page one">'+copy("\u0646\u0633\u062e\u0629 \u0627\u0644\u0625\u062f\u0627\u0631\u0629")+'</div>'+
       '<div class="page one">'+copy("\u0646\u0633\u062e\u0629 \u0627\u0644\u0639\u0627\u0645\u0644")+'</div>';
   w.document.write(
-    '<html><head><meta charset="utf-8"><title>\u0648\u0635\u0644 \u0645\u0648\u0627\u062f '+no+'</title><style>'+
+    PRINT_DOC_OPEN+'<title>\u0648\u0635\u0644 \u0645\u0648\u0627\u062f '+no+'</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:0}'+
     'html,body{margin:0;padding:0;background:#fff}'+
     '.page{width:210mm;height:297mm;display:flex;flex-direction:column;'+
@@ -5140,7 +5144,7 @@ el("dirPrint").onclick=()=>{
     return '<td'+cls+'>'+esc(String(v))+'</td>';
   }).join("")+'</tr>').join("");
   w.document.write(
-    '<html dir="rtl"><head><meta charset="utf-8"><title>دليل العمال</title><style>'+
+    PRINT_DOC_OPEN+'<title>دليل العمال</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:12mm}'+
     'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
     'h1{font-size:16pt;margin:0 0 2mm;color:#4B2E83}'+
@@ -5351,7 +5355,7 @@ el("varPrint").onclick=()=>{
     return '<td'+cls+'>'+esc(String(v))+'</td>';
   }).join("")+'</tr>').join("");
   w.document.write(
-    '<html dir="rtl"><head><meta charset="utf-8"><title>حالات العمال</title><style>'+
+    PRINT_DOC_OPEN+'<title>حالات العمال</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 landscape;margin:10mm}'+
     'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
     'h1{font-size:16pt;margin:0 0 2mm;color:#4B2E83}'+
@@ -5528,7 +5532,7 @@ el("extPrint").onclick=()=>{
     return '<td'+cls+'>'+esc(String(v))+'</td>';
   }).join("")+'</tr>').join("");
   w.document.write(
-    '<html dir="rtl"><head><meta charset="utf-8"><title>'+esc(extTitleText())+'</title><style>'+
+    PRINT_DOC_OPEN+'<title>'+esc(extTitleText())+'</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:14mm}'+
     'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
     'h1{font-size:15pt;margin:0 0 1mm;color:#4B2E83}'+
@@ -6917,7 +6921,7 @@ el("rpPdf").onclick=()=>{
   if(!imgs.length){ alertBox("تعذّر إنشاء التقرير."); return; }
   const w=window.open("","_blank");
   if(!w){ alertBox("المتصفح منع فتح النافذة. اسمح بالنوافذ المنبثقة."); return; }
-  w.document.write('<html><head><meta charset="utf-8"><title>كشف الرواتب</title><style>'+
+  w.document.write(PRINT_DOC_OPEN+'<title>كشف الرواتب</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:0}html,body{margin:0;padding:0}'+
     'img{width:210mm;height:297mm;display:block;page-break-after:always}'+
     'img:last-child{page-break-after:auto}</style></head><body>'+
@@ -7037,21 +7041,33 @@ function wRun(t,o){
     '" w:cs="'+(o.font||"Arial")+'"/>';
   if(o.bold) rPr+='<w:b/><w:bCs/>';
   if(o.color) rPr+='<w:color w:val="'+HEX(o.color)+'"/>';
-  rPr+='<w:sz w:val="'+sz+'"/><w:szCs w:val="'+sz+'"/>'+(o.ltr?"":'<w:rtl/>')+'</w:rPr>';
+  /* الاتجاه صريح بالجهتين: الافتراضي بالمستند rtl، فالتشغيل اللاتيني (رقم، هاتف،
+     مبلغ) يحمل rtl=0 صراحة وإلا ورث الاتجاه العربي وانقلب ترتيب مقاطعه. */
+  rPr+='<w:sz w:val="'+sz+'"/><w:szCs w:val="'+sz+'"/>';
+  /* LTR فقط لنص بلا حرف عربي (هاتف، مبلغ، تاريخ رقمي): نص عربي فيه رقم («جت-2026-…»،
+     «335,000 د.ع») يبقى RTL وخوارزمية الاتجاه ترتّب مقاطعه صحيحاً. الهاتف بالذات لازم
+     LTR: الفراغ بين مجموعات أرقامه داخل تشغيل عربي يقلب ترتيبها (4567 123 0770). */
+  const dir=p=>(o.ltr && !/[\u0600-\u06FF]/.test(p)) ? '<w:rtl w:val="0"/>' : '<w:rtl/>';
   // كل سطر جديد يصير فاصل سطر داخل نفس الفقرة
   const parts=String(t==null?"":t).split("\n");
   return parts.map((p,i)=>
-    '<w:r>'+rPr+(i?'<w:br/>':'')+'<w:t xml:space="preserve">'+xe(p)+'</w:t></w:r>'
+    '<w:r>'+rPr+dir(p)+'</w:rPr>'+(i?'<w:br/>':'')+'<w:t xml:space="preserve">'+xe(p)+'</w:t></w:r>'
   ).join("");
 }
+/* المحاذاة المنطقية داخل فقرة عربية (bidi): وورد — وليبر أوفيس كذلك — يقرآن right/left
+   داخل الفقرة ثنائية الاتجاه كطرف بداية/نهاية معكوس، فكانت «right» تُرسم يساراً
+   (مقاسة: x=37 من 595 بدل 514). start/end منطقيتان بلا لبس: البداية يمين بالعربي. */
+const W_JC={right:"start", left:"end", center:"center", both:"both"};
+function wJc(a){ return W_JC[a||"right"]||"start"; }
 function wPara(t,o){
   o=o||{};
-  const jc=o.align||"right";
+  const jc=wJc(o.align);
   // ترتيب العناصر داخل w:pPr مُلزم بمخطط OOXML: shd ← bidi ← spacing ← jc
   // وورد يرفض فتح الملف إذا اختلّ الترتيب.
   let pPr='<w:pPr>';
   if(o.shade) pPr+='<w:shd w:val="clear" w:color="auto" w:fill="'+HEX(o.shade)+'"/>';
-  pPr+=o.ltr?'<w:bidi w:val="0"/>':'<w:bidi/>';
+  /* كل فقرة عربية الاتجاه؛ المحتوى اللاتيني (o.ltr) تشغيلٌ LTR داخلها لا فقرة LTR */
+  pPr+='<w:bidi/>';
   pPr+='<w:spacing w:before="'+(o.before||0)+'" w:after="'+(o.after==null?60:o.after)+
        '" w:line="240" w:lineRule="auto"/>';
   pPr+='<w:jc w:val="'+jc+'"/>';
@@ -7088,7 +7104,7 @@ function wRow(cells,o){
   if(o.cantSplit!==false) trPr+='<w:cantSplit/>';
   if(o.height) trPr+='<w:trHeight w:val="'+o.height+'" w:hRule="'+(o.hRule||"atLeast")+'"/>';
   if(o.header) trPr+='<w:tblHeader/>';
-  trPr+='<w:jc w:val="right"/></w:trPr>';
+  trPr+='<w:jc w:val="start"/></w:trPr>';
   return '<w:tr>'+trPr+cells.join("")+'</w:tr>';
 }
 function wTable(rows,o){
@@ -7112,7 +7128,7 @@ function wTable(rows,o){
   // ترتيب العناصر داخل tblPr مُلزم: bidiVisual ← tblW ← jc ← tblBorders ← tblCellMar ← tblLook
   return '<w:tbl><w:tblPr><w:bidiVisual/>'+
     '<w:tblW w:w="'+tw+'" w:type="'+tt+'"/>'+
-    '<w:jc w:val="right"/>'+borders+
+    '<w:jc w:val="start"/>'+borders+
     '<w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="70" w:type="dxa"/>'+
     '<w:bottom w:w="40" w:type="dxa"/><w:right w:w="70" w:type="dxa"/></w:tblCellMar>'+
     '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" '+
@@ -7139,6 +7155,48 @@ const W_NS='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/mai
   'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '+
   'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
 const REL_IMG="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+/* إعدادات المستند: بدونها يفتح وورد بافتراضاته اللاتينية للتحرير والتدقيق. ترتيب
+   العناصر مُلزم بالمخطط: view ← zoom ← defaultTabStop ← characterSpacingControl ←
+   compat ← themeFontLang. وضع التوافق ١٥ يمنع عبارة «وضع التوافق» بشريط عنوان وورد. */
+const W_SETTINGS='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+  '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'+
+  '<w:view w:val="print"/><w:zoom w:percent="100"/><w:defaultTabStop w:val="720"/>'+
+  '<w:characterSpacingControl w:val="doNotCompress"/>'+
+  '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>'+
+  '<w:themeFontLang w:val="en-US" w:bidi="ar-IQ"/></w:settings>';
+/* ---- مدقّق الاتجاه: يرفض أي مستند فيه فقرة بلا bidi أو جدول بلا bidiVisual أو
+   تشغيل نص عربي بلا rtl أو قسم بلا bidi. يعمل تلقائياً بوضع التطوير (?dev أو
+   jard_dev=1) وبملف الفحص على كل مستند مولَّد؛ بالاستعمال العادي لا يبطئ التصدير. */
+function devChecks(){
+  try{ return lsGet("jard_dev")==="1" || /[?&#]dev\b/.test(String(location.search)+String(location.hash)); }catch(e){ return false; }
+}
+function rtlProblems(xml){
+  const bad=[], AR=/[\u0600-\u06FF]/;
+  const add=(k,sample)=>{ bad.push(k+": "+String(sample).replace(/<[^>]+>/g,"").slice(0,40)); };
+  let m;
+  /* كل فقرة تبدأ بـ pPr وفيه <w:bidi/> (لا bidi w:val="0") */
+  const pStart=/<w:p[ >]/g;
+  while((m=pStart.exec(xml))){
+    const at=m.index, head=xml.slice(at, at+600), end=head.indexOf("</w:pPr>");
+    const ok = /^<w:p><w:pPr>/.test(head) && end>0 && head.slice(0,end).indexOf("<w:bidi/>")>=0;
+    if(!ok) add("فقرة بلا bidi", xml.slice(at,at+200));
+  }
+  const tStart=/<w:tbl>/g;
+  while((m=tStart.exec(xml))){ if(!xml.startsWith("<w:tbl><w:tblPr><w:bidiVisual/>",m.index)) add("جدول بلا bidiVisual", xml.slice(m.index,m.index+120)); }
+  const rRe=/<w:r>([\s\S]*?)<\/w:r>/g;
+  while((m=rRe.exec(xml))){
+    const body=m[1], tx=(body.match(/<w:t[^>]*>([^<]*)<\/w:t>/g)||[]).join("");
+    if(AR.test(tx) && body.indexOf("<w:rtl/>")<0) add("تشغيل عربي بلا rtl", tx);
+  }
+  const sRe=/<w:sectPr>([\s\S]*?)<\/w:sectPr>/g;
+  while((m=sRe.exec(xml))){ if(m[1].indexOf("<w:bidi/>")<0) add("قسم بلا bidi", "sectPr"); }
+  return bad;
+}
+function assertRtl(xml, where){
+  const bad=rtlProblems(xml);
+  if(bad.length) throw new Error("اتجاه غير عربي بـ"+(where||"المستند")+" ("+bad.length+"): "+bad.slice(0,3).join(" | "));
+  return true;
+}
 /* opts: landscape، margin (تويب لكل الجهات)، pgMar {top,bottom,right,left,header,footer}،
    media [{name,data,rid}] للمتن، header/footer {xml, media} — ترويسة وتذييل صفحة حقيقيان
    يتكرّران بكل صفحة (رقم الصفحة، الفورمة خلف النص). بلا ترويسة ولا تذييل يخرج الملف
@@ -7159,7 +7217,7 @@ function buildDocx(bodyXml, opts){
     (ftr?'<w:footerReference w:type="default" r:id="rIdFtr1"/>':'')+
     '<w:pgSz w:w="'+pw+'" w:h="'+ph+'"'+(land?' w:orient="landscape"':"")+'/>'+
     '<w:pgMar w:top="'+pm.top+'" w:right="'+pm.right+'" w:bottom="'+pm.bottom+'" w:left="'+pm.left+'" '+
-    'w:header="'+pm.header+'" w:footer="'+pm.footer+'" w:gutter="0"/><w:bidi/></w:sectPr>';
+    'w:header="'+pm.header+'" w:footer="'+pm.footer+'" w:gutter="0"/><w:bidi/><w:rtlGutter/></w:sectPr>';
 
   const doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<w:document '+W_NS+'>'+
@@ -7169,7 +7227,8 @@ function buildDocx(bodyXml, opts){
     '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'+
     '<w:docDefaults><w:rPrDefault><w:rPr>'+
     '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'+
-    '<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault>'+
+    /* نص يتسرّب بلا rPr صريح يبقى عربياً: اتجاه ولغة ثنائية بالمستوى الافتراضي */
+    '<w:sz w:val="22"/><w:szCs w:val="22"/><w:rtl/><w:lang w:val="ar-IQ" w:eastAsia="ar-IQ" w:bidi="ar-IQ"/></w:rPr></w:rPrDefault>'+
     '<w:pPrDefault><w:pPr><w:bidi/><w:spacing w:after="60" w:line="240" w:lineRule="auto"/>'+
     '</w:pPr></w:pPrDefault></w:docDefaults>'+
 
@@ -7184,6 +7243,7 @@ function buildDocx(bodyXml, opts){
     (hasJpg?'<Default Extension="jpeg" ContentType="image/jpeg"/>':'')+
     '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'+
     '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'+
+    '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>'+
     (hdr?'<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>':'')+
     (ftr?'<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>':'')+
     '</Types>';
@@ -7195,7 +7255,8 @@ function buildDocx(bodyXml, opts){
 
   let docRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
-    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'+
+    '<Relationship Id="rIdSet" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>';
   media.forEach((m,i)=>{
     docRels+='<Relationship Id="'+m.rid+'" Type="'+REL_IMG+'" Target="media/'+m.name+'"/>';
   });
@@ -7208,8 +7269,10 @@ function buildDocx(bodyXml, opts){
     {name:"_rels/.rels", data:utf8(rels)},
     {name:"word/document.xml", data:utf8(doc)},
     {name:"word/styles.xml", data:utf8(styles)},
+    {name:"word/settings.xml", data:utf8(W_SETTINGS)},
     {name:"word/_rels/document.xml.rels", data:utf8(docRels)}
   ];
+  if(devChecks()){ assertRtl(doc,"المتن"); if(hdr) assertRtl(hdr.xml,"الترويسة"); if(ftr) assertRtl(ftr.xml,"التذييل"); }
   const part=(tag,name,x)=>{
     files.push({name:"word/"+name+".xml", data:utf8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
       '<w:'+tag+' '+W_NS+'>'+x.xml+'</w:'+tag+'>')});
@@ -7240,7 +7303,7 @@ function wImage(rid, wIn, hIn, align){
   const cx=Math.round(wIn*EMU), cy=Math.round(hIn*EMU);
   /* ترتيب عناصر pPr مُلزم بمخطط OOXML: bidi ← spacing ← jc. كان jc قبل
      spacing بكل صورة (توقيع أو شعار) — وورد قد يرفض الملف أو يطلب إصلاحه. */
-  return '<w:p><w:pPr><w:bidi/><w:spacing w:after="0"/><w:jc w:val="'+(align||"center")+'"/></w:pPr>'+
+  return '<w:p><w:pPr><w:bidi/><w:spacing w:after="0"/><w:jc w:val="'+wJc(align||"center")+'"/></w:pPr>'+
     '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'+
     '<wp:extent cx="'+cx+'" cy="'+cy+'"/><wp:docPr id="'+(wImage.n=(wImage.n||0)+1)+'" name="img'+wImage.n+'"/>'+
     '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
@@ -7268,8 +7331,9 @@ function xlsxSheetXml(rows, widths, selected){
       const ref=colRef(ci)+(ri+1);
       const isNum = typeof v==="number" && isFinite(v);
       if(v==null||v==="") return;
-      /* الأعداد الصحيحة بلا كسور — «١٫٠٠» بخانة تسلسل تبيّن إهمالاً */
-      const style = ri===0 ? ' s="1"' : (isNum ? ((v===Math.round(v))?' s="3"':' s="2"') : '');
+      /* الأعداد الصحيحة بلا كسور — «١٫٠٠» بخانة تسلسل تبيّن إهمالاً. كل خلية تحمل
+         محاذاتها صراحة: النص يمين بقراءة عربية، الرقم يسار، والرأس بالوسط */
+      const style = ri===0 ? ' s="1"' : (isNum ? ((v===Math.round(v))?' s="3"':' s="2"') : ' s="4"');
       cells += isNum
         ? '<c r="'+ref+'"'+style+'><v>'+v+'</v></c>'
         : '<c r="'+ref+'" t="inlineStr"'+style+'><is><t xml:space="preserve">'+xe(String(v))+'</t></is></c>';
@@ -7301,6 +7365,8 @@ function buildXlsxBook(sheets){
   const workbook='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '+
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+    /* يفتح دائماً على الورقة الأولى */
+    '<workbookPr/><bookViews><workbookView activeTab="0" firstSheet="0"/></bookViews>'+
     '<sheets>'+names.map((nm,i)=>'<sheet name="'+xe(nm)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join("")+
     '</sheets></workbook>';
   const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
@@ -7312,12 +7378,16 @@ function buildXlsxBook(sheets){
     '<fill><patternFill patternType="solid"><fgColor rgb="FF3B2266"/><bgColor indexed="64"/></patternFill></fill></fills>'+
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'+
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
-    '<cellXfs count="4">'+
+    '<cellXfs count="5">'+
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'+
     '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1">'+
-    '<alignment horizontal="center" vertical="center" wrapText="1"/></xf>'+
-    '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
-    '<xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
+    '<alignment horizontal="center" vertical="center" wrapText="1" readingOrder="2"/></xf>'+
+    '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1">'+
+    '<alignment horizontal="left" readingOrder="0"/></xf>'+
+    '<xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1">'+
+    '<alignment horizontal="left" readingOrder="0"/></xf>'+
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1">'+
+    '<alignment horizontal="right" readingOrder="2"/></xf>'+
     '</cellXfs>'+
     /* نمط «Normal» المرجعي — بدونه تحذّر بعض القارئات أن الملف بلا نمط افتراضي */
     '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'+
@@ -8995,7 +9065,7 @@ el("lgPrint").onclick=()=>{
   if(!single)
     rows+='<tr class="lgrow pb"><td><div class="h5" style="font-size:10.5pt">التغييرات خلال الشهر وخلاصة الجرد</div>'+
       lgSummaryHtml(list, LG.from, LG.to, lgScopeRows().shown)+lgSigsHtml(false)+'</td></tr>';
-  w.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>الجرد التفصيلي</title><style>'+
+  w.document.write(PRINT_DOC_OPEN+'<title>الجرد التفصيلي</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:9mm 10mm 13mm;'+printPageFootCss()+'}html,body{margin:0;padding:0;background:#fff;direction:rtl}'+
     lgCss()+
     '.lgdoc{width:100%;border-collapse:collapse}'+
@@ -9052,7 +9122,7 @@ function lgDocTable(heads, grid, rows, CLR){
 function lgDocH(t,CLR){ return wPara(t,{size:9.5,bold:true,color:CLR.ink,before:80,after:30}); }
 /* سطر اسم العامل ورقم جرده — أول سطر بكتلة كل عامل */
 function lgDocTitle(L,CLR){
-  return '<w:p><w:pPr><w:bidi/><w:spacing w:before="0" w:after="30" w:line="240" w:lineRule="auto"/><w:jc w:val="right"/></w:pPr>'+
+  return '<w:p><w:pPr><w:bidi/><w:spacing w:before="0" w:after="30" w:line="240" w:lineRule="auto"/><w:jc w:val="start"/></w:pPr>'+
     wRun(L.info.name,{size:12,bold:true,color:CLR.ink})+wRun("     رقم الجرد ",{size:8,color:CLR.ink2})+
     wRun(L.no,{size:8,color:CLR.ink2,ltr:true})+'</w:p>';
 }

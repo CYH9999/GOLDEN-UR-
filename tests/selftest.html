@@ -414,11 +414,63 @@ try{
   check("الوضع الداكن مطبّق على الواجهة", w7.eval('document.documentElement.getAttribute("data-ui")'), "dark");
   w7.eval('setUiTheme("auto")');
 
+  /* ---- ١٠) اتجاه المخرجات ---- */
+  group("١٠ · اتجاه عربي صحيح بكل مستند Word وExcel");
+  const w10=await boot();
+  const PNG1="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAGUlEQVR4nGNkYPj/n4EIwESMolGFtFUIAB8wAx8xw1dFAAAAAElFTkSuQmCC";
+  const C10=company({settings:{numerals:"arab"},states:{"2026-09-08":{a:"absent"}},
+    workers:[{id:"a",name:"أحمد كاظم",phone:"07701234567",motherName:"فاطمة",status:"منقول",statusChangedAt:"2026-09-15",statusNote:"نقل"},{id:"b",name:"باسم",phone:"07801234567"}],
+    leaves:[{id:"l1",no:"إ-2026-001",workerId:"a",type:"اعتيادية",from:"2026-09-02",days:2,to:"2026-09-03",policy:"half",reason:"ظرف"}],
+    penalties:[{id:"p1",no:"ع-2026-001",workerId:"a",type:"استقطاع",kind:"amount",amount:20000,date:"2026-09-05",reason:"تأخر"}]});
+  C10.settings.logo=PNG1; C10.settings.logoW=8; C10.settings.logoH=8; C10.settings.signature=PNG1;
+  load(w10,stateOf([C10]));
+  w10.eval('initLeaveView(); initPenView(); initAchView(); initMatView(); el("lvWorker").value="a"; el("pnWorker").value="a"; el("acWorker").value="a"; el("mtWorker").value="a";'+
+    'RP=buildReport("2026-09-01","2026-09-30"); applyPaySort(); extSel=extDefaults(); setVarSel(WSTATUSES.slice());'+
+    'switchView("ledger"); el("lgFrom").value="2026-09-01"; el("lgTo").value="2026-09-30"; runLedger(false);');
+  const DOCS=["dailyDocx","payrollDocx","leaveDocx","penaltyDocx","achievementDocx","issueDocx","directoryDocx","variablesDocx","externalDocx","ledgerDocx(lgList())"];
+  DOCS.forEach(fn=>{
+    let z=null, why="";
+    try{ z=unzipStored(new Uint8Array(w10.eval("Array.from("+(fn.indexOf("(")>0?fn:fn+"()")+")"))); }catch(e){ why=e.message; }
+    if(!z){ check(fn+" — يُبنى", why, ""); return; }
+    const parts=["word/document.xml","word/header1.xml","word/footer1.xml"].filter(n=>z[n]);
+    const probs=parts.map(n=>{ w10.__x=z[n]; return w10.eval("rtlProblems(__x).length"); }).reduce((a,b)=>a+b,0);
+    let asserted=true; try{ parts.forEach(n=>{ w10.__x=z[n]; w10.eval("assertRtl(__x)"); }); }catch(e){ asserted=e.message; }
+    check(fn+" — assertRtl: كل فقرة bidi، كل جدول bidiVisual، كل تشغيل عربي rtl", asserted, true);
+    const doc=z["word/document.xml"];
+    check(fn+" — لا محاذاة right/left داخل فقرة عربية (start/end فقط)",
+      (doc.match(/<w:jc w:val="(right|left)"\/>/g)||[]).length, 0, "وورد يعكس right/left داخل الفقرة ثنائية الاتجاه");
+    check(fn+" — settings.xml بلغة عربية ثنائية", /themeFontLang w:val="en-US" w:bidi="ar-IQ"/.test(z["word/settings.xml"]||""), true);
+    check(fn+" — rtl ولغة ar-IQ بالمستوى الافتراضي", /<w:rtl\/><w:lang w:val="ar-IQ" w:eastAsia="ar-IQ" w:bidi="ar-IQ"\/>/.test(z["word/styles.xml"]||""), true);
+    check(fn+" — القسم bidi + rtlGutter", /<w:bidi\/><w:rtlGutter\/><\/w:sectPr>/.test(doc), true);
+  });
+  const xz=unzipStored(new Uint8Array(w10.eval('(function(){var b=null,o=saveXlsx;saveXlsx=function(x){b=x};el("rpXls").onclick();saveXlsx=o;return Array.from(b);})()')));
+  check("Excel — الورقة RTL", /rightToLeft="1"/.test(xz["xl/worksheets/sheet1.xml"]), true);
+  check("Excel — النص يمين بقراءة عربية، والأرقام يسار، والرأس بالوسط",
+    /horizontal="right" readingOrder="2"/.test(xz["xl/styles.xml"]) && /horizontal="left" readingOrder="0"/.test(xz["xl/styles.xml"]) &&
+    /horizontal="center" vertical="center" wrapText="1" readingOrder="2"/.test(xz["xl/styles.xml"]), true);
+  check("Excel — يفتح على الورقة الأولى", /<workbookView activeTab="0" firstSheet="0"\/>/.test(xz["xl/workbook.xml"]), true);
+  check("Excel — كل خلية نصية تحمل نمط المحاذاة", (xz["xl/worksheets/sheet1.xml"].match(/t="inlineStr"(?! s=)/g)||[]).length, 0);
+  const pws=w10.eval('(function(){ var out=[]; var op=window.open; window.open=function(){ var h=""; return {document:{write:function(x){h+=x;},close:function(){out.push(h);}},focus:function(){},print:function(){}}; };'+
+    '["printBtn","lvPrint","pnPrint","acPrint","mtPrint","dirPrint","varPrint","rpPdf","lgPrint"].forEach(function(id){ try{ el(id).onclick(); }catch(e){} });'+
+    'window.open=op; return out; })()');
+  check("كل نوافذ الطباعة بـ DOCTYPE واتجاه عربي", pws.length>=9 && pws.every(h=>/^<!DOCTYPE html><html dir="rtl" lang="ar">/.test(h) && h.indexOf("direction:rtl")>0), true, pws.length+" نافذة");
+
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
 }
 render();
+}
+/* فك أرشيف ZIP بطريقة التخزين (كما يكتبه البرنامج) إلى نصوص */
+function unzipStored(b){
+  const dv=new DataView(b.buffer,b.byteOffset,b.byteLength), out={}; let p=0;
+  while(p+30<=b.length && dv.getUint32(p,true)===0x04034b50){
+    const nl=dv.getUint16(p+26,true), xl=dv.getUint16(p+28,true), len=dv.getUint32(p+18,true), meth=dv.getUint16(p+8,true);
+    const name=new TextDecoder().decode(b.subarray(p+30,p+30+nl)), d0=p+30+nl+xl;
+    if(meth!==0) throw new Error("أرشيف مضغوط: "+name);
+    out[name]=new TextDecoder().decode(b.subarray(d0,d0+len)); p=d0+len;
+  }
+  return out;
 }
 function addISO(iso,n){ const p=iso.split("-").map(Number); const d=new Date(p[0],p[1]-1,p[2]+n);
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
