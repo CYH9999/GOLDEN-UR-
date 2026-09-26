@@ -1093,6 +1093,11 @@ tr.rowneg td{background:var(--absent-bg)}
     <div class="panel-body">
       <p class="hint" style="margin-top:0">لكل عامل: تقويم الشهر يوماً بيوم، وكل وصل إجازة وعقوبة ومكافأة ومواد،
         وتفصيل الراتب من الكامل إلى الصافي — والأرقام نفسها أرقام كشف الرواتب بلا أي حساب جديد.</p>
+      <!-- الافتراضي ورقة مختصرة تُقرأ بثوانٍ؛ التفاصيل الموسّعة ترجّع العرض الكامل لمن يريده -->
+      <div class="chkrow" style="margin:0 0 12px">
+        <label><input type="checkbox" id="lgFull"> تفاصيل موسّعة (كل الخانات والجداول)</label>
+        <label><input type="checkbox" id="lgCal"> أظهر تقويم الشهر</label>
+      </div>
       <div class="varbar">
         <label class="field" style="margin:0"><span>النطاق</span>
           <select id="lgScope" class="wsel">
@@ -7090,7 +7095,12 @@ function wTable(rows,o){
   o=o||{};
   const bc=HEX(o.border||"#BFBFBF");
   const line=n=>'<w:'+n+' w:val="single" w:sz="'+(o.borderSize||6)+'" w:space="0" w:color="'+bc+'"/>';
-  const borders='<w:tblBorders>'+["top","left","bottom","right","insideH","insideV"].map(line).join("")+'</w:tblBorders>';
+  /* o.frame: all (الافتراضي) · none بلا حدود · bottom خط سفلي فقط (الترويسة) ·
+     rows خط بين الصفوف فقط (فاصل بين كتل العمال) */
+  const fr=o.frame||"all";
+  const on = fr==="none"?[] : fr==="bottom"?["bottom"] : fr==="rows"?["insideH"] : ["top","left","bottom","right","insideH","insideV"];
+  const borders='<w:tblBorders>'+["top","left","bottom","right","insideH","insideV"].map(n=>
+    on.indexOf(n)>=0 ? line(n) : '<w:'+n+' w:val="nil"/>').join("")+'</w:tblBorders>';
   const grid=(o.grid||[]).map(w=>'<w:gridCol w:w="'+w+'"/>').join("");
   // عرض الجدول بالتوافق مع مجموع الأعمدة (dxa) بدل نسبة مئوية،
   // لأن اختلاف الوحدتين يربك تخطيط وورد.
@@ -7122,23 +7132,37 @@ function dataUrlBytes(d){
 const EMU=914400;   // وحدة الرسم لكل إنش
 
 /* ---- بناء ملف DOCX كامل ---- */
+/* مساحات الأسماء لكل جزء مستند (المتن والترويسة والتذييل) — الصور والمراسي تحتاجها كلها */
+const W_NS='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '+
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '+
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '+
+  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '+
+  'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
+const REL_IMG="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+/* opts: landscape، margin (تويب لكل الجهات)، pgMar {top,bottom,right,left,header,footer}،
+   media [{name,data,rid}] للمتن، header/footer {xml, media} — ترويسة وتذييل صفحة حقيقيان
+   يتكرّران بكل صفحة (رقم الصفحة، الفورمة خلف النص). بلا ترويسة ولا تذييل يخرج الملف
+   بنفس بنيته السابقة. */
 function buildDocx(bodyXml, opts){
   if(typeof bodyXml!=="string"||!bodyXml) throw new Error("محتوى المستند فارغ");
   opts=opts||{};
   const land=!!opts.landscape;
   const pw=land?16838:11906, ph=land?11906:16838;
   const mg=opts.margin||720;             // ١٫٢٧ سم
-  const media=opts.media||[];            // [{name, data}]
-  const secPr='<w:sectPr><w:pgSz w:w="'+pw+'" w:h="'+ph+'"'+(land?' w:orient="landscape"':"")+'/>'+
-    '<w:pgMar w:top="'+mg+'" w:right="'+mg+'" w:bottom="'+mg+'" w:left="'+mg+'" '+
-    'w:header="0" w:footer="0" w:gutter="0"/><w:bidi/></w:sectPr>';
+  const media=opts.media||[];            // [{name, data, rid}]
+  const hdr=opts.header||null, ftr=opts.footer||null;
+  const pm=Object.assign({top:mg,right:mg,bottom:mg,left:mg,
+    header:(hdr||ftr)?Math.round(mg/2):0, footer:(hdr||ftr)?Math.round(mg/2):0}, opts.pgMar||{});
+  /* ترتيب عناصر sectPr مُلزم: headerReference ← footerReference ← pgSz ← pgMar ← … ← bidi */
+  const secPr='<w:sectPr>'+
+    (hdr?'<w:headerReference w:type="default" r:id="rIdHdr1"/>':'')+
+    (ftr?'<w:footerReference w:type="default" r:id="rIdFtr1"/>':'')+
+    '<w:pgSz w:w="'+pw+'" w:h="'+ph+'"'+(land?' w:orient="landscape"':"")+'/>'+
+    '<w:pgMar w:top="'+pm.top+'" w:right="'+pm.right+'" w:bottom="'+pm.bottom+'" w:left="'+pm.left+'" '+
+    'w:header="'+pm.header+'" w:footer="'+pm.footer+'" w:gutter="0"/><w:bidi/></w:sectPr>';
 
   const doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
-    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '+
-    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '+
-    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '+
-    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '+
-    'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
+    '<w:document '+W_NS+'>'+
     '<w:body>'+bodyXml+secPr+'</w:body></w:document>';
 
   const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
@@ -7151,13 +7175,17 @@ function buildDocx(bodyXml, opts){
 
     '</w:styles>';
 
+  const hasJpg=media.concat(hdr&&hdr.media||[]).some(m=>/\.jpe?g$/i.test(m.name));
   let ctypes='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
     '<Default Extension="xml" ContentType="application/xml"/>'+
     '<Default Extension="png" ContentType="image/png"/>'+
+    (hasJpg?'<Default Extension="jpeg" ContentType="image/jpeg"/>':'')+
     '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'+
     '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'+
+    (hdr?'<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>':'')+
+    (ftr?'<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>':'')+
     '</Types>';
 
   const rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
@@ -7169,8 +7197,10 @@ function buildDocx(bodyXml, opts){
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
   media.forEach((m,i)=>{
-    docRels+='<Relationship Id="'+m.rid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+m.name+'"/>';
+    docRels+='<Relationship Id="'+m.rid+'" Type="'+REL_IMG+'" Target="media/'+m.name+'"/>';
   });
+  if(hdr) docRels+='<Relationship Id="rIdHdr1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>';
+  if(ftr) docRels+='<Relationship Id="rIdFtr1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>';
   docRels+='</Relationships>';
 
   const files=[
@@ -7180,7 +7210,25 @@ function buildDocx(bodyXml, opts){
     {name:"word/styles.xml", data:utf8(styles)},
     {name:"word/_rels/document.xml.rels", data:utf8(docRels)}
   ];
-  media.forEach(m=>files.push({name:"word/media/"+m.name, data:m.data}));
+  const part=(tag,name,x)=>{
+    files.push({name:"word/"+name+".xml", data:utf8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<w:'+tag+' '+W_NS+'>'+x.xml+'</w:'+tag+'>')});
+    const pm2=x.media||[];
+    if(pm2.length){
+      files.push({name:"word/_rels/"+name+".xml.rels", data:utf8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+        pm2.map(m=>'<Relationship Id="'+m.rid+'" Type="'+REL_IMG+'" Target="media/'+m.name+'"/>').join("")+
+        '</Relationships>')});
+    }
+  };
+  if(hdr) part("hdr","header1",hdr);
+  if(ftr) part("ftr","footer1",ftr);
+  /* الصورة الواحدة تُكتب مرة واحدة بالأرشيف حتى لو أشار لها المتن والترويسة معاً */
+  const seen=new Set();
+  media.concat(hdr&&hdr.media||[],ftr&&ftr.media||[]).forEach(m=>{
+    if(seen.has(m.name)) return; seen.add(m.name);
+    files.push({name:"word/media/"+m.name, data:m.data});
+  });
   return zipStore(files);
 }
 
@@ -7315,6 +7363,43 @@ function saveDocx(bytes,name){
 }
 
 /* ============ [تصدير] مستندات وورد: ورقة الجرد وكشف الرواتب ============ */
+
+/* ---- ترويسة الصفحة وتذييلها بالوورد (جزءان حقيقيان يتكرّران بكل صفحة) ----
+   الترويسة: [الشعار واسم الشركة] | [عنوان المستند وسطر ثانوي] | [العدد/التاريخ/المدة]
+   بخط سفلي واحد بلون الشركة، بلا تعبئة ولا زخرفة. التذييل: اسم الشركة · تاريخ
+   الطباعة · صفحة س من ص (حقلا PAGE و NUMPAGES يعدّهما وورد نفسه). */
+function wPageHead(o){
+  const s=S(), CLR=CL(), W=o.width, media=[];
+  let rid=null;
+  if(s.logo){ const bb=dataUrlBytes(s.logo); if(bb){ rid="rIdHLogo"; media.push({name:"logo.png",data:bb,rid:rid}); } }
+  const A=Math.round(W*0.33), G=[A,W-2*A,A], ld=logoDims(0.85,0.36);
+  const meta=(o.meta||[]).filter(Boolean);
+  const xml=wTable([wRow([
+    wCell((rid?wImage(rid,ld.w,ld.h,"right"):"")+
+      wPara(s.company||"اسم الشركة",{size:11.5,bold:true,color:CLR.ink,align:"right",after:0}),{width:G[0],raw:true,valign:"bottom"}),
+    wCell(wPara(o.title,{size:14,bold:true,color:CLR.ink,align:"center",after:0})+
+      (o.sub?wPara(o.sub,{size:9,color:CLR.ink2,align:"center",after:0}):""),{width:G[1],raw:true,valign:"bottom"}),
+    wCell(meta.length?meta.map(t=>wPara(t,{size:8.5,color:CLR.ink2,align:"right",after:0})).join(""):wPara("",{after:0}),
+      {width:G[2],raw:true,valign:"bottom"})
+  ])],{frame:"bottom",border:isMono()?"#333333":CLR.purple,borderSize:10,grid:G})+wPara("",{after:0,size:3});
+  return {xml:xml, media:media};
+}
+function wField(instr,o){
+  return '<w:fldSimple w:instr=" '+instr+' ">'+wRun("1",Object.assign({},o,{ltr:false}))+'</w:fldSimple>';
+}
+function wPageFoot(){
+  const s=S(), CLR=CL(), o={size:8,color:CLR.ink2};
+  return {xml:'<w:p><w:pPr><w:bidi/><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>'+
+    wRun((s.company||"")+" · تاريخ الطباعة "+dateSlash(todayISO())+" · صفحة ",o)+wField("PAGE",o)+
+    wRun(" من ",o)+wField("NUMPAGES",o)+'</w:p>'};
+}
+/* تذييل صفحات نوافذ الطباعة: نفس النص، داخل هامش الصفحة (@page) فيتكرّر ويعدّ الصفحات */
+function cssStr(t){ return '"'+String(t==null?"":t).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/[\r\n]+/g," ")+'"'; }
+function printPageFootCss(){
+  const s=S(), cs=S().numerals==="arab"?"arabic-indic":"decimal";
+  return '@bottom-center{content:'+cssStr((s.company||"")+" · تاريخ الطباعة "+dateSlash(todayISO())+" · صفحة ")+
+    ' counter(page,'+cs+') '+cssStr(" من ")+' counter(pages,'+cs+');font:8pt '+FF+';color:#666;direction:rtl}';
+}
 
 /* ترويسة موحّدة: اسم الشركة على خلفية بلون الشركة ثم عنوان المستند */
 function docHeader(title, sub, full){
@@ -8303,7 +8388,42 @@ function lgCss(){
   /* ألوان الحالات للطباعة الملوّنة؛ بالأبيض والأسود تبقى بالحبر مع الخط العريض */
   css+= mono ? '.lg .st-on,.lg .st-move,.lg .st-end,.lg .st-cut,.lg .st-fire{color:'+CLR.ink+';font-weight:700}'
              : STATUS_PRINT_CSS.replace(/(^|\})\./g,"$1.lg .");
-  return css+'.lg .ph{white-space:nowrap;direction:ltr;unicode-bidi:isolate}';
+  css+='.lg .ph{white-space:nowrap;direction:ltr;unicode-bidi:isolate}';
+  /* ---- الورقة المختصرة: لون لرأس الجدول والمبلغ السالب والحالة فقط ---- */
+  css+='.lg .lg-hl{display:flex;align-items:center;gap:8px;border-bottom:1.5px solid '+CLR.purple+';padding-bottom:3px;margin-bottom:5px}'+
+    '.lg .lg-hl img{max-height:10mm;max-width:24mm;object-fit:contain}'+
+    '.lg .lg-hl .co{font-size:11pt;color:'+CLR.ink+'}'+
+    '.lg .lg-hl .tt{font-size:10pt;font-weight:700}'+
+    '.lg .lg-hl .mt{margin-inline-start:auto;font-size:8pt;color:'+CLR.ink2+';white-space:nowrap}'+
+    '.lg .lgw{break-inside:avoid;page-break-inside:avoid;padding:0 0 3.5mm;margin:0 0 3.5mm;border-bottom:1px solid '+LN+'}'+
+    '.lg .lgw.last{border-bottom:0;margin-bottom:0}'+
+    '.lg .wt{display:flex;align-items:baseline;gap:8px;margin:0 0 2px}'+
+    '.lg .wt .nm{font-size:11.5pt;font-weight:800}'+
+    '.lg .wt .no{margin-inline-start:auto;font-size:8pt;color:'+CLR.ink2+';white-space:nowrap}'+
+    '.lg .c6{display:grid;grid-template-columns:2fr 1.5fr 1.1fr 1.7fr 1.2fr 1.1fr;border:1px solid '+LN+'}'+
+    '.lg .c6 div{padding:1px 6px;border-inline-start:1px solid '+LN2+';font-weight:600;min-width:0}'+
+    '.lg .c6 div:first-child{border-inline-start:0}'+
+    '.lg .c6 b{display:block;font-size:7pt;color:'+CLR.ink2+';font-weight:600}'+
+    '.lg .sec2{font-size:7.5pt;color:'+CLR.ink2+';margin:1px 0 0}'+
+    '.lg .d5{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid '+LN+';margin-top:4px}'+
+    '.lg .d5 div{text-align:center;padding:1px 2px;border-inline-start:1px solid '+LN2+';font-size:7.5pt;color:'+CLR.ink2+'}'+
+    '.lg .d5 div:first-child{border-inline-start:0}'+
+    '.lg .d5 b{display:block;font-size:11pt;color:'+CLR.ink+';font-variant-numeric:tabular-nums;line-height:1.2}'+
+    '.lg .d5 .neg b{color:'+CLR.absent+'}'+
+    '.lg .dline{font-size:7.5pt;color:'+CLR.ink2+';margin:1px 0 4px;line-height:1.4}'+
+    '.lg .h5{font-size:8.5pt;font-weight:700;margin:4px 0 1px;break-after:avoid}'+
+    '.lg .payc td{padding:1px 6px}'+
+    '.lg .payc .sub td{background:none;border-top:1.5px solid '+CLR.ink2+'}'+
+    '.lg .payc .tot td{background:none;color:'+CLR.ink+';border-top:2px solid '+CLR.ink+';font-size:10.5pt}'+
+    '.lg .none{font-size:8pt;margin:3px 0 0}'+
+    /* التقويم المختصر: أربع فئات تتميّز بالرمز أولاً ثم بالتعبئة (مقروء بالأبيض والأسود) */
+    '.lg .cal4 td{height:5.6mm}'+
+    '.lg .c4-p{background:'+(mono?'#fff':'#E4F0EA')+';color:'+(mono?'#111':'#2C6E49')+'}'+
+    '.lg .c4-a{background:'+(mono?'#1A1A1A':'#F7E5E8')+';color:'+(mono?'#fff':'#9B1C31')+'}'+
+    '.lg .c4-m{background:'+(mono?'#C8C8C8':'#F7EFD8')+';color:'+(mono?'#111':'#8A6A12')+'}'+
+    '.lg .c4-r{background:#EFEFEF;color:#777}'+
+    '.lg .c4-u{background:#fff;color:#999}';
+  return css;
 }
 /* أسماء أيام التقويم تبدأ بالسبت (أول الأسبوع بالعراق) — يمين الجدول */
 const LG_WEEK=[6,0,1,2,3,4,5];
@@ -8398,12 +8518,188 @@ function lgPayLines(L){
 function lgChangeText(ch){
   return changeKindText(ch)+(ch.kind==="start"?"":(ch.from?" ("+ch.from+" ← "+ch.to+")":" ("+ch.to+")"));
 }
+/* ==== الورقة المختصرة (العرض الافتراضي) ====
+   ورقة العامل تجاوب على أربعة أسئلة فقط وبهذا الترتيب: من هو؟ شكد حضر وغاب
+   وليش؟ شنو الوصولات الصادرة بحقه؟ شكد صافي راتبه؟ أي عنصر ما يجاوب واحداً
+   منها يطلع من العرض الافتراضي ويبقى بـ«التفاصيل الموسّعة». كل رقم يُقرأ من
+   صف buildReport نفسه — الورقة المختصرة لا تحسب شيئاً. */
+/* بطاقة العامل: ستة حقول لا أكثر [العنوان، القيمة، صنف] */
+function lgCard6(L){
+  const I=L.info;
+  return [["الاسم",I.name,"nm"],["القسم",I.section,""],["المباشرة",I.start,""],
+    ["الحالة الحالية",statusFullText(I.status,I.statusDate),"st"],["الهاتف",I.phone,"ph"],["سياسة المتفرقة",policyName(L.policy),""]];
+}
+/* السطر الثانوي تحت البطاقة: الحقول الفارغة تُحذف ولا تُطبع «—» */
+function lgCardSecondary(L){
+  const I=L.info, off=offLabel(L.w), parts=[];
+  if(I.mother && I.mother!=="—") parts.push("اسم الأم: "+I.mother);
+  if(I.dob && I.dob!=="—") parts.push("التولد: "+I.dob);
+  if(I.zone && I.zone!=="—") parts.push("المنطقة: "+I.zone);
+  if(off && off!=="—") parts.push("الأوف: "+off);
+  return parts.join(" · ");
+}
+/* شريط الأيام: خمس خانات، والباقي بسطر نصّي واحد */
+function lgStrip5(L){
+  const r=L.row;
+  return [["حضور",r.present,""],["غياب",r.absent,r.absent?"neg":""],["متفرقة",r.misc,""],
+    ["إجازة",r.leave,""],["أيام مستقطعة",r.deductDays,r.deductDays?"neg":""]];
+}
+function lgStripLine(L){
+  const r=L.row, parts=["أيام المدة "+fmtNum(r.periodDays),"أيام خدمته "+fmtNum(r.svcDays),
+    "المعتمدة له "+fmtNum(r.eligible)];
+  if(r.off) parts.push("أوف "+fmtNum(r.off));
+  if(r.excused) parts.push("متفرقة + إجازة "+fmtNum(r.excused));
+  if(L.cnt.unc) parts.push("غير معتمد "+fmtNum(L.cnt.unc));
+  parts.push("نسبة الحضور "+fmtNum(Math.round(r.rate*100))+"%");
+  return parts.join(" · ");
+}
+/* الاستثناءات: غياب ومتفرقة وإجازة وأيام غير معتمدة فقط. الأيام المتتالية
+   المتطابقة سطر واحد، ويُتجاوز بينها يوم عطلة أو أوف (لا معلومة فيه) — فإجازة
+   من الخميس إلى الأحد تبقى سطراً واحداً رغم الجمعة بالوسط. */
+const LG_EXC={absent:1,misc:1,leave:1,unc:1};
+function lgExceptionRows(L, all){
+  if(all) return lgDayRows(L,true);
+  const kindAt=iso=>{ const x=L.days[daysBetween(L.from,iso)]; return x?x.k:""; };
+  const restBetween=(a,b)=>{ let d=addDays(a,1), g=0;
+    while(d<b && g++<40){ const k=kindAt(d); if(k!=="hol" && k!=="off") return false; d=addDays(d,1); }
+    return true; };
+  const out=[];
+  L.days.forEach(x=>{
+    if(!LG_EXC[x.k]) return;
+    const p=out[out.length-1];
+    if(p && p.k===x.k && p.detail===x.detail && p.ded===x.ded && restBetween(p.to,x.d)){ p.to=x.d; p.n++; return; }
+    out.push({from:x.d,to:x.d,n:1,k:x.k,detail:x.detail,ded:x.ded});
+  });
+  return out;
+}
+/* الوصولات بجدول واحد مرتّب بالتاريخ: النوع | الرقم | التاريخ | التفصيل | الأثر المالي.
+   سبب العقوبة يبقى كاملاً بعمود التفصيل. */
+function lgVoucherRows(L){
+  const out=[];
+  L.leaves.forEach(l=>{ const t=isTimedLeave(l), pol=policyOfLeave(l,L.w);
+    out.push({d:l.from, type:"إجازة", no:l.no||"",
+      date:t?dateSlash(l.from):dateSlash(l.from)+" ← "+dateSlash(leaveEnd(l)),
+      detail:(l.type||"")+" — "+(t?hoursText(l.hours||1):daysText(l.days||1))+(l.reason?" — "+l.reason:""),
+      eff:t?"بلا استقطاع":(pol==="none"?"بلا استقطاع":(pol==="half"?"استقطاع نصف الأيام":"استقطاع كل الأيام")), cls:""}); });
+  L.pens.forEach(p=>{ const a=penaltyAmount(p,L.w);
+    out.push({d:p.date, type:p.terminates?"قرار إنهاء خدمة":"عقوبة", no:p.no||"", date:dateSlash(p.date),
+      detail:(p.type||"")+" — "+penKindName(p.kind)+(p.kind==="days"?" ("+daysText(p.days)+")":"")+(p.reason?" — "+p.reason:""),
+      eff:a?"-"+fmtMoney(a):"بلا استقطاع", cls:a?"neg":""}); });
+  L.achs.forEach(x=>{ const v=achAmount(x,L.w);
+    out.push({d:x.date, type:"مكافأة", no:x.no||"", date:dateSlash(x.date),
+      detail:(x.type||"")+(x.reason?" — "+x.reason:""), eff:v?"+"+fmtMoney(v):"شكر وتقدير", cls:v?"pos":""}); });
+  L.issues.forEach(x=>{
+    out.push({d:x.from, type:"مواد", no:x.no||"", date:dateSlash(x.from),
+      detail:"صرف "+fmtNum((x.items||[]).length)+" مادة لغاية "+dateSlash(x.to||x.from), eff:"—", cls:""}); });
+  return out.sort((a,b)=>a.d<b.d?-1:(a.d>b.d?1:0));
+}
+/* التقويم المختصر: أربعة رموز فقط — حاضر · غائب · متفرقة أو إجازة · عطلة/أوف/خارج
+   الخدمة برمز رمادي واحد. اليوم غير المعتمد خانة فارغة. الرموز الثمانية تبقى
+   بالتفاصيل الموسّعة. */
+const LG_CAL4={present:"p",absent:"a",misc:"m",leave:"m",off:"r",hol:"r",out:"r",unc:"u"};
+const LG_CAL4_SYM={p:"ح",a:"غ",m:"م",r:"·",u:""};
+function lgCalendar4(L){
+  const ym=L.from.slice(0,7), first=parseISO(ym+"-01");
+  const len=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
+  const off=LG_WEEK.indexOf(first.getDay());
+  const byDate={}; L.days.forEach(x=>{ byDate[x.d]=x; });
+  let h='<table class="cal cal4"><thead><tr>'+LG_WEEK.map(i=>'<th>'+WD_NAMES[i]+'</th>').join("")+'</tr></thead><tbody><tr>';
+  let col=0;
+  for(let i=0;i<off;i++){ h+='<td class="k-none"></td>'; col++; }
+  for(let dd=1; dd<=len; dd++){
+    if(col===7){ h+='</tr><tr>'; col=0; }
+    const iso=ym+"-"+String(dd).padStart(2,"0"), x=byDate[iso], g=x?LG_CAL4[x.k]:"";
+    h+= x ? '<td class="c4-'+g+'" title="'+esc(LG_KINDS[x.k].t+(x.detail?" — "+x.detail:""))+'"><span class="dn">'+fmtNum(dd)+
+          '</span><span class="sy">'+(LG_CAL4_SYM[g]||"&nbsp;")+'</span></td>'
+        : '<td class="k-none"><span class="dn">'+fmtNum(dd)+'</span><span class="sy">&nbsp;</span></td>';
+    col++;
+  }
+  while(col<7){ h+='<td class="k-none"></td>'; col++; }
+  h+='</tr></tbody></table><div class="legend">ح حاضر · غ غائب · م متفرقة أو إجازة · · عطلة أو أوف أو خارج الخدمة · الخانة الفارغة يوم لم يُعتمد</div>';
+  return h;
+}
+/* كتلة التوقيع — مرة واحدة بنهاية الجرد كله. عمودان: المسؤول الإداري والمصادقة
+   (مع التوقيع المرسوم)، وخانة «توقيع العامل بالاستلام» بنطاق العامل الواحد فقط. */
+function lgSigSeats(single, name){
+  const st=S(), a=[];
+  if(single) a.push({title:"توقيع العامل بالاستلام", name:name||""});
+  a.push({title:st.cmT2||"المسؤول الإداري", name:st.cmN2||""});
+  a.push({title:"المصادقة", name:st.signer||"", role:st.role||"", sig:true});
+  return a;
+}
+function lgSigsHtml(single, name){
+  const st=S(), seats=lgSigSeats(single,name);
+  return '<div class="sigs" style="grid-template-columns:repeat('+seats.length+',1fr)">'+seats.map(x=>
+    '<div><div class="sp">'+(x.sig&&st.signature?'<img src="'+st.signature+'" alt="">':'')+'</div>'+
+    '<div class="ln">'+esc(x.title)+'</div>'+esc(x.name)+(x.role?'<div class="mini">'+esc(x.role)+'</div>':'')+'</div>').join("")+
+    '</div>';
+}
+/* سطر الترويسة الواحد: الشعار · اسم الشركة · «الجرد التفصيلي» · المدة · رقم الجرد */
+function lgHeadLine(o){
+  const st=S();
+  return '<div class="lg-hl">'+(st.logo?'<img src="'+st.logo+'" alt="">':'')+
+    '<b class="co">'+esc(st.company||"")+'</b><span class="tt">الجرد التفصيلي'+(o.sub?' — '+esc(o.sub):'')+'</span>'+
+    '<span class="mt">المدة '+dateSlash(o.from)+' ← '+dateSlash(o.to)+
+    (o.no?' · رقم الجرد <bdi dir="ltr">'+esc(o.no)+'</bdi>':'')+(o.printed?' · تاريخ الإصدار '+dateSlash(todayISO()):'')+'</span></div>';
+}
 function ledgerHtml(L, o){
   o=o||{};
   const I=L.info;
   let h='';
-  if(L.mismatch.length)
-    h+='<div class="err">تنبيه داخلي: عدّ الأيام هنا يختلف عن كشف الرواتب ('+esc(L.mismatch.join("، "))+') — بلّغ عنه.</div>';
+  /* رقم الجرد بسطر اسم العامل تحت؛ سطر الترويسة يحمل الشركة والمدة فقط */
+  if(o.head) h+=lgHeadLine({from:L.from,to:L.to});
+  /* ١) من هو؟ */
+  h+='<div class="wt"><span class="nm">'+esc(I.name)+'</span><span class="no">رقم الجرد <bdi dir="ltr">'+esc(L.no)+'</bdi></span></div>';
+  h+='<div class="c6">'+lgCard6(L).map(x=>'<div><b>'+x[0]+'</b>'+
+    (x[2]==="st"?'<span class="'+statusPrintClass(I.status)+'">'+esc(x[1])+'</span>':
+     (x[2]==="ph"?'<span class="ph">'+esc(x[1])+'</span>':esc(x[1])))+'</div>').join("")+'</div>';
+  const sec=lgCardSecondary(L);
+  if(sec) h+='<div class="sec2">'+esc(sec)+'</div>';
+  /* ٢) شكد حضر وغاب؟ */
+  h+='<div class="d5">'+lgStrip5(L).map(x=>'<div'+(x[2]?' class="'+x[2]+'"':'')+'>'+x[0]+'<b>'+fmtNum(x[1])+'</b></div>').join("")+'</div>';
+  h+='<div class="dline">'+esc(lgStripLine(L))+(lgSumNote(L)?' · '+esc(lgSumNote(L)):'')+'</div>';
+  /* ٤) شكد صافي راتبه؟ — تفصيل الراتب بالعرض الأكبر */
+  h+='<table class="pay payc"><tbody>'+
+    lgPayLines(L).map(x=>'<tr'+(x[3]==="sub"||x[3]==="tot"?' class="'+x[3]+'"':'')+'><td class="nw">'+x[0]+'</td><td class="mini">'+esc(x[1])+'</td>'+
+      '<td'+(x[3]==="neg"||x[3]==="pos"?' class="'+x[3]+'"':'')+'>'+esc(x[2])+'</td></tr>').join("")+
+    '</tbody></table>';
+  /* ٢) وليش؟ — الاستثناءات */
+  const ex=lgExceptionRows(L,!!o.allDays);
+  if(ex.length){
+    h+='<div class="h5">'+(o.allDays?'الأيام (كل الأيام)':'الاستثناءات')+'</div>'+
+      '<table><thead><tr><th style="width:27%">التاريخ</th><th style="width:15%">الحالة</th><th>التفصيل</th>'+
+      '<th style="width:10%" class="c">مستقطع؟</th></tr></thead><tbody>'+
+      ex.map(g=>'<tr><td class="num">'+lgRangeText(g)+(g.n>1?' <span class="mini">('+esc(daysText(g.n))+')</span>':'')+'</td>'+
+        '<td>'+LG_KINDS[g.k].t+'</td><td>'+esc(g.detail||"—")+'</td><td class="c">'+esc(g.ded)+'</td></tr>').join("")+
+      '</tbody></table>';
+  }else h+='<div class="none">حضور كامل، بلا استثناءات.</div>';
+  /* ٣) شنو الوصولات الصادرة بحقه؟ */
+  const vs=lgVoucherRows(L);
+  if(vs.length){
+    h+='<div class="h5">الوصولات</div><table><thead><tr><th style="width:12%">النوع</th><th style="width:15%">الرقم</th>'+
+      '<th style="width:20%">التاريخ</th><th>التفصيل</th><th style="width:14%" class="l">الأثر المالي</th></tr></thead><tbody>'+
+      vs.map(v=>'<tr><td>'+esc(v.type)+'</td><td class="num"><bdi dir="ltr">'+esc(v.no)+'</bdi></td><td class="num">'+v.date+'</td>'+
+        '<td>'+esc(v.detail)+'</td><td class="l num'+(v.cls?' '+v.cls:'')+'">'+esc(v.eff)+'</td></tr>').join("")+'</tbody></table>';
+  }else h+='<div class="none">لا وصولات صادرة خلال المدة.</div>';
+  if(L.changes.length){
+    h+='<div class="h5">تغييرات الحالة</div><table><thead><tr><th style="width:18%">التاريخ</th><th style="width:30%">التغيير</th><th>الملاحظة</th><th style="width:16%">المرجع</th></tr></thead><tbody>'+
+      L.changes.map(ch=>'<tr><td class="num">'+dateSlash(ch.date)+'</td><td>'+esc(lgChangeText(ch))+'</td>'+
+        '<td>'+esc(ch.note||"—")+'</td><td class="num"><bdi dir="ltr">'+esc(ch.ref||"—")+'</bdi></td></tr>').join("")+'</tbody></table>';
+  }
+  if(o.cal) h+='<div class="h5">تقويم الشهر</div>'+lgCalendar4(L);
+  return h;
+}
+/* اختيار العرض: مختصر افتراضاً، والموسّع بخانة «تفاصيل موسّعة» */
+function lgFullMode(){ const n=document.getElementById("lgFull"); return !!(n && n.checked); }
+function lgCalOn(){ const n=document.getElementById("lgCal"); return !!(n && n.checked); }
+function lgSheet(L, o){
+  o=o||{};
+  return lgFullMode() ? ledgerHtmlFull(L,o) : ledgerHtml(L,Object.assign({cal:lgCalOn()},o));
+}
+function ledgerHtmlFull(L, o){
+  o=o||{};
+  const I=L.info;
+  let h='';
   if(o.head) h+=lgHeaderHtml(L);
   h+='<div class="lg-info">'+lgInfoPairs(L).map(x=>'<div'+(x[2]>1?' style="grid-column:span '+x[2]+'"':'')+'><b>'+x[0]+'</b>'+
     (x[0]==="الحالة الحالية"?'<span class="'+statusPrintClass(I.status)+'">'+esc(x[1])+'</span>':
@@ -8468,15 +8764,6 @@ function ledgerHtml(L, o){
       L.changes.map(ch=>'<tr><td class="num">'+dateSlash(ch.date)+'</td><td>'+esc(lgChangeText(ch))+'</td>'+
         '<td>'+esc(ch.note||"—")+(ch.migrated?' <span class="mini">(مرحَّل)</span>':'')+'</td><td class="num"><bdi dir="ltr">'+esc(ch.ref||"—")+'</bdi></td></tr>').join("")+
       '</tbody></table>';
-  }
-  if(o.sigs){
-    const st=S();
-    h+='<div class="sigs">'+
-      '<div><div class="sp"></div><div class="ln">توقيع العامل بالاستلام</div>'+esc(I.name)+'</div>'+
-      '<div><div class="sp"></div><div class="ln">'+esc(st.cmT2||"المسؤول الإداري")+'</div>'+esc(st.cmN2||"")+'</div>'+
-      '<div><div class="sp">'+(st.signature?'<img src="'+st.signature+'" alt="">':'')+'</div>'+
-        '<div class="ln">المصادقة</div>'+esc(st.signer||"")+(st.role?'<div class="mini">'+esc(st.role)+'</div>':'')+'</div>'+
-      '</div>';
   }
   return h;
 }
@@ -8632,7 +8919,10 @@ function renderLedger(){
       '<span class="mmeta">'+esc(L.info.section)+' · حضور '+fmtNum(r.present)+' · غياب '+fmtNum(r.absent)+
       ' · متفرقة+إجازة '+fmtNum(r.excused)+' · الصافي '+fmtMoney(r.net)+
       (L.mismatch.length?' · <span class="mwarn">اختلاف</span>':'')+'</span></div>'+
-      (open?'<div class="mbody"><div class="lg lgscreen">'+ledgerHtml(L,{allDays:lgAll,head:true})+'</div></div>':'')+
+      (open?'<div class="mbody">'+(L.mismatch.length?'<div class="errbox" style="margin:8px">عدّ أيام هذا العامل يختلف عن كشف الرواتب بـ: '+
+        esc(L.mismatch.join("، "))+' — التصدير والطباعة موقوفان حتى يُحلّ الاختلاف.</div>':'')+
+        '<div class="lg lgscreen">'+lgSheet(L,{allDays:lgAll,head:true})+
+        (one && el("lgScope").value==="worker"?lgSigsHtml(true,L.info.name):'')+'</div></div>':'')+
       '</div>';
   }).join("");
 }
@@ -8662,6 +8952,8 @@ el("lgExpand").onclick=()=>{
   renderLedger();
 };
 el("lgAllDays").onclick=()=>{ lgAll=!lgAll; renderLedger(); };
+el("lgFull").addEventListener("change",()=>renderLedger());
+el("lgCal").addEventListener("change",()=>renderLedger());
 el("rpToLedger").onclick=()=>{
   if(RP && !RP.invalid){ el("lgFrom").value=RP.from; el("lgTo").value=RP.to; }
   switchView("ledger");
@@ -8671,6 +8963,16 @@ function lgReady(){
   if(!LG){ alertBox("اختر مدة شهر واحد واضغط «اعرض» أول."); return null; }
   const list=lgList();
   if(!list.length){ alertBox("ماكو عمال ضمن هذا النطاق."); return null; }
+  /* الورقة الرسمية لا تحمل رسالة تصحيح داخلية: أي اختلاف بين الجرد والكشف
+     يوقف التصدير كله، والسبب يُعرض بالشاشة بدل أن يُطبع على الورق. */
+  const bad=list.filter(L=>L.mismatch.length), diff=ledgerVsPayroll(list, lgScopeRows().shown);
+  if(bad.length || diff.length){
+    alertBox("التصدير موقوف: الجرد التفصيلي يختلف عن كشف الرواتب.\n"+
+      (bad.length?"العمال: "+bad.slice(0,5).map(L=>L.info.name+" ("+L.mismatch.join("، ")+")").join(" · ")+(bad.length>5?" …":"")+"\n":"")+
+      (diff.length?"المجاميع: "+diff.join("، ")+"\n":"")+
+      "راجع أيام الجرد والوصولات لهذه المدة ثم أعد العرض.","الجرد لا يطابق الكشف");
+    return null;
+  }
   return list;
 }
 function lgFileTag(){ return LG.from+"_"+LG.to; }
@@ -8682,27 +8984,26 @@ el("lgPrint").onclick=()=>{
   const list=lgReady(); if(!list) return;
   const w=window.open("","_blank");
   if(!w){ alertBox("المتصفح منع فتح النافذة. اسمح بالنوافذ المنبثقة."); return; }
-  const multi=el("lgScope").value!=="worker" && list.length>0;
-  const st=S();
-  const page=(head,body)=>'<table class="lgpg"><thead><tr><td>'+head+'</td></tr></thead>'+
-    '<tbody><tr><td>'+body+'</td></tr></tbody></table>';
-  let html=list.map(L=>page(lgHeaderHtml(L), ledgerHtml(L,{allDays:lgAll,sigs:true}))).join("");
-  if(multi){
-    const hd='<div class="lg-hd">'+(st.logo?'<img src="'+st.logo+'" alt="">':'')+
-      '<div><div class="lg-co">'+esc(st.company||"")+'</div><div class="lg-tt">التغييرات خلال الشهر وخلاصة الجرد التفصيلي</div></div>'+
-      '<div class="lg-meta">المدة: '+dateSlash(LG.from)+' ← '+dateSlash(LG.to)+'<br>'+esc(lgScopeText())+
-      '<br>تاريخ الإصدار: '+dateSlash(todayISO())+'</div></div>';
-    html+=page(hd, lgSummaryHtml(list, LG.from, LG.to, lgScopeRows().shown));
-  }
-  w.document.write('<html dir="rtl"><head><meta charset="utf-8"><title>الجرد التفصيلي</title><style>'+
-    '@page{size:A4 portrait;margin:9mm 10mm}html,body{margin:0;padding:0;background:#fff}'+
+  const single=el("lgScope").value==="worker", full=lgFullMode();
+  /* سطر ترويسة واحد يتكرّر أعلى كل صفحة (thead)، وكل عامل كتلة لا تنقسم
+     بين صفحتين إلا إذا كانت أطول من صفحة — فعاملان اعتياديان بالصفحة الواحدة.
+     بالعرض الموسّع كل عامل يبدأ بصفحة جديدة كما كان. */
+  const head=lgHeadLine({from:LG.from, to:LG.to, printed:true,
+    no:single?list[0].no:"", sub:single?list[0].info.name:lgScopeText()});
+  let rows=list.map((L,i)=>'<tr class="lgrow'+(full&&i>0?' pb':'')+'"><td><div class="lgw'+(i===list.length-1?' last':'')+'">'+
+    lgSheet(L,{allDays:lgAll})+(single?lgSigsHtml(true,L.info.name):'')+'</div></td></tr>').join("");
+  if(!single)
+    rows+='<tr class="lgrow pb"><td><div class="h5" style="font-size:10.5pt">التغييرات خلال الشهر وخلاصة الجرد</div>'+
+      lgSummaryHtml(list, LG.from, LG.to, lgScopeRows().shown)+lgSigsHtml(false)+'</td></tr>';
+  w.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>الجرد التفصيلي</title><style>'+
+    '@page{size:A4 portrait;margin:9mm 10mm 13mm;'+printPageFootCss()+'}html,body{margin:0;padding:0;background:#fff;direction:rtl}'+
     lgCss()+
-    '.lgpg{width:100%;border-collapse:collapse;break-after:page;page-break-after:always}'+
-    '.lgpg:last-child{break-after:auto;page-break-after:auto}'+
-    '.lgpg>thead>tr>td,.lgpg>tbody>tr>td{border:0;padding:0}'+
-    /* صف الصفحة نفسه يُسمح بانكساره — وإلا يُقصّ جرد عامل أطول من صفحة */
-    '.lgpg>tbody>tr{break-inside:auto;page-break-inside:auto}'+
-    '</style></head><body><div class="lg">'+html+'</div></body></html>');
+    '.lgdoc{width:100%;border-collapse:collapse}'+
+    '.lgdoc>thead>tr>td,.lgdoc>tbody>tr>td{border:0;padding:0}'+
+    '.lgdoc>tbody>tr{break-inside:avoid;page-break-inside:avoid}'+
+    '.lgdoc>tbody>tr.pb{break-before:page;page-break-before:always}'+
+    '</style></head><body><div class="lg"><table class="lgdoc"><thead><tr><td>'+head+'</td></tr></thead><tbody>'+
+    rows+'</tbody></table></div></body></html>');
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
   lgNote("انفتحت الطباعة ✓");
 };
@@ -8748,24 +9049,16 @@ function lgDocTable(heads, grid, rows, CLR){
     return wCell(String(t==null?"":t),o);
   })))),{border:isMono()?"#9A9A9A":tint(CLR.purple,.62),grid:grid});
 }
-function lgDocH(t,CLR){ return wPara(t,{size:10,bold:true,color:CLR.purpleDeep,before:100,after:40}); }
-function lgDocHeader(L,m,CLR,title){
-  const st=S(), G=lgGrid([1.25,1.5,1.05]), ld=logoDims(0.95,0.42);
-  return wTable([wRow([
-    wCell((m.logoRid?wImage(m.logoRid,ld.w,ld.h,"right"):"")+
-      wPara(st.company||"اسم الشركة",{size:13,bold:true,color:CLR.purpleDeep,align:"right",after:0}),
-      {width:G[0],raw:true}),
-    wCell(wPara(title,{size:14,bold:true,color:CLR.purple,align:"center",after:20})+
-      wPara(L?L.info.name:lgScopeText(),{size:11,bold:true,color:CLR.ink,align:"center",after:0}),{width:G[1],raw:true}),
-    wCell((L?wPara("رقم الجرد: "+L.no,{size:9,bold:true,align:"left",after:10}):"")+
-      wPara("المدة: "+dateSlash(LG.from)+" ← "+dateSlash(LG.to),{size:8.5,color:CLR.ink2,align:"left",after:10})+
-      wPara("تاريخ الإصدار: "+dateSlash(todayISO()),{size:8.5,color:CLR.ink2,align:"left",after:0}),{width:G[2],raw:true})
-  ],{header:true})],{border:CLR.gold,borderSize:10,grid:G})+wGap(100);
+function lgDocH(t,CLR){ return wPara(t,{size:9.5,bold:true,color:CLR.ink,before:80,after:30}); }
+/* سطر اسم العامل ورقم جرده — أول سطر بكتلة كل عامل */
+function lgDocTitle(L,CLR){
+  return '<w:p><w:pPr><w:bidi/><w:spacing w:before="0" w:after="30" w:line="240" w:lineRule="auto"/><w:jc w:val="right"/></w:pPr>'+
+    wRun(L.info.name,{size:12,bold:true,color:CLR.ink})+wRun("     رقم الجرد ",{size:8,color:CLR.ink2})+
+    wRun(L.no,{size:8,color:CLR.ink2,ltr:true})+'</w:p>';
 }
-function lgWorkerDocXml(L,m,CLR){
+function lgWorkerDocXmlFull(L,m,CLR){
   const r=L.row, I=L.info, BRD=isMono()?"#9A9A9A":tint(CLR.purple,.62), SOFT=isMono()?"#EDEDED":tint(CLR.purple,.9);
-  let b=lgDocHeader(L,m,CLR,"الجرد التفصيلي");
-  if(L.mismatch.length) b+=wPara("تنبيه داخلي: عدّ الأيام يختلف عن كشف الرواتب ("+L.mismatch.join("، ")+")",{size:9,bold:true,color:CLR.absent});
+  let b=lgDocTitle(L,CLR);
   /* بطاقة العامل: صفّان × ٦ خانات، الاسم والحالة بخانتين */
   const G6=lgGrid([1,1,1,1,1,1]), info=lgInfoPairs(L), irows=[];
   let cells=[], col=0;
@@ -8871,55 +9164,136 @@ function lgWorkerDocXml(L,m,CLR){
     b+=lgDocTable(["التاريخ","التغيير","الملاحظة","المرجع"],lgGrid([1,2,3,1.1]),
       L.changes.map(ch=>[dateSlash(ch.date),lgChangeText(ch),(ch.note||"—")+(ch.migrated?" (مرحَّل)":""),noCell(ch.ref||"—")]),CLR);
   }
-  b+=lgDocSigs(I.name,m,CLR);
   return b;
 }
-function lgDocSigs(name,m,CLR){
-  const st=S(), G=lgGrid([1,1,1]);
-  const sig=m.sigRid?wImage(m.sigRid,1.5,0.5,"center"):wPara("",{after:0});
-  const cell=(top,title,sub,j)=>wCell(top+
+/* ---- الكتلة المختصرة للعامل بالوورد (العرض الافتراضي) — نفس ترتيب الورقة المطبوعة ----
+   W = العرض المتاح داخل خلية الحاوية؛ كل شبكة داخلية مجموعها = W بالضبط. */
+function lgWorkerDocXml(L,m,CLR,W){
+  const r=L.row, I=L.info, BRD=isMono()?"#9A9A9A":tint(CLR.purple,.62), SOFT=isMono()?"#EDEDED":tint(CLR.purple,.9);
+  const g=ws=>lgGrid(ws,W);
+  let b=lgDocTitle(L,CLR);
+  /* ١) البطاقة: ستة حقول */
+  const G6=g([2,1.5,1.1,1.7,1.2,1.1]);
+  b+=wTable([wRow(lgCard6(L).map((x,j)=>wCell(
+    wPara(x[0],{size:7,color:CLR.ink2,align:"right",after:0})+
+    wPara(x[1],{size:9,bold:true,align:"right",after:0,ltr:x[2]==="ph",
+      color:x[2]==="st"?statusDocColor(I.status):CLR.ink}),{width:G6[j],raw:true,valign:"top"})))],{border:BRD,grid:G6});
+  const sec=lgCardSecondary(L);
+  if(sec) b+=wPara(sec,{size:7.5,color:CLR.ink2,after:30});
+  /* ٢) شريط الأيام: خمس خانات + سطر نصّي */
+  const G5=g([1,1,1,1,1]);
+  b+=wTable([wRow(lgStrip5(L).map((x,j)=>wCell(
+    wPara(x[0],{size:7.5,color:CLR.ink2,align:"center",after:0})+
+    wPara(fmtNum(x[1]),{size:11,bold:true,align:"center",after:0,color:x[2]?CLR.absent:CLR.ink}),{width:G5[j],raw:true})))],{border:BRD,grid:G5});
+  b+=wPara(lgStripLine(L)+(lgSumNote(L)?" · "+lgSumNote(L):""),{size:7.5,color:CLR.ink2,after:50});
+  /* ٤) تفصيل الراتب */
+  const GP=g([1.5,3.2,1.3]);
+  b+=wTable(lgPayLines(L).map(x=>{
+    const hi=x[3]==="sub"||x[3]==="tot";
+    const cc=x[3]==="neg"?CLR.absent:(x[3]==="pos"?(isMono()?CLR.ink:CLR.present):CLR.ink);
+    return wRow([wCell(x[0],{size:x[3]==="tot"?10:8.5,bold:hi,width:GP[0],align:"right"}),
+      wCell(x[1],{size:7.5,color:CLR.ink2,width:GP[1],align:"right"}),
+      wCell(x[2],{size:x[3]==="tot"?10:8.5,bold:hi,color:cc,width:GP[2],align:"left",ltr:true})]);
+  }),{border:BRD,grid:GP});
+  /* ٢) الاستثناءات */
+  const ex=lgExceptionRows(L,lgAll);
+  if(ex.length){
+    b+=lgDocH(lgAll?"الأيام (كل الأيام)":"الاستثناءات",CLR);
+    b+=lgDocTable(["التاريخ","الحالة","التفصيل","مستقطع؟"],g([2.6,1.4,4.6,1]),
+      ex.map(x=>[lgRangeText(x)+(x.n>1?" ("+daysText(x.n)+")":""),LG_KINDS[x.k].t,x.detail||"—",{t:x.ded,align:"center"}]),CLR);
+  }else b+=wPara("حضور كامل، بلا استثناءات.",{size:8.5,color:CLR.ink,before:40,after:0});
+  /* ٣) الوصولات: جدول واحد */
+  const vs=lgVoucherRows(L);
+  if(vs.length){
+    b+=lgDocH("الوصولات",CLR);
+    b+=lgDocTable(["النوع","الرقم","التاريخ","التفصيل","الأثر المالي"],g([1.1,1.4,1.9,4.2,1.4]),
+      vs.map(v=>[v.type,{t:v.no,ltr:true,align:"right"},v.date,v.detail,
+        {t:v.eff,align:"left",ltr:/^[-+\d]/.test(v.eff),color:v.cls==="neg"?CLR.absent:(v.cls==="pos"&&!isMono()?CLR.present:null)}]),CLR);
+  }else b+=wPara("لا وصولات صادرة خلال المدة.",{size:8.5,color:CLR.ink,before:30,after:0});
+  if(L.changes.length){
+    b+=lgDocH("تغييرات الحالة",CLR);
+    b+=lgDocTable(["التاريخ","التغيير","الملاحظة","المرجع"],g([1,2,3,1.1]),
+      L.changes.map(ch=>[dateSlash(ch.date),lgChangeText(ch),ch.note||"—",{t:ch.ref||"—",ltr:true,align:"right"}]),CLR);
+  }
+  if(lgCalOn()) b+=lgDocH("تقويم الشهر",CLR)+lgDocCal4(L,CLR,W);
+  return b;
+}
+/* التقويم المختصر بالوورد — أربع فئات، ويُضاف فقط إذا أُشّرت «أظهر تقويم الشهر» */
+function lgDocCal4(L,CLR,W){
+  const GC=lgGrid([1,1,1,1,1,1,1],W), SOFT=isMono()?"#EDEDED":tint(CLR.purple,.9);
+  const FILL=isMono()?{p:"#FFFFFF",a:"#1A1A1A",m:"#C8C8C8",r:"#EFEFEF",u:"#FFFFFF"}:{p:"#E4F0EA",a:"#F7E5E8",m:"#F7EFD8",r:"#EFEFEF",u:"#FFFFFF"};
+  const INK=isMono()?{p:"#111111",a:"#FFFFFF",m:"#111111",r:"#777777",u:"#999999"}:{p:"#2C6E49",a:"#9B1C31",m:"#8A6A12",r:"#777777",u:"#999999"};
+  const ym=L.from.slice(0,7), first=parseISO(ym+"-01");
+  const len=new Date(first.getFullYear(),first.getMonth()+1,0).getDate(), off=LG_WEEK.indexOf(first.getDay());
+  const byDate={}; L.days.forEach(x=>{ byDate[x.d]=x; });
+  const rows=[wRow(LG_WEEK.map((i,j)=>wCell(WD_NAMES[i],{bold:true,size:7,shade:SOFT,width:GC[j]})))];
+  let cells=[];
+  const blank=j=>wCell(wPara("",{after:0}),{raw:true,width:GC[j]});
+  for(let i=0;i<off;i++) cells.push(blank(cells.length));
+  for(let dd=1; dd<=len; dd++){
+    const iso=ym+"-"+String(dd).padStart(2,"0"), x=byDate[iso], j=cells.length, k=x?LG_CAL4[x.k]:"";
+    cells.push(wCell(wPara(fmtNum(dd)+" "+(k?LG_CAL4_SYM[k]:""),{size:8,bold:true,align:"center",after:0,color:k?INK[k]:"#BBBBBB"}),
+      {raw:true,width:GC[j],shade:k?FILL[k]:null}));
+    if(cells.length===7){ rows.push(wRow(cells)); cells=[]; }
+  }
+  if(cells.length){ while(cells.length<7) cells.push(blank(cells.length)); rows.push(wRow(cells)); }
+  return wTable(rows,{border:isMono()?"#9A9A9A":tint(CLR.purple,.62),grid:GC})+
+    wPara("ح حاضر · غ غائب · م متفرقة أو إجازة · · عطلة أو أوف أو خارج الخدمة · الخانة الفارغة يوم لم يُعتمد",{size:7,color:CLR.ink2,after:0});
+}
+/* التواقيع — مرة واحدة بنهاية الملف */
+function lgDocSigs(single,name,m,CLR){
+  const seats=lgSigSeats(single,name), G=lgGrid(seats.map(()=>1));
+  const blank=wPara("",{after:0})+wGap(420);
+  return wGap(200)+wTable([wRow(seats.map((x,j)=>wCell(
+    (x.sig&&m.sigRid?wImage(m.sigRid,1.5,0.5,"center"):blank)+
     wPara("______________________",{size:9,color:CLR.ink2,align:"center",after:0})+
-    wPara(title,{size:9,bold:true,color:CLR.purpleDeep,align:"center",after:0})+
-    wPara(sub||" ",{size:8.5,color:CLR.ink,align:"center",after:0}),{raw:true,width:G[j],valign:"bottom"});
-  const blank=wPara("",{after:0})+wGap(400);
-  return wGap(160)+wTable([wRow([
-    cell(blank,"توقيع العامل بالاستلام",name,0),
-    cell(blank,st.cmT2||"المسؤول الإداري",st.cmN2||"",1),
-    cell(sig,"المصادقة",(st.signer||"")+(st.role?" — "+st.role:""),2)
-  ])],{border:"#FFFFFF",borderSize:2,grid:G});
+    wPara(x.title,{size:9,bold:true,color:CLR.ink,align:"center",after:0})+
+    wPara((x.name||" ")+(x.role?" — "+x.role:""),{size:8.5,color:CLR.ink2,align:"center",after:0}),
+    {raw:true,width:G[j],valign:"bottom"})))],{frame:"none",grid:G});
 }
 function lgSummaryDocXml(list,m,CLR){
   const t=ledgerTotals(list), ch=lgChangesOf(list), cur=S().currency||"", CUR=cur?" "+cur:"";
-  let b=lgDocHeader(null,m,CLR,"التغييرات خلال الشهر وخلاصة الجرد");
+  let b=wPara("التغييرات خلال الشهر وخلاصة الجرد",{size:12,bold:true,color:CLR.ink,after:60});
   b+=lgDocH("التغييرات خلال الشهر",CLR);
   if(ch.length) b+=lgDocTable(["النوع","الاسم","التاريخ","الملاحظة","المرجع"],lgGrid([1.3,2,1,3,1.1]),
-    ch.map(x=>[changeKindText(x),x.name,dateSlash(x.date),x.note||"—",x.ref||"—"]),CLR);
+    ch.map(x=>[changeKindText(x),x.name,dateSlash(x.date),x.note||"—",{t:x.ref||"—",ltr:true,align:"right"}]),CLR);
   else b+=wPara("لا مباشرات ولا تغييرات حالة خلال المدة.",{size:9,color:CLR.ink2});
   b+=lgDocH("خلاصة المدة",CLR);
   b+=lgDocTable(["البند","العدد","المبلغ"],lgGrid([3,1,1.6]),[
     ["عدد العمال بالجرد",{t:fmtNum(t.workers),align:"center"},""],
     ["حضور / غياب / متفرقة / إجازة / أوف",{t:[t.present,t.absent,t.misc,t.leave,t.off].map(fmtNum).join(" / "),align:"center"},""],
-    ["أيام مستقطعة",{t:fmtNum(t.deductDays),align:"center"},{t:"-"+fmtMoney(t.absDeduction),align:"left"}],
+    ["أيام مستقطعة",{t:fmtNum(t.deductDays),align:"center"},{t:"-"+fmtMoney(t.absDeduction),align:"left",ltr:true}],
     ["وصولات الإجازة",{t:fmtNum(t.leaveDocs),align:"center"},""],
-    ["العقوبات",{t:fmtNum(t.penCount),align:"center"},{t:"-"+fmtMoney(t.penDed),align:"left"}],
-    ["المكافآت",{t:fmtNum(t.achCount),align:"center"},{t:"+"+fmtMoney(t.achAdd),align:"left"}],
+    ["العقوبات",{t:fmtNum(t.penCount),align:"center"},{t:"-"+fmtMoney(t.penDed),align:"left",ltr:true}],
+    ["المكافآت",{t:fmtNum(t.achCount),align:"center"},{t:"+"+fmtMoney(t.achAdd),align:"left",ltr:true}],
     ["وصولات المواد",{t:fmtNum(t.issueDocs),align:"center"},""],
-    ["الرواتب المستحقة","",{t:fmtMoney(t.salary)+CUR,align:"left"}],
-    [{t:"صافي الرواتب",bold:true},"",{t:fmtMoney(t.net)+CUR,align:"left",bold:true,color:CLR.purpleDeep}]
+    ["الرواتب المستحقة","",{t:fmtMoney(t.salary)+CUR,align:"left",ltr:true}],
+    [{t:"صافي الرواتب",bold:true},"",{t:fmtMoney(t.net)+CUR,align:"left",bold:true,ltr:true}]
   ],CLR);
-  const diff=ledgerVsPayroll(list, lgScopeRows().shown);
-  b+=wPara(diff.length?"المجاميع تختلف عن كشف الرواتب بـ: "+diff.join("، ")
-    :"المجاميع أعلاه مطابقة لكشف الرواتب المختصر لنفس المدة ونفس العمال رقماً برقم.",
-    {size:8.5,color:diff.length?CLR.absent:CLR.ink2,bold:!!diff.length,before:60});
-  b+=lgDocSigs("",m,CLR);
+  b+=wPara("المجاميع أعلاه مطابقة لكشف الرواتب المختصر لنفس المدة ونفس العمال رقماً برقم.",{size:8.5,color:CLR.ink2,before:60});
   return b;
 }
+/* الملف: ترويسة صفحة وتذييل حقيقيان، والعمال بجدول حاوٍ صفّ لكل عامل لا ينقسم —
+   فالصفحة تنكسر فقط لمّا يمتلئ الحيّز، لا بعد كل عامل. العرض الموسّع: عامل لكل صفحة.
+   الخلاصة والتواقيع مرة واحدة بالنهاية. */
 function ledgerDocx(list){
   docReset();
-  const CLR=CL(), m=receiptMedia();
-  const parts=list.map(L=>lgWorkerDocXml(L,m,CLR));
-  if(el("lgScope").value!=="worker") parts.push(lgSummaryDocXml(list,m,CLR));
-  return buildDocx(parts.join(pageBreakXml()),{media:m.media,margin:LG_MG});
+  const CLR=CL(), m=receiptMedia(), single=el("lgScope").value==="worker", full=lgFullMode();
+  const BRD=isMono()?"#9A9A9A":tint(CLR.purple,.62);
+  const head=wPageHead({width:LG_FULL, title:"الجرد التفصيلي", sub:single?list[0].info.name:lgScopeText(),
+    meta:["المدة: "+dateSlash(LG.from)+" ← "+dateSlash(LG.to),
+      single?"رقم الجرد: "+list[0].no:"عدد العمال: "+fmtNum(list.length),"تاريخ الإصدار: "+dateSlash(todayISO())]});
+  let body;
+  if(full) body=list.map(L=>lgWorkerDocXmlFull(L,m,CLR)).join(pageBreakXml());
+  else{
+    const IW=LG_FULL-140;
+    body=wTable(list.map(L=>wRow([wCell(lgWorkerDocXml(L,m,CLR,IW)+wPara("",{after:60}),
+      {raw:true,width:LG_FULL,valign:"top"})])),{frame:"rows",border:BRD,borderSize:8,grid:[LG_FULL]});
+  }
+  if(!single) body+=pageBreakXml()+lgSummaryDocXml(list,m,CLR);
+  body+=lgDocSigs(single, single?list[0].info.name:"", m, CLR);
+  return buildDocx(body,{media:m.media, header:head, footer:wPageFoot(),
+    pgMar:{top:1300,bottom:900,right:LG_MG,left:LG_MG,header:320,footer:360}});
 }
 /* تصدير كبير (مئات العمال) يأخذ ثوانٍ: رسالة «جاري التحضير» تُرسم أولاً ثم يبدأ
    البناء، والملف يُضغط قبل الحفظ */
