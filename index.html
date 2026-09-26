@@ -5453,10 +5453,9 @@ el("dirPrint").onclick=()=>{
   }).join("")+'</tr>').join("");
   w.document.write(
     PRINT_DOC_OPEN+'<title>دليل العمال</title><style>'+PRINT_BASE_CSS+
-    '@page{size:A4 portrait;margin:12mm}'+
-    'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
-    'h1{font-size:16pt;margin:0 0 2mm;color:#4B2E83}'+
-    '.sub{font-size:9pt;color:#666;margin:0 0 6mm}'+
+    '@page{size:A4 portrait;margin:12mm 12mm 15mm;'+printPageFootCss()+'}'+
+    'body{font:400 10pt '+FF+';color:#111;direction:rtl;margin:0}'+PRINT_HEAD_CSS+
+    '.sub{font-size:8.5pt;color:#555;margin:0 0 3mm}'+
     'table{width:100%;border-collapse:collapse}'+
     'thead{display:table-header-group}'+
     'th,td{border:1px solid #bbb;padding:4px 6px;font-size:9.5pt;vertical-align:top}'+
@@ -5465,10 +5464,9 @@ el("dirPrint").onclick=()=>{
     '.ltr{direction:ltr;text-align:right;unicode-bidi:embed;white-space:nowrap}'+
     STATUS_PRINT_CSS+
     '</style></head><body>'+
-    '<h1>'+esc(s.company||"")+' — دليل العمال</h1>'+
-    '<p class="sub">عدد العمال: '+fmtNum(rows.length)+
-      ' · تاريخ الطباعة: '+dateTextOf(todayISO())+
-      ' · وثيقة داخلية تُحفظ لدى الإدارة</p>'+
+    printHeadHtml({title:"دليل العمال", sub:"الهواتف والعناوين — وثيقة داخلية",
+      meta:["عدد العمال: "+fmtNum(rows.length),"تاريخ الإصدار: "+dateSlash(todayISO())]})+
+    '<p class="sub">وثيقة داخلية تُحفظ لدى الإدارة · المعلومات شخصية ولا تُتداول خارج الشركة.</p>'+
     '<table><thead><tr>'+DIR_HEAD.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead>'+
     '<tbody>'+body+'</tbody></table></body></html>');
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
@@ -5665,10 +5663,9 @@ el("varPrint").onclick=()=>{
   }).join("")+'</tr>').join("");
   w.document.write(
     PRINT_DOC_OPEN+'<title>'+esc(extTitleText())+'</title><style>'+PRINT_BASE_CSS+
-    '@page{size:A4 landscape;margin:10mm}'+
-    'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
-    'h1{font-size:16pt;margin:0 0 2mm;color:#4B2E83}'+
-    '.sub{font-size:9pt;color:#666;margin:0 0 6mm}'+
+    '@page{size:A4 landscape;margin:10mm 10mm 13mm;'+printPageFootCss()+'}'+
+    'body{font:400 10pt '+FF+';color:#111;direction:rtl;margin:0}'+PRINT_HEAD_CSS+
+    '.sub{font-size:8.5pt;color:#555;margin:0 0 3mm}'+
     'table{width:100%;border-collapse:collapse}'+
     'thead{display:table-header-group}'+
     'th,td{border:1px solid #bbb;padding:4px 6px;font-size:9.5pt;vertical-align:top}'+
@@ -5677,9 +5674,9 @@ el("varPrint").onclick=()=>{
     '.ltr{direction:ltr;text-align:right;unicode-bidi:embed;white-space:nowrap}'+
     STATUS_PRINT_CSS+
     '</style></head><body>'+
-    '<h1>'+esc(s.company||"")+' — '+esc(extTitleText())+'</h1>'+
-    (extTitle().scope?'<p class="sub" style="margin-bottom:1mm">'+esc(extTitle().scope)+'</p>':'')+
-    '<p class="sub">'+esc(varSubLine(rows.length))+' · وثيقة داخلية تُحفظ لدى الإدارة</p>'+
+    printHeadHtml({title:extTitleText(), sub:extTitle().scope,
+      meta:["تاريخ التحرير: "+dateSlash(todayISO()),"عدد الأسماء: "+fmtNum(rows.length)]})+
+    '<p class="sub">'+(String(el("varSearch").value||"").trim()?"بحث: "+esc(String(el("varSearch").value).trim())+" · ":"")+'وثيقة داخلية تُحفظ لدى الإدارة</p>'+
     '<table><thead><tr>'+VAR_HEAD.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead>'+
     '<tbody>'+body+'</tbody></table></body></html>');
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
@@ -5874,11 +5871,9 @@ el("extPrint").onclick=()=>{
   }).join("")+'</tr>').join("");
   w.document.write(
     PRINT_DOC_OPEN+'<title>'+esc(extTitleText())+'</title><style>'+PRINT_BASE_CSS+
-    '@page{size:A4 portrait;margin:14mm}'+
-    'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
-    'h1{font-size:15pt;margin:0 0 1mm;color:#4B2E83}'+
-    'h2{font-size:12pt;margin:0 0 3mm;color:#333;font-weight:700}'+
-    '.sub{font-size:9.5pt;color:#555;margin:0 0 6mm;line-height:1.9}'+
+    '@page{size:A4 portrait;margin:14mm 14mm 16mm;'+printPageFootCss()+'}'+
+    'body{font:400 10pt '+FF+';color:#111;direction:rtl;margin:0}'+PRINT_HEAD_CSS+
+    '.sub{font-size:9pt;color:#444;margin:0 0 4mm;text-align:center}'+
     'table{width:100%;border-collapse:collapse}'+
     'thead{display:table-header-group}'+
     'th,td{border:1px solid #bbb;padding:5px 7px;font-size:10pt;vertical-align:top}'+
@@ -5892,9 +5887,7 @@ el("extPrint").onclick=()=>{
     '.foot{margin-top:10mm;font-size:9.5pt;color:#555;border-top:1px dashed #bbb;padding-top:3mm}'+
     STATUS_PRINT_CSS+
     '</style></head><body>'+
-    '<h1>'+esc(s2.company||"")+'</h1>'+
-    '<h2>'+esc(extTitleText())+'</h2>'+
-    (extTitle().scope?'<p class="sub" style="margin-bottom:1mm">'+esc(extTitle().scope)+'</p>':'')+
+    printHeadHtml({title:extTitleText(), sub:extTitle().scope, meta:[]})+
     '<p class="sub">'+esc(extSubLine(rows.length))+'</p>'+
     '<table><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead>'+
     '<tbody>'+body+'</tbody></table>'+
@@ -5924,10 +5917,10 @@ function externalDocx(){
   const land=fitGrid(head,cells,11906-720*2,{cols:spec}).squeezed;
   const FULL=(land?16838:11906)-720*2;
 
-  /* الترويسة الموحّدة (wPageHead) ثم السطر الفرعي الموحّد بعرض الصفحة */
+  /* الترويسة الموحّدة كجزء صفحة (تتكرّر بكل صفحة)، ثم السطر الفرعي الموحّد بعرض الصفحة */
   const T=extTitle();
-  let b=wPageHead({width:FULL, title:T.title, sub:T.scope, meta:[], logoRid:m.logoRid||null}).xml;
-  b+=wPara(extSubLine(rows.length),{size:9,color:CLR.ink2,align:"center",before:40,after:120});
+  const phead=wPageHead({width:FULL, title:T.title, sub:T.scope, meta:[]});
+  let b=wPara(extSubLine(rows.length),{size:9,color:CLR.ink2,align:"center",before:0,after:120});
 
   b+=wFitTable(head, cells, spec,
     {total:FULL,CLR:CLR,zebra:true,headShade:isMono()?"#E6E6E6":tint(CLR.purple,.88),border:CLR.line,
@@ -5939,7 +5932,7 @@ function externalDocx(){
   const DOT="\u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7";
   let sig = m.sigRid ? wImage(m.sigRid,1.45,0.47,"center") : wGap(420);
   sig += wPara(DOT,{align:"center",size:10,color:CLR.ink2,after:20});
-  sig += wPara(s2.signer||"المسؤول الإداري",{align:"center",size:11,bold:true,color:CLR.purpleDeep,after:10});
+  sig += wPara(s2.signer||"المسؤول الإداري",{align:"center",size:11,bold:true,color:CLR.ink,after:10});
   sig += wPara(s2.role||"",{align:"center",size:9,color:CLR.ink2,after:0});
   b+=wTable([wRow([
     wCell("",{width:SW2}),
@@ -5947,10 +5940,9 @@ function externalDocx(){
   ],{height:1400})],{border:CLR.line,borderSize:6,grid:[SW2,SW]});
   b+=wGap(200);
 
-  b+=wTable([wRow([wCell(EXT_FOOT+" · "+(s2.company||"")+" · "+dateTextOf(todayISO()),
-    {size:9,color:CLR.ink2,shade:SOFT,align:"center",width:FULL})],{height:360})],
-    {border:CLR.line,borderSize:4,grid:[FULL]});
-  return buildDocx(b,{media:m.media,margin:720,landscape:land});
+  b+=wPara(EXT_FOOT,{size:8.5,color:CLR.ink2,align:"center",after:0});
+  return buildDocx(b,{media:m.media,landscape:land,header:phead,footer:wPageFoot(),
+    pgMar:{top:1350,bottom:900,right:720,left:720,header:300,footer:360}});
 }
 
 /* ---- حالات العمال بالوورد (عرضي — عشرة أعمدة) ---- */
@@ -5962,23 +5954,19 @@ function variablesDocx(){
   const rows=varExportRows();
   const FULL=16838-640*2;
 
-  /* الترويسة الموحّدة: العنوان من الحالات المؤشّرة (نفس الكشف الخارجي) + سطر فرعي واحد */
-  const T=extTitle();
-  let b=wPageHead({width:FULL, title:T.title, sub:T.scope, meta:[], logoRid:m.logoRid||null}).xml;
-  b+=wPara(varSubLine(rows.length)+" · وثيقة داخلية",{size:9,color:CLR.ink2,align:"center",before:40,after:120});
-
+  /* الترويسة الموحّدة كجزء صفحة: العنوان من الحالات المؤشّرة (نفس الكشف الخارجي) */
+  const T=extTitle(), q=String(el("varSearch").value||"").trim();
+  const head=wPageHead({width:FULL, title:T.title, sub:T.scope,
+    meta:["تاريخ التحرير: "+dateSlash(todayISO()),"عدد الأسماء: "+fmtNum(rows.length)]});
+  let b=q?wPara("بحث: "+q,{size:8.5,color:CLR.ink2,align:"center",after:100}):"";
   b+=wFitTable(VAR_HEAD, rows.map(r=>r.map((v,j)=>j===0?fmtNum(v):(j===5?phoneNB(v):v))), [
     {fixed:420,align:"center"},{bold:true,min:1600},{flex:true,min:1300},{align:"center"},{flex:true,min:1300},{min:1750,noWrap:true,ltr:true,align:"center"},
     {flex:true,min:1100},{bold:true,align:"center",color:v=>statusDocColor(v)},{align:"center"},{flex:true,min:1300}
   ],{total:FULL,CLR:CLR,zebra:true,headShade:isMono()?"#E6E6E6":tint(CLR.purple,.88),border:CLR.line,
     empty:"ماكو عمال بهذا الاختيار"}).xml;
-  b+=wGap(200);
-  b+=wTable([wRow([wCell(
-    "وثيقة داخلية تُحفظ لدى الإدارة · سجل العامل وأيامه ورواتبه السابقة محفوظة بالكامل · "+
-    (s.company||"")+" · "+dateTextOf(todayISO()),
-    {size:9,color:CLR.ink2,shade:SOFT,align:"center",width:FULL})],{height:360})],
-    {border:CLR.line,borderSize:4,grid:[FULL]});
-  return buildDocx(b,{media:m.media,landscape:true,margin:640});
+  b+=wPara("وثيقة داخلية تُحفظ لدى الإدارة · سجل العامل وأيامه ورواتبه السابقة محفوظة بالكامل.",{size:8,color:CLR.ink2,before:120,after:0});
+  return buildDocx(b,{media:m.media,landscape:true,header:head,footer:wPageFoot(),
+    pgMar:{top:1350,bottom:900,right:640,left:640,header:300,footer:360}});
 }
 
 /* ==================== [محرّك] التقارير والرواتب ==================== */
@@ -7114,6 +7102,30 @@ el("rpXls").onclick=()=>{
   }catch(err){ alertBox("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
 
+/* ---- [رسم] الترويسة والتذييل الموحّدان على الرسم (نفس أجزاء wPageHead / wPageFoot) ---- */
+function stdHeadCanvas(ctx,o){
+  const CLR=CL(), st=S(), L=o.L, R=o.R, W=R-L, top=o.top||50, A=W*0.32;
+  let hasLogo=false;
+  ctx.textAlign="right"; ctx.direction="rtl";
+  if(st.logo) hasLogo=drawLogoAt(ctx,R-150,top-4,150,52);
+  ctx.fillStyle=CLR.ink;
+  fitFill(ctx,st.company||"",R,top+(hasLogo?78:34),A,21,700,{keep:true});
+  fitFill(ctx,o.title||"",L+W/2,top+30,W-2*A,26,700,{center:true});
+  if(o.sub){ ctx.fillStyle=CLR.ink2; fitFill(ctx,o.sub,L+W/2,top+60,W-2*A,15,400,{center:true}); }
+  /* الرقم والتاريخ عند الطرف الأيسر: محاذاة يسار داخل سياق عربي فيبدأ النص من الهامش لا يتعدّاه */
+  ctx.fillStyle=CLR.ink2; ctx.textAlign="left";
+  (o.meta||[]).forEach((t,i)=>fitFill(ctx,t,L,top+24+i*24,A,14,400));
+  ctx.textAlign="right";
+  const by=top+(hasLogo?92:74);
+  ctx.strokeStyle=CLR.ink; ctx.lineWidth=2; line(ctx,L,by,R,by);
+  return by+8;
+}
+function stdFootCanvas(ctx,L,R,y,pageNo,pages){
+  const CLR=CL(), st=S();
+  ctx.fillStyle=CLR.ink2;
+  fitFill(ctx,(st.company||"")+" · تاريخ الطباعة "+dateSlash(todayISO())+" · صفحة "+fmtNum(pageNo)+" من "+fmtNum(pages),
+    (L+R)/2,y,R-L,13,400,{center:true});
+}
 /* ---- [رسم] تصدير PDF متعدد الصفحات ---- */
 function drawReportPage(rows, pageNo, pages, k){
   k=k||1;
@@ -7125,26 +7137,14 @@ function drawReportPage(rows, pageNo, pages, k){
   const L=PAD,R=SH_W-PAD,W=SH_W-PAD*2;
   ctx.fillStyle="#fff"; ctx.fillRect(0,0,SH_W,SH_H);
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
-  ctx.strokeStyle=CLR.purple; ctx.lineWidth=2; ctx.strokeRect(24,24,SH_W-48,SH_H-48);
 
-  // ترويسة
-  const hTop=44,hH=96;
-  ctx.fillStyle=CLR.purple; roundRect(ctx,L,hTop,W,hH,10); ctx.fill();
-  ctx.save(); roundRect(ctx,L,hTop,W,hH,10); ctx.clip();
-  ctx.fillStyle=CLR.gold; ctx.fillRect(L,hTop+hH-5,W,5); ctx.restore();
-  ctx.fillStyle="#fff"; fitText(ctx,st.company||"",W-120,30,700);
-  ctxCenter(ctx,st.company||"",SH_W/2,hTop+38);
-  ctx.fillStyle=CLR.goldLite; ctx.font=f(600,19);
-  ctxCenter(ctx,"كشف الحضور والرواتب",SH_W/2,hTop+68);
-
-  let y=hTop+hH+30;
-  ctx.fillStyle=CLR.ink2; ctx.font=f(600,17);
-  ctx.fillText("المدة: من "+dateNumeric(RP.from)+" إلى "+dateNumeric(RP.to),R,y);
-  ctx.textAlign="left";
-  ctx.fillText("صفحة "+fmtNum(pageNo)+" من "+fmtNum(pages),L,y);
-  ctx.textAlign="right";
+  /* الترويسة والتذييل الموحّدان (معيار البساطة): بلا شريط ملوّن ولا إطار */
+  let y=stdHeadCanvas(ctx,{L:L,R:R,top:50,title:"كشف الحضور والرواتب",
+    sub:"المدة من "+dateNumeric(RP.from)+" إلى "+dateNumeric(RP.to),
+    meta:["عدد العمال: "+fmtNum(rpRows().length),"تاريخ الإصدار: "+dateSlash(todayISO())]});
+  stdFootCanvas(ctx,L,R,SH_H-34,pageNo,pages);
   const P=periodInfo(RP);
-  if(P){ y+=28; ctx.fillStyle=CLR.ink; drawSegs(ctx,periodSegs(P),R,y,W,15); }
+  if(P){ y+=30; ctx.fillStyle=CLR.ink; drawSegs(ctx,periodSegs(P),R,y,W,15); }
   y+=22;
 
   // رأس الجدول — كل عمود يحمل مفتاحه، والقيمة واللون يُطلبان بالمفتاح.
@@ -7205,15 +7205,15 @@ function drawReportPage(rows, pageNo, pages, k){
                               color:r.absDeduction?CLR.absent:null};
       case "penDed":  return {v:r.penDed?"-"+fmtMoney(r.penDed):fmtNum(0),
                               color:r.penDed?CLR.absent:null};
-      case "achAdd":  return {v:r.achAdd?"+"+fmtMoney(r.achAdd):fmtNum(0),
-                              color:r.achAdd?(isMono()?CLR.ink:"#2C6E49"):null};
-      case "net":     return {v:fmtMoney(r.net), color:CLR.purpleDeep, weight:700};
+      /* اللون للمبلغ السالب والحالة فقط (معيار البساطة) */
+      case "achAdd":  return {v:r.achAdd?"+"+fmtMoney(r.achAdd):fmtNum(0)};
+      case "net":     return {v:fmtMoney(r.net), color:r.net<0?CLR.absent:null, weight:700};
     }
     return {v:""};
   }
   rows.forEach((r,i)=>{
-    if(i%2===1){ ctx.fillStyle=tint(CLR.purple,.955); ctx.fillRect(L,y,W,rowH); }
-    ctx.strokeStyle=tint(CLR.purple,.85); ctx.lineWidth=1;
+    if(i%2===1){ ctx.fillStyle="#F5F5F5"; ctx.fillRect(L,y,W,rowH); }
+    ctx.strokeStyle="#D0D0D0"; ctx.lineWidth=1;
     line(ctx,L,y+rowH,R,y+rowH);
     let x=R;
     cols.forEach(c2=>{
@@ -7234,9 +7234,10 @@ function drawReportPage(rows, pageNo, pages, k){
   const T=rpTot(), SRC=rpRows();
   if(pageNo===pages){
     y+=8;
-    ctx.fillStyle=CLR.gold; roundRect(ctx,L,y,W,rowH+6,6); ctx.fill();
-    ctx.fillStyle=CLR.purpleDeep; ctx.font=f(800,17);
-    ctx.fillText("المجموع الكلي",R-14,y+31);
+    /* صف المجموع: خط فاصل وعريض — بلا شريط ملوّن */
+    ctx.strokeStyle=CLR.ink; ctx.lineWidth=2; line(ctx,L,y,R,y); line(ctx,L,y+rowH+6,R,y+rowH+6);
+    ctx.fillStyle=CLR.ink; ctx.font=f(800,17);
+    ctx.fillText("المجموع الكلي ("+fmtNum(SRC.length)+" عامل)",R-14,y+31);
     ctx.textAlign="left"; ctx.direction="ltr";
     ctx.fillText("الصافي: "+fmtMoney(T.net)+" "+cur,L+14,y+31);
     ctx.direction="rtl"; ctx.textAlign="right";
@@ -7256,7 +7257,7 @@ function drawReportPage(rows, pageNo, pages, k){
     if(P){ const r=wrapFit(ctx,periodNoteText(P),W,60,13,400); r.lines.forEach(t=>{ ctx.fillText(t,R,y); y+=r.lh; }); y-=r.lh; }
     y+=26;
     // توقيع
-    const sx=L+40, ly=Math.min(SH_H-PAD-60,y+50);
+    const sx=L+40, ly=Math.min(SH_H-PAD-80,y+50);
     drawSignature(ctx,sx,ly,240,44);
     ctx.strokeStyle=CLR.purple; ctx.lineWidth=1.5; line(ctx,sx,ly,sx+240,ly);
     ctx.fillStyle=CLR.ink2;
@@ -7292,6 +7293,19 @@ el("rpPdf").onclick=()=>{
 };
 
 /* ==================================================================
+   [تصدير] معيار البساطة لكل مطبوع (v4.1) — يُقرأ قبل إضافة أو تعديل أي مخرج:
+   ١. ترويسة واحدة: الشعار + اسم الشركة | عنوان الوثيقة (+ سطر فرعي) | الرقم/التاريخ/العدد
+      — wPageHead للوورد، printHeadHtml لنوافذ الطباعة، stdHeadCanvas للرسم.
+   ٢. تذييل واحد: الشركة · تاريخ الطباعة · صفحة X من Y — wPageFoot / printPageFootCss / stdFootCanvas.
+   ٣. توقيع واحد بآخر الوثيقة (الوصولات الفردية وحدها لها خاناتها الثلاث).
+   ٤. جدول رئيسي واحد؛ أي جدول ثانوي ≤ ٥ أعمدة.
+   ٥. بلا زخرفة ولا رموز تعبيرية ولا شارات ملوّنة. اللون فقط لرأس الجدول، والمبلغ السالب، والحالة.
+   ٦. خط واحد (Arial بالوورد، خط الواجهة بالطباعة) بحجمين أو ثلاثة: عنوان، متن، هامش صغير.
+   ٧. كل رقم مشروح (سطر بيان المدة، عنوان كل مجموع).
+   ٨. مقروء بالأبيض والأسود (isMono): لا معلومة تُحمل باللون وحده.
+   استثناءان موثّقان بـ AUDIT.md: الوصولات الفردية (نسختان بورقة، خانات لجنة) وورقة الجرد
+   اليومي (استمارة صفحة واحدة تُملأ وتُعلَّق)، والكتب على الفورمة (الفورمة نفسها ترويستها وتذييلها).
+   ==================================================================
    [تصدير] مولّد ملفات وورد (.docx) — جافاسكربت خالص، بلا مكتبات ولا إنترنت
    ملف DOCX هو أرشيف ZIP فيه ملفات XML. نكتب الأرشيف بلا ضغط
    (طريقة Store) لأن وورد يقبلها، وهذا يغنينا عن أي مكتبة ضغط.
@@ -7570,7 +7584,9 @@ function fitGrid(heads, rows, total, opts){
   const needAt=(sz,hs)=>cols.map((c,j)=>{
     if(c.fixed) return c.fixed;
     let m=fitHeadNeed(heads[j],hs);
-    rows.forEach(r=>{ const v=r[j]; if(v==null||v==="") return; const w=fitNeed(v,sz,c.bold); if(w>m) m=w; });
+    /* opts.boldLast: صف المجموع يُطبع عريضاً فيُقاس عريضاً (كان يُقاس عادياً فيلتفّ المبلغ الكبير) */
+    rows.forEach((r,ri)=>{ const v=r[j]; if(v==null||v==="") return;
+      const w=fitNeed(v,sz,c.bold||(opts.boldLast&&ri===rows.length-1)); if(w>m) m=w; });
     m=Math.max(c.min,m);
     return c.flex ? Math.min(c.max,m) : m;
   });
@@ -7632,7 +7648,7 @@ function fitGrid(heads, rows, total, opts){
    وصفوف بخط واحد. spec[j] = {k, min, max, flex, bold, ltr, noWrap, align, color(v,row)}.
    rows = مصفوفة قيم نصية. o = {total, CLR, zebra, headShade, headColor, border} */
 function wFitTable(heads, rows, spec, o){
-  const CLR=o.CLR, fit=fitGrid(heads, o.foot?rows.concat([o.foot]):rows, o.total, {cols:spec, sizes:o.sizes, headSize:o.headSize});
+  const CLR=o.CLR, fit=fitGrid(heads, o.foot?rows.concat([o.foot]):rows, o.total, {cols:spec, sizes:o.sizes, headSize:o.headSize, boldLast:!!o.foot});
   const G=fit.grid, sz=fit.size, hs=fit.headSize;
   const HEADH=Math.round(hs*20*1.2*2+110);             // سطران بارتفاع ثابت
   const trs=[wRow(heads.map((h,j)=>wCell(h,{bold:true,size:hs,color:o.headColor||CLR.ink,shade:o.headShade,width:G[j]})),
@@ -7640,7 +7656,7 @@ function wFitTable(heads, rows, spec, o){
   if(!rows.length && o.empty)
     trs.push(wRow([wCell(o.empty,{size:sz,align:"center",color:CLR.ink2,width:o.total,span:heads.length})]));
   rows.forEach((r,i)=>{
-    const zebra=(o.zebra && i%2===1)?(isMono()?"#F7F7F7":"#FAF8FC"):null;
+    const zebra=(o.zebra && i%2===1)?"#F7F7F7":null;     // تناوب محايد — اللون لرأس الجدول فقط
     trs.push(wRow(r.map((v,j)=>{
       const c=spec[j]||{}, t=fit.truncate[j] ? fitCut(v,fit.truncate[j],sz,c.bold) : String(v==null?"":v);
       return wCell(t,{size:sz,bold:!!c.bold,width:G[j],shade:zebra,align:c.align||"right",ltr:!!c.ltr,noWrap:!!c.noWrap,
@@ -7650,7 +7666,7 @@ function wFitTable(heads, rows, spec, o){
   /* صف المجموع: عريض بخط علوي، بلا تعبئة زخرفية */
   if(o.foot) trs.push(wRow(o.foot.map((v,j)=>{ const c=spec[j]||{};
     return wCell(String(v==null?"":v),{size:sz,bold:true,width:G[j],align:c.align||"right",ltr:!!c.ltr,
-      shade:isMono()?"#EDEDED":tint(CLR.purple,.9),color:c.color?c.color(v,o.foot):null}); })));
+      shade:"#EDEDED",color:c.color?c.color(v,o.foot):null}); })));
   return {xml:wTable(trs,{border:o.border||CLR.line,borderSize:6,grid:G,fixed:true}), fit:fit};
 }
 /* الهاتف بالمخرجات: فراغ غير فاصل بين مجموعات الأرقام فلا ينكسر سطرين */
@@ -7993,7 +8009,19 @@ function printPageFootCss(){
     ' counter(page,'+cs+') '+cssStr(" من ")+' counter(pages,'+cs+');font:8pt '+FF+';color:#666;direction:rtl}';
 }
 
-/* ترويسة موحّدة: اسم الشركة على خلفية بلون الشركة ثم عنوان المستند */
+/* ترويسة نوافذ الطباعة الموحّدة: نفس أجزاء wPageHead (الشعار والشركة | العنوان | الرقم والتاريخ) */
+function printHeadHtml(o){
+  const st=S();
+  return '<div class="phd"><div class="phd-co">'+(st.logo?'<img src="'+st.logo+'" alt="">':'')+'<b>'+esc(st.company||"")+'</b></div>'+
+    '<div class="phd-tt"><b>'+esc(o.title||"")+'</b>'+(o.sub?'<span>'+esc(o.sub)+'</span>':'')+'</div>'+
+    '<div class="phd-mt">'+(o.meta||[]).filter(Boolean).map(esc).join('<br>')+'</div></div>';
+}
+const PRINT_HEAD_CSS='.phd{display:grid;grid-template-columns:1fr 1.4fr 1fr;align-items:end;gap:8px;'+
+  'border-bottom:1.5pt solid #333;padding-bottom:4px;margin:0 0 4mm}'+
+  '.phd-co{display:flex;align-items:center;gap:6px}.phd-co img{max-height:12mm;max-width:28mm;object-fit:contain}'+
+  '.phd-co b{font-size:11pt}.phd-tt{text-align:center}.phd-tt b{display:block;font-size:13pt}'+
+  '.phd-tt span{display:block;font-size:8.5pt;color:#444}.phd-mt{font-size:8.5pt;color:#444;text-align:left;line-height:1.5}';
+/* ترويسة قديمة (شريط بلون الشركة) — باقية لمن يستدعيها من إضافات لاحقة؛ المخرجات الحالية تستعمل wPageHead */
 function docHeader(title, sub, full){
   const s=S(), CLR=CL(), SOFT=isMono()?"#F2F2F2":"#F5F3F8";
   /* عرض صريح بالتويب حتى يطابق مجموعه عرض الصفحة تماماً مثل بقية الجداول */
@@ -8018,7 +8046,7 @@ function docSignature(media){
     out+=wImage(rid,1.9,0.62,"right");
   }
   out+=wPara("__________________________",{align:"right",size:11,color:CLR.ink2,after:0});
-  out+=wPara(s.signer||"التوقيع",{align:"right",size:12,bold:true,color:CLR.purpleDeep,after:0});
+  out+=wPara(s.signer||"التوقيع",{align:"right",size:11,bold:true,color:CLR.ink,after:0});
   if(s.role) out+=wPara(s.role,{align:"right",size:10,color:CLR.ink2,after:0});
   return out;
 }
@@ -8159,7 +8187,10 @@ function payrollDocx(){
   const media=[];
   const PAY_FULL=16838-560*2;
   const SRC=rpRows(), t=rpTot();
-  let b=docHeader("كشف الحضور والرواتب", rpScopeText(), PAY_FULL);
+  /* الترويسة والتذييل الموحّدان كأجزاء صفحة: الكشف الطويل يحمل عنوانه ورقم صفحته بكل ورقة */
+  const head=wPageHead({width:PAY_FULL, title:"كشف الحضور والرواتب", sub:rpScopeText(),
+    meta:["عدد العمال: "+fmtNum(SRC.length),"تاريخ الإصدار: "+dateSlash(todayISO())]});
+  let b="";
   const P=periodInfo(RP);
   b+=wPeriodPara(P,{align:"right",after:100});
 
@@ -8197,7 +8228,7 @@ function payrollDocx(){
   const offList=SRC.filter(r=>r.status!==WS_ACTIVE);
   if(offList.length){
     b+=wPara("العمال غير المستمرين خلال المدة",
-      {size:12,bold:true,color:CLR.purpleDeep,after:60});
+      {size:10,bold:true,color:CLR.ink,after:60});
     offList.forEach(r=>{
       const d=r.endDate||r.statusChangedAt;
       b+=wPara(r.name+" — "+r.status+(d?" — آخر يوم عمل "+dateSlash(d):""),
@@ -8210,16 +8241,17 @@ function payrollDocx(){
     "   ·   استقطاع الغياب: "+fmtMoney(t.absDeduction)+" "+cur+
     "   ·   عقوبات: "+fmtMoney(t.penDed)+" "+cur+
     "   ·   مكافآت: "+fmtMoney(t.achAdd)+" "+cur,{size:10,color:CLR.ink2});
-  b+=wPara("صافي الرواتب: "+fmtMoney(t.net)+" "+cur,{size:14,bold:true,color:CLR.purpleDeep});
+  b+=wPara("صافي الرواتب: "+fmtMoney(t.net)+" "+cur,{size:12,bold:true,color:t.net<0?CLR.absent:CLR.ink});
   b+=wPara("متفرقة وإجازات: "+fmtNum(t.excused)+" يوم   ·   المستقطع منها: "+fmtNum(t.excusedDed)+
     " يوم   ·   نسبة الحضور: "+fmtNum(Math.round(t.rate*100))+"%",{size:10,color:CLR.ink2});
   if(RP.gaps.length)
     b+=wPara("تنبيه: "+fmtNum(RP.gaps.length)+" يوم عمل ضمن المدة لم يُعتمد بعد.",
-      {size:10,color:CLR.absent,bold:true});
+      {size:10,color:CLR.ink,bold:true});
   if(P) b+=wPara(periodNoteText(P),{size:8,color:CLR.ink2,before:60,after:0});
 
   b+=docSignature(media);
-  return buildDocx(b,{landscape:true,media:media,margin:560});
+  return buildDocx(b,{landscape:true,media:media,header:head,footer:wPageFoot(),
+    pgMar:{top:1300,bottom:860,right:560,left:560,header:280,footer:340}});
 }
 
 el("dlWord").onclick=()=>{
@@ -8814,38 +8846,19 @@ function directoryDocx(){
   const rows=dirExportRows();
   const FULL=16838-640*2;
 
-  const ld=logoDims(0.95,0.42);
-  let b=wTable([wRow([
-    wCell(
-      (m.logoRid?wImage(m.logoRid,ld.w,ld.h,"right"):"")+
-      wPara(s.company||"اسم الشركة",{size:14,bold:true,color:CLR.purpleDeep,align:"right",after:20})+
-      wPara("إدارة الموارد البشرية — الشعبة الإدارية",{size:9,color:CLR.ink2,align:"right",after:0}),
-      {width:Math.round(FULL*0.34),raw:true,valign:"center"}),
-    wCell(
-      wPara("دليل العمال",{size:20,bold:true,color:CLR.purple,align:"center",after:20})+
-      wPara("الهواتف والعناوين — وثيقة داخلية",{size:9,color:CLR.ink2,align:"center",after:0}),
-      {width:FULL-2*Math.round(FULL*0.34),raw:true,valign:"center"}),
-    wCell(
-      wPara("عدد العمال: "+fmtNum(rows.length),{size:10,bold:true,align:"left",after:20})+
-      wPara("تاريخ الطباعة: "+dateTextOf(todayISO()),{size:9,align:"left",after:0}),
-      {width:Math.round(FULL*0.34),raw:true,valign:"center"})
-  ],{height:1000})],{border:CLR.purple,borderSize:8,
-      grid:[Math.round(FULL*0.34),FULL-2*Math.round(FULL*0.34),Math.round(FULL*0.34)]});
-  b+=wGap(160);
-
+  /* ترويسة وتذييل موحّدان كأجزاء صفحة: يتكرّران بكل صفحة */
+  const head=wPageHead({width:FULL, title:"دليل العمال", sub:"الهواتف والعناوين — وثيقة داخلية",
+    meta:["عدد العمال: "+fmtNum(rows.length),"تاريخ الإصدار: "+dateSlash(todayISO())]});
+  let b="";
   /* سطر واحد لكل صف: الأعرض يُقاس، والعنوان وحده مرن يُقصّ بعد أصغر خط */
   const PH={min:1750,noWrap:true,ltr:true,align:"center"}, DT={align:"center"};
   b+=wFitTable(DIR_HEAD, rows.map(r=>r.map((v,j)=>j===0?fmtNum(v):(j===5||j===6?phoneNB(v):v))), [
     {fixed:420,align:"center"},{bold:true,min:1600},{flex:true,min:1300},{align:"center"},{flex:true,min:1300},PH,PH,
     {flex:true,min:1200},DT,{bold:true,align:"center",color:v=>statusDocColor(v)},DT
   ],{total:FULL,CLR:CLR,zebra:true,headShade:isMono()?"#E6E6E6":tint(CLR.purple,.88),border:CLR.line}).xml;
-  b+=wGap(200);
-  b+=wTable([wRow([wCell(
-    "وثيقة داخلية تُحفظ لدى الإدارة · المعلومات شخصية ولا تُتداول خارج الشركة · "+
-    (s.company||"")+" · "+dateTextOf(todayISO()),
-    {size:9,color:CLR.ink2,shade:SOFT,align:"center",width:FULL})],{height:360})],
-    {border:CLR.line,borderSize:4,grid:[FULL]});
-  return buildDocx(b,{media:m.media,landscape:true,margin:640});
+  b+=wPara("وثيقة داخلية تُحفظ لدى الإدارة · المعلومات شخصية ولا تُتداول خارج الشركة.",{size:8,color:CLR.ink2,before:120,after:0});
+  return buildDocx(b,{media:m.media,landscape:true,header:head,footer:wPageFoot(),
+    pgMar:{top:1350,bottom:900,right:640,left:640,header:300,footer:360}});
 }
 
 function issueDocx(){

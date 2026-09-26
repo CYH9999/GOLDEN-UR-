@@ -580,9 +580,9 @@ try{
     'return JSON.stringify(o); })()');
   const E=JSON.parse(cap), ET=BASE+" المنقولين";
   check("طباعة الكشف: <title>", (E.print.match(/<title>([^<]*)<\/title>/)||[])[1], ET);
-  check("طباعة الكشف: العنوان الظاهر", E.print.indexOf("<h2>"+ET+"</h2>")>0, true);
+  check("طباعة الكشف: العنوان الظاهر بالترويسة الموحّدة", E.print.indexOf('<div class="phd-tt"><b>'+ET+'</b>')>0, true);
   check("طباعة الكشف: سطر فرعي واحد (الجهة · التاريخ · العدد)", /الجهة المستلمة: مكتب الاستعلامات · تاريخ التحرير: [^<]+ · عدد الأسماء: (1|١)</.test(E.print), true);
-  check("Word الكشف: العنوان", unzipStored(new Uint8Array(E.doc))["word/document.xml"].indexOf(ET)>0, true);
+  check("Word الكشف: العنوان بترويسة الصفحة", (unzipStored(new Uint8Array(E.doc))["word/header1.xml"]||"").indexOf(ET)>0, true);
   check("Word الكشف: اسم الملف", E.docName.indexOf("كشف-بأسماء-العمال-المنقولين-")===0, true, E.docName);
   check("Excel الكشف: اسم الورقة", /<sheet name="العمال المنقولين"/.test(unzipStored(new Uint8Array(E.xls))["xl/workbook.xml"]), true);
   check("Excel الكشف: اسم الملف", E.xlsName.indexOf("كشف-بأسماء-العمال-المنقولين-")===0 && /\.xlsx$/.test(E.xlsName), true, E.xlsName);
@@ -590,7 +590,7 @@ try{
   const vp=w10.eval('(function(){ var h="", op=window.open; window.open=function(){ return {document:{write:function(x){h+=x;},close:function(){}},focus:function(){},print:function(){}}; }; el("varPrint").onclick(); window.open=op; return h; })()');
   check("كشف الحالات (خليط): <title> عام", (vp.match(/<title>([^<]*)<\/title>/)||[])[1], BASE);
   check("كشف الحالات (خليط): سطر الحالات المشمولة", vp.indexOf("الحالات المشمولة: مستمر ومنقول")>0, true);
-  const vd=unzipStored(new Uint8Array(w10.eval("Array.from(variablesDocx())")))["word/document.xml"];
+  const vd=unzipStored(new Uint8Array(w10.eval("Array.from(variablesDocx())")))["word/header1.xml"]||"";
   check("كشف الحالات Word (خليط): العنوان والحالات المشمولة", vd.indexOf(">"+BASE+"<")>0 && vd.indexOf("الحالات المشمولة: مستمر ومنقول")>0, true);
   w10.eval('setVarSel(WSTATUSES.slice()); extSel=extDefaults();');
 
@@ -738,6 +738,28 @@ try{
   W_15('el("gsInput").value="إ-2026-001"; el("gsInput").dispatchEvent(new Event("input")); el("gsInput").dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));');
   check("Enter يفتح الوصل بتبويبه", W_15('(!el("view-leaves").classList.contains("hidden"))+"/"+el("lvNo").value'), "true/إ-2026-001");
   check("Esc يغلق البحث", (W_15('gsShow(); document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true})); el("gsBack").classList.contains("hidden")')), true);
+
+  /* ---- ١٦) معيار البساطة ---- */
+  group("١٦ · معيار البساطة: ترويسة واحدة، تذييل واحد، توقيع واحد، لون محدود");
+  w10.eval('setVarSel(WSTATUSES.slice()); extSel=extDefaults(); RP=buildReport("2026-09-01","2026-09-30"); applyPaySort();'+
+    'switchView("ledger"); el("lgScope").value="all"; el("lgFrom").value="2026-09-01"; el("lgTo").value="2026-09-30"; runLedger(false);');
+  const brand_16=w10.eval('HEX(CL().purple)'), signer_16=w10.eval('S().signer');
+  ["payrollDocx","directoryDocx","variablesDocx","externalDocx","ledgerDocx(lgList())"].forEach(fn=>{
+    const z=unzipStored(new Uint8Array(w10.eval("Array.from("+(fn.indexOf("(")>0?fn:fn+"()")+")")));
+    const hd=z["word/header1.xml"]||"", ft=z["word/footer1.xml"]||"", dc=z["word/document.xml"]||"";
+    check(fn+" — ترويسة صفحة موحّدة (الشركة + العنوان) تتكرّر بكل صفحة", !!hd && hd.indexOf(w10.eval('S().company'))>0 && /<w:headerReference/.test(dc), true);
+    check(fn+" — تذييل: الشركة · تاريخ الطباعة · صفحة X من Y", /PAGE/.test(ft) && /NUMPAGES/.test(ft) && ft.indexOf("تاريخ الطباعة")>0, true);
+    check(fn+" — بلا شريط بلون الشركة (اللون لرأس الجدول والحالة والسالب فقط)", (dc+hd).indexOf('w:fill="'+brand_16+'"'), -1);
+    if(fn!=="variablesDocx" && fn!=="directoryDocx")
+      check(fn+" — توقيع واحد بآخر الوثيقة", (dc.split('xml:space="preserve">'+signer_16).length-1), 1);
+  });
+  const pw_16=w10.eval('(function(){ var out={}, op=window.open; window.open=function(){ var h=""; return {document:{write:function(x){h+=x;},close:function(){out.last=h;}},focus:function(){},print:function(){}}; };'+
+    'var r={}; ["dirPrint","varPrint","lgPrint"].forEach(function(id){ el(id).onclick(); r[id]=out.last; }); el("extTo").value="جهة"; el("extPrint").onclick(); r.extPrint=out.last; window.open=op; return JSON.stringify(r); })()');
+  const PW_16=JSON.parse(pw_16);
+  Object.keys(PW_16).forEach(k=>{
+    check(k+" — ترويسة موحّدة وتذييل صفحة X من Y", /class="(phd|lg-hl)"/.test(PW_16[k]) && /@bottom-center\{content:[^}]*counter\(page/.test(PW_16[k]), true);
+    check(k+" — بلا عنوان ملوّن بلون الشركة", /h1\{[^}]*color:#4B2E83/.test(PW_16[k]), false);
+  });
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
