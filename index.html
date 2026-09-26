@@ -5391,13 +5391,14 @@ el("varXls").onclick=()=>{
   try{
     const body=varExportRows(true);
     const rows=[VAR_HEAD].concat(body.length?body:[VAR_EMPTY_ROW]);
-    saveXlsx(buildXlsx(rows,{sheet:"حالات العمال",widths:[5,26,24,14,22,16,32,18,18,30]}),
-      "حالات-العمال-"+todayISO()+".xlsx");
+    const T=extTitle();
+    saveXlsx(buildXlsx(rows,{sheet:T.sheet,widths:[5,26,24,14,22,16,32,18,18,30]}),
+      T.file+"-"+todayISO()+".xlsx");
     varNote("انصدّر Excel ✓");
   }catch(err){ alertBox("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
 el("varWord").onclick=()=>{
-  try{ saveDocx(variablesDocx(),"حالات-العمال-"+todayISO()+".docx"); varNote("انصدّر Word ✓"); }
+  try{ saveDocx(variablesDocx(),extTitle().file+"-"+todayISO()+".docx"); varNote("انصدّر Word ✓"); }
   catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("varPrint").onclick=()=>{
@@ -5411,7 +5412,7 @@ el("varPrint").onclick=()=>{
     return '<td'+cls+'>'+esc(String(v))+'</td>';
   }).join("")+'</tr>').join("");
   w.document.write(
-    PRINT_DOC_OPEN+'<title>حالات العمال</title><style>'+PRINT_BASE_CSS+
+    PRINT_DOC_OPEN+'<title>'+esc(extTitleText())+'</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 landscape;margin:10mm}'+
     'body{font:400 11pt "Segoe UI",Tahoma,sans-serif;color:#111;direction:rtl;margin:0}'+
     'h1{font-size:16pt;margin:0 0 2mm;color:#4B2E83}'+
@@ -5424,10 +5425,9 @@ el("varPrint").onclick=()=>{
     '.ltr{direction:ltr;text-align:right;unicode-bidi:embed;white-space:nowrap}'+
     STATUS_PRINT_CSS+
     '</style></head><body>'+
-    '<h1>'+esc(s.company||"")+' — حالات العمال</h1>'+
-    '<p class="sub">'+esc(varScopeText())+' · عدد النتائج: '+fmtNum(rows.length)+
-      ' · تاريخ الطباعة: '+dateTextOf(todayISO())+
-      ' · وثيقة داخلية تُحفظ لدى الإدارة</p>'+
+    '<h1>'+esc(s.company||"")+' — '+esc(extTitleText())+'</h1>'+
+    (extTitle().scope?'<p class="sub" style="margin-bottom:1mm">'+esc(extTitle().scope)+'</p>':'')+
+    '<p class="sub">'+esc(varSubLine(rows.length))+' · وثيقة داخلية تُحفظ لدى الإدارة</p>'+
     '<table><thead><tr>'+VAR_HEAD.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead>'+
     '<tbody>'+body+'</tbody></table></body></html>');
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
@@ -5483,8 +5483,39 @@ function extRows(raw){
   colsMatch(cs.map(c=>c.t), rows, "الكشف الخارجي");
   return rows;
 }
-function extTitleText(){ return "كشف بأسماء العمال غير المستمرين"; }
+/* ---- عنوان الكشف من الحالات المؤشّرة (varSelected) ----
+   كان العنوان ثابتاً «غير المستمرين» حتى لو أُشّر «مستمر» وحده. الآن مصدر واحد
+   للعنوان بالطباعة و<title> والوورد وورقة الإكسل واسم الملف — للكشف الخارجي
+   ولكشف حالات العمال:
+   مستمر وحده ← المستمرين · الأربع غير المستمرة ← غير المستمرين · الخمس ← «كشف بأسماء العمال»
+   حالة واحدة ← جمعها · أي خليط آخر ← «كشف بأسماء العمال» + «الحالات المشمولة: …» */
+const WS_PLURAL={};
+WS_PLURAL[WS_ACTIVE]="المستمرين"; WS_PLURAL[WS_MOVE]="المنقولين"; WS_PLURAL[WS_END]="المنتهية خدماتهم";
+WS_PLURAL[WS_CUT]="المنقطعين";    WS_PLURAL[WS_FIRE]="المفصولين";
+function statusSetTitle(sel){
+  sel=WSTATUSES.filter(t=>(sel||[]).indexOf(t)>=0);
+  const base="كشف بأسماء العمال";
+  let who="";
+  if(sel.length===1) who=WS_PLURAL[sel[0]];
+  else if(sel.length===WS_VARIABLE.length && WS_VARIABLE.every(t=>sel.indexOf(t)>=0)) who="غير المستمرين";
+  const title=who?base+" "+who:base;
+  return { title:title, who:who,
+    scope:(!who && sel.length>1 && sel.length<WSTATUSES.length) ? "الحالات المشمولة: "+listAnd(sel) : "",
+    sheet:who?"العمال "+who:base,                 // ≤ ٣١ حرفاً (حدّ إكسل)
+    file:title.replace(/\s+/g,"-") };
+}
+function extTitle(){ return statusSetTitle(varSelected()); }
+function extTitleText(){ return extTitle().title; }
 function extToText(){ return String(el("extTo").value||"").trim() || "—"; }
+/* السطر الفرعي الموحّد بكل مخرجات الكشف الخارجي */
+function extSubLine(n){
+  return "الجهة المستلمة: "+extToText()+" · تاريخ التحرير: "+dateTextOf(todayISO())+" · عدد الأسماء: "+fmtNum(n);
+}
+/* وكشف حالات العمال (داخلي — بلا جهة مستلمة) */
+function varSubLine(n){
+  const q=String(el("varSearch").value||"").trim();
+  return "تاريخ التحرير: "+dateTextOf(todayISO())+" · عدد الأسماء: "+fmtNum(n)+(q?" · بحث: "+q:"");
+}
 const EXT_FOOT="هذا الكشف يقتصر على ما ورد أعلاه، ولا تُمنح معلومات إضافية إلا بطلب رسمي.";
 
 function renderExt(){
@@ -5514,7 +5545,8 @@ function renderExt(){
   }
   const sc=el("extScope");
   if(sc && sc.textContent!==undefined)
-    sc.textContent=varScopeText()+"  ·  عدد الأسماء: "+fmtNum(varList().length);
+    /* العنوان الذي سيُطبع فعلاً يظهر هنا قبل التصدير */
+    sc.textContent="العنوان: «"+extTitleText()+"»  ·  "+varScopeText()+"  ·  عدد الأسماء: "+fmtNum(varList().length);
 }
 function openExt(){
   extSel=extDefaults();          // كل فتحة ترجع للأعمدة الآمنة
@@ -5565,15 +5597,16 @@ function extGuard(){
 el("extXls").onclick=()=>{
   if(!extGuard()) return;
   try{
+    const T=extTitle();
     saveXlsx(buildXlsx([extHead()].concat(extRows(true)),
-      {sheet:"كشف خارجي", widths:extCols().map(c=>c.k==="name"?28:(c.k==="idx"?5:18))}),
-      "كشف-خارجي-"+todayISO()+".xlsx");
+      {sheet:T.sheet, widths:extCols().map(c=>c.k==="name"?28:(c.k==="idx"?5:18))}),
+      T.file+"-"+todayISO()+".xlsx");
     extNote("انصدّر Excel ✓");
   }catch(err){ alertBox("تعذّر إنشاء ملف الإكسل: "+err.message); }
 };
 el("extWord").onclick=()=>{
   if(!extGuard()) return;
-  try{ saveDocx(externalDocx(),"كشف-خارجي-"+todayISO()+".docx"); extNote("انصدّر Word ✓"); }
+  try{ saveDocx(externalDocx(),extTitle().file+"-"+todayISO()+".docx"); extNote("انصدّر Word ✓"); }
   catch(err){ alertBox("تعذّر إنشاء ملف الوورد: "+err.message); }
 };
 el("extPrint").onclick=()=>{
@@ -5609,9 +5642,8 @@ el("extPrint").onclick=()=>{
     '</style></head><body>'+
     '<h1>'+esc(s2.company||"")+'</h1>'+
     '<h2>'+esc(extTitleText())+'</h2>'+
-    '<p class="sub">الجهة المستلمة: <b>'+esc(extToText())+'</b><br>'+
-      'تاريخ التحرير: '+dateTextOf(todayISO())+'<br>'+
-      'عدد الأسماء: '+fmtNum(rows.length)+'</p>'+
+    (extTitle().scope?'<p class="sub" style="margin-bottom:1mm">'+esc(extTitle().scope)+'</p>':'')+
+    '<p class="sub">'+esc(extSubLine(rows.length))+'</p>'+
     '<table><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join("")+'</tr></thead>'+
     '<tbody>'+body+'</tbody></table>'+
     '<div class="sig"><div class="ln"></div><b>'+esc(s2.signer||"المسؤول الإداري")+'</b>'+
@@ -5640,24 +5672,10 @@ function externalDocx(){
   const land=fitGrid(head,cells,11906-720*2,{cols:spec}).squeezed;
   const FULL=(land?16838:11906)-720*2;
 
-  const H1=Math.round(FULL*0.32), H3=Math.round(FULL*0.32), H2=FULL-H1-H3;
-  const ld=logoDims(0.95,0.42);
-  let b=wTable([wRow([
-    wCell(
-      (m.logoRid?wImage(m.logoRid,ld.w,ld.h,"right"):"")+
-      wPara(s2.company||"اسم الشركة",{size:13,bold:true,color:CLR.purpleDeep,align:"right",after:20})+
-      wPara("إدارة الموارد البشرية — الشعبة الإدارية",{size:8,color:CLR.ink2,align:"right",after:0}),
-      {width:H1,raw:true,valign:"center"}),
-    wCell(
-      wPara(extTitleText(),{size:16,bold:true,color:CLR.purple,align:"center",after:20})+
-      wPara("الجهة المستلمة: "+extToText(),{size:9,bold:true,color:CLR.ink2,align:"center",after:0}),
-      {width:H2,raw:true,valign:"center"}),
-    wCell(
-      wPara("عدد الأسماء: "+fmtNum(rows.length),{size:10,bold:true,align:"left",after:20})+
-      wPara("تاريخ التحرير: "+dateTextOf(todayISO()),{size:9,align:"left",after:0}),
-      {width:H3,raw:true,valign:"center"})
-  ],{height:1000})],{border:CLR.purple,borderSize:8,grid:[H1,H2,H3]});
-  b+=wGap(160);
+  /* الترويسة الموحّدة (wPageHead) ثم السطر الفرعي الموحّد بعرض الصفحة */
+  const T=extTitle();
+  let b=wPageHead({width:FULL, title:T.title, sub:T.scope, meta:[], logoRid:m.logoRid||null}).xml;
+  b+=wPara(extSubLine(rows.length),{size:9,color:CLR.ink2,align:"center",before:40,after:120});
 
   b+=wFitTable(head, cells, spec,
     {total:FULL,CLR:CLR,zebra:true,headShade:isMono()?"#E6E6E6":tint(CLR.purple,.88),border:CLR.line,
@@ -5692,24 +5710,10 @@ function variablesDocx(){
   const rows=varExportRows();
   const FULL=16838-640*2;
 
-  const ld=logoDims(0.95,0.42);
-  let b=wTable([wRow([
-    wCell(
-      (m.logoRid?wImage(m.logoRid,ld.w,ld.h,"right"):"")+
-      wPara(s.company||"اسم الشركة",{size:14,bold:true,color:CLR.purpleDeep,align:"right",after:20})+
-      wPara("إدارة الموارد البشرية — الشعبة الإدارية",{size:9,color:CLR.ink2,align:"right",after:0}),
-      {width:Math.round(FULL*0.34),raw:true,valign:"center"}),
-    wCell(
-      wPara("حالات العمال",{size:20,bold:true,color:CLR.purple,align:"center",after:20})+
-      wPara(varScopeText(),{size:9,color:CLR.ink2,align:"center",after:0}),
-      {width:FULL-2*Math.round(FULL*0.34),raw:true,valign:"center"}),
-    wCell(
-      wPara("عدد النتائج: "+fmtNum(rows.length),{size:10,bold:true,align:"left",after:20})+
-      wPara("تاريخ الطباعة: "+dateTextOf(todayISO()),{size:9,align:"left",after:0}),
-      {width:Math.round(FULL*0.34),raw:true,valign:"center"})
-  ],{height:1000})],{border:CLR.purple,borderSize:8,
-      grid:[Math.round(FULL*0.34),FULL-2*Math.round(FULL*0.34),Math.round(FULL*0.34)]});
-  b+=wGap(160);
+  /* الترويسة الموحّدة: العنوان من الحالات المؤشّرة (نفس الكشف الخارجي) + سطر فرعي واحد */
+  const T=extTitle();
+  let b=wPageHead({width:FULL, title:T.title, sub:T.scope, meta:[], logoRid:m.logoRid||null}).xml;
+  b+=wPara(varSubLine(rows.length)+" · وثيقة داخلية",{size:9,color:CLR.ink2,align:"center",before:40,after:120});
 
   b+=wFitTable(VAR_HEAD, rows.map(r=>r.map((v,j)=>j===0?fmtNum(v):(j===5?phoneNB(v):v))), [
     {fixed:420,align:"center"},{bold:true,min:1600},{flex:true,min:1300},{align:"center"},{flex:true,min:1300},{min:1750,noWrap:true,ltr:true,align:"center"},
@@ -7680,7 +7684,9 @@ function saveDocx(bytes,name){
 function wPageHead(o){
   const s=S(), CLR=CL(), W=o.width, media=[];
   let rid=null;
-  if(s.logo){ const bb=dataUrlBytes(s.logo); if(bb){ rid="rIdHLogo"; media.push({name:"logo.png",data:bb,rid:rid}); } }
+  /* o.logoRid: الترويسة داخل المتن تستعمل صورة الشعار المسجّلة أصلاً بالمستند (receiptMedia) */
+  if(o.logoRid!==undefined) rid=o.logoRid;
+  else if(s.logo){ const bb=dataUrlBytes(s.logo); if(bb){ rid="rIdHLogo"; media.push({name:"logo.png",data:bb,rid:rid}); } }
   const A=Math.round(W*0.33), G=[A,W-2*A,A], ld=logoDims(0.85,0.36);
   const meta=(o.meta||[]).filter(Boolean);
   const xml=wTable([wRow([

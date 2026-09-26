@@ -549,6 +549,50 @@ try{
   check("أكثر من ٣ عطل: العدد وحده بالسطر", q.line.indexOf("عطل رسمية 4 ·")>0 && q.line.indexOf("(أ")<0, true, q.line);
   check("أكثر من ٣ عطل: التفاصيل بالتذييل", q.note.indexOf("العطل الرسمية بالمدة: 1 أ، 2 ب، 3 ج، 10 عيد الغدير.")>0, true);
   check("أكثر من ٣ عطل: أيام العمل = ٣٠ − ٤ − ٤", q.P.work, 22);
+
+  /* ---- ١٣) عنوان الكشف الخارجي من الحالات المؤشّرة ---- */
+  group("١٣ · عنوان الكشف الخارجي وكشف الحالات حسب الاختيار");
+  const TT=sel=>JSON.parse(w10.eval('JSON.stringify(statusSetTitle('+JSON.stringify(sel)+'))'));
+  const BASE="كشف بأسماء العمال", ST=["مستمر","منقول","إنهاء خدمات","انقطاع عن العمل","مفصول"];
+  check("«مستمر» وحده", TT(["مستمر"]).title, BASE+" المستمرين");
+  check("الحالات الأربع غير المستمرة", TT(["منقول","إنهاء خدمات","انقطاع عن العمل","مفصول"]).title, BASE+" غير المستمرين");
+  check("الحالات الخمس", TT(ST).title, BASE);
+  check("الحالات الخمس بلا سطر «الحالات المشمولة»", TT(ST).scope, "");
+  check("منقول وحده", TT(["منقول"]).title, BASE+" المنقولين");
+  check("إنهاء خدمات وحده", TT(["إنهاء خدمات"]).title, BASE+" المنتهية خدماتهم");
+  check("انقطاع وحده", TT(["انقطاع عن العمل"]).title, BASE+" المنقطعين");
+  check("مفصول وحده", TT(["مفصول"]).title, BASE+" المفصولين");
+  check("خليط (مستمر + منقول): العنوان العام", TT(["منقول","مستمر"]).title, BASE);
+  check("خليط (مستمر + منقول): الحالات المشمولة بالترتيب الثابت", TT(["منقول","مستمر"]).scope, "الحالات المشمولة: مستمر ومنقول");
+  check("خليط من ثلاث غير مستمرة", TT(["مفصول","منقول","انقطاع عن العمل"]).scope, "الحالات المشمولة: منقول، انقطاع عن العمل ومفصول");
+  let sheetOk=true, fileOk=true;
+  for(let m=1;m<32;m++){ const sel=ST.filter((x,i)=>m&(1<<i)), t=TT(sel);
+    if(!(t.sheet.length<=31 && !/[\[\]:*?\/\\]/.test(t.sheet))) sheetOk=false;
+    if(/\s/.test(t.file) || t.file.indexOf(BASE.split(" ")[0])!==0) fileOk=false; }
+  check("كل التوليفات الـ٣١: اسم ورقة إكسل صالح (≤ ٣١ حرفاً)", sheetOk, true);
+  check("كل التوليفات الـ٣١: اسم ملف بلا فراغات", fileOk, true);
+  /* التطبيق الفعلي: الطباعة و<title> والوورد والإكسل واسم الملف */
+  w10.eval('setVarSel(["منقول"]); extSel=extDefaults(); el("extTo").value="مكتب الاستعلامات";');
+  const cap=w10.eval('(function(){ var o={}; var sd=saveDocx, sx=saveXlsx, op=window.open;'+
+    'saveDocx=function(b,n){o.docName=n; o.doc=Array.from(b);}; saveXlsx=function(b,n){o.xlsName=n; o.xls=Array.from(b);};'+
+    'window.open=function(){ var h=""; return {document:{write:function(x){h+=x;},close:function(){o.print=h;}},focus:function(){},print:function(){}}; };'+
+    'try{ el("extWord").onclick(); el("extXls").onclick(); el("extPrint").onclick(); } finally { saveDocx=sd; saveXlsx=sx; window.open=op; }'+
+    'return JSON.stringify(o); })()');
+  const E=JSON.parse(cap), ET=BASE+" المنقولين";
+  check("طباعة الكشف: <title>", (E.print.match(/<title>([^<]*)<\/title>/)||[])[1], ET);
+  check("طباعة الكشف: العنوان الظاهر", E.print.indexOf("<h2>"+ET+"</h2>")>0, true);
+  check("طباعة الكشف: سطر فرعي واحد (الجهة · التاريخ · العدد)", /الجهة المستلمة: مكتب الاستعلامات · تاريخ التحرير: [^<]+ · عدد الأسماء: (1|١)</.test(E.print), true);
+  check("Word الكشف: العنوان", unzipStored(new Uint8Array(E.doc))["word/document.xml"].indexOf(ET)>0, true);
+  check("Word الكشف: اسم الملف", E.docName.indexOf("كشف-بأسماء-العمال-المنقولين-")===0, true, E.docName);
+  check("Excel الكشف: اسم الورقة", /<sheet name="العمال المنقولين"/.test(unzipStored(new Uint8Array(E.xls))["xl/workbook.xml"]), true);
+  check("Excel الكشف: اسم الملف", E.xlsName.indexOf("كشف-بأسماء-العمال-المنقولين-")===0 && /\.xlsx$/.test(E.xlsName), true, E.xlsName);
+  w10.eval('setVarSel(["مستمر","منقول"]);');
+  const vp=w10.eval('(function(){ var h="", op=window.open; window.open=function(){ return {document:{write:function(x){h+=x;},close:function(){}},focus:function(){},print:function(){}}; }; el("varPrint").onclick(); window.open=op; return h; })()');
+  check("كشف الحالات (خليط): <title> عام", (vp.match(/<title>([^<]*)<\/title>/)||[])[1], BASE);
+  check("كشف الحالات (خليط): سطر الحالات المشمولة", vp.indexOf("الحالات المشمولة: مستمر ومنقول")>0, true);
+  const vd=unzipStored(new Uint8Array(w10.eval("Array.from(variablesDocx())")))["word/document.xml"];
+  check("كشف الحالات Word (خليط): العنوان والحالات المشمولة", vd.indexOf(">"+BASE+"<")>0 && vd.indexOf("الحالات المشمولة: مستمر ومنقول")>0, true);
+  w10.eval('setVarSel(WSTATUSES.slice()); extSel=extDefaults();');
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
