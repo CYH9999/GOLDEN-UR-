@@ -508,7 +508,7 @@ try{
   check("يفتح على بيانات فارغة بلا خطأ JS", wu.__errs.length, 0, (wu.__errs[0]||""));
   check("يفتح على بيانات فارغة بلا «عنصر مفقود»", wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0,
     (wu.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0)[0]||""));
-  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","settings"];
+  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form","settings"];
   setState(wu,fixture({workers:[WK({id:"w1"}),WK({id:"w2",name:"علي",status:"مفصول",statusChangedAt:"2026-09-02"})]}));
   wu.eval("bootView()");
   TABS.forEach(t=>{ try{ wu.eval('switchView("'+t+'")'); }catch(e){ wu.__errs.push(t+": "+e.message); } });

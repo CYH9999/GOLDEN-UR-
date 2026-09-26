@@ -400,7 +400,7 @@ try{
 
   /* ---- ٩) الواجهة: نظافة ووضع داكن ---- */
   group("٩ · الواجهة");
-  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","settings"];
+  const TABS=["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form","settings"];
   TABS.forEach(t=>{ try{ w7.eval('switchView("'+t+'")'); }catch(e){ w7.__errs.push(t+": "+e.message); } });
   check("كل التبويبات بلا خطأ JS", w7.__errs.length, 0, w7.__errs[0]||"");
   check("كل التبويبات بلا «عنصر مفقود»", w7.__warns.filter(x=>x.indexOf("عنصر مفقود")>=0).length, 0);
@@ -593,6 +593,67 @@ try{
   const vd=unzipStored(new Uint8Array(w10.eval("Array.from(variablesDocx())")))["word/document.xml"];
   check("كشف الحالات Word (خليط): العنوان والحالات المشمولة", vd.indexOf(">"+BASE+"<")>0 && vd.indexOf("الحالات المشمولة: مستمر ومنقول")>0, true);
   w10.eval('setVarSel(WSTATUSES.slice()); extSel=extDefaults();');
+
+  /* ---- ١٤) الفورمة: ورق الشركة والمسوّدات ---- */
+  group("١٤ · الفورمة — ترحيل، مسوّدات، عزل، وورد وطباعة");
+  const w14=await boot();
+  const CA=company({id:"coA",name:"شركة أ",workers:[{id:"a",name:"أحمد كاظم",startDate:"2024-03-01"}]});
+  const CB=company({id:"coB",name:"شركة ب",workers:[{id:"b",name:"باسم"}]});
+  load(w14,stateOf([CA,CB]));
+  const J=x=>JSON.parse(w14.eval("JSON.stringify("+x+")"));
+  check("ترحيل formV1: الفورمة data URL داخل البيانات", w14.eval('state.companies.every(function(c){ return /^data:image\\/jpeg;base64,/.test(c.settings.letterhead) && c.formV1===true && c.settings.lhBg==="show" && Array.isArray(c.letters); })'), true);
+  check("الفورمة المضمّنة = assets/letterhead.jpg (١٥٢٬٦٢٥ بايت)", w14.eval('dataUrlBytes(letterheadDefault()).length'), 152625);
+  w14.eval('state.companies[1].settings.letterhead=""; state=migrate(JSON.parse(JSON.stringify(state))); bootView();');
+  check("الترحيل متكرر بلا أثر: فورمة محذوفة لا ترجع", w14.eval('state.companies[1].settings.letterhead'), "");
+  check("الترحيل متكرر بلا أثر: فورمة الشركة الأولى كما هي", w14.eval('state.companies[0].settings.letterhead===letterheadDefault()'), true);
+  /* مسوّدة: حفظ، ترقيم «ك»، تعديل، حفظ ثانٍ */
+  w14.eval('switchView("form"); el("lfTo").value="مديرية التربية"; el("lfSubject").value="تأييد"; el("lfTitle").value="كتاب ١"; lfApplyTpl("gov");'+
+    'el("lfEditor").querySelectorAll("p")[3].innerHTML="نص <b>عريض</b> <script>x()<\/script><span onclick=y()>و</span>"; lfSave();');
+  let LT1=J('C().letters[0]');
+  check("أول كتاب يأخذ العدد ك-السنة-001", LT1.no, "ك-2026-001");
+  check("حقول المسوّدة الثمانية", Object.keys(LT1).sort().join(","), "date,editedAt,html,id,no,subject,title,to");
+  check("العدد المعطى عند الحفظ يظهر داخل نص الكتاب", LT1.html.indexOf(">ك-2026-001<")>0, true);
+  check("المنظّف: لا script ولا onclick، والعريض باقٍ", /<script|onclick/.test(LT1.html)===false && LT1.html.indexOf("<b>عريض</b>")>0, true);
+  check("صورة التوقيع لا تُخزَّن داخل الكتاب", /<img/.test(LT1.html), false);
+  w14.eval('el("lfTo").value="مديرية الصحة"; lfSave();');
+  LT1=J('C().letters[0]');
+  check("إعادة الحفظ تعدّل الكتاب نفسه (لا نسخة ثانية)", w14.eval('C().letters.length')+" / "+LT1.to+" / "+(LT1.editedAt?"معدّل":"—"), "1 / مديرية الصحة / معدّل");
+  w14.eval('lfReset(); lfSave();');
+  check("كتاب جديد يأخذ العدد التالي", w14.eval('C().letters[1].no'), "ك-2026-002");
+  /* الحفظ والاستعادة */
+  const lfBefore=w14.eval('JSON.stringify({l:C().letters, h:S().letterhead})');
+  w14.eval('state=migrate(JSON.parse(JSON.stringify(state))); bootView();');
+  check("الحفظ ثم القراءة: الكتب والفورمة كما هي", w14.eval('JSON.stringify({l:C().letters, h:S().letterhead})')===lfBefore, true);
+  /* وورد: الفورمة صورة خلف النص بترويسة الصفحة */
+  w14.eval('switchView("form"); lfOpen(C().letters[0].id);');
+  const lz14=unzipStored(new Uint8Array(w14.eval("Array.from(letterDocx())")));
+  const hx14=lz14["word/header1.xml"]||"", dx14=lz14["word/document.xml"]||"";
+  check("وورد: صورة مثبّتة خلف النص (anchor behindDoc=1، wrapNone)", /<wp:anchor [^>]*behindDoc="1"/.test(hx14) && /<wp:wrapNone\/>/.test(hx14), true);
+  check("وورد: بموضع (٠،٠) من الصفحة وبقياسها الكامل", /positionH relativeFrom="page"><wp:posOffset>0</.test(hx14) && /positionV relativeFrom="page"><wp:posOffset>0</.test(hx14) && /<wp:extent cx="7559993" cy="10691813"\/>/.test(hx14), true);
+  check("وورد: headerReference أول عنصر بالقسم", /<w:sectPr><w:headerReference w:type="default" r:id="rIdHdr1"\/>/.test(dx14), true);
+  check("وورد: A4 والهوامش (٤ / ٢٫٤ / ١٫٨ سم)", /<w:pgSz w:w="11906" w:h="16838"\/><w:pgMar w:top="2268" w:right="1020" w:bottom="1361" w:left="1020" w:header="283" w:footer="283"/.test(dx14), true);
+  check("وورد: الصورة ونوعها مسجّلان", !!lz14["word/media/letterhead.jpeg"] && /Extension="jpeg"/.test(lz14["[Content_Types].xml"]) && /rIdLH/.test(lz14["word/_rels/header1.xml.rels"]||""), true);
+  let ar14=true; try{ w14.__x=dx14; w14.eval("assertRtl(__x)"); w14.__x=hx14; w14.eval("assertRtl(__x)"); }catch(e){ ar14=e.message; }
+  check("وورد: assertRtl على المتن والترويسة", ar14, true);
+  check("وورد: العريض والجدول والقائمة", /<w:b\/><w:bCs\/>(?:(?!<\/w:r>).)*عريض/.test(dx14), true);
+  const ph14=w14.eval('lfPrintHtml()');
+  check("الطباعة: @page A4 بلا هامش مع print-color-adjust:exact", ph14.indexOf("@page{size:A4;margin:0}")>0 && ph14.indexOf("print-color-adjust:exact")>0, true);
+  check("الطباعة: الخلفية ظاهرة", /<img class="bg" src="data:image\/jpeg/.test(ph14), true);
+  w14.eval('el("lfBg").checked=false; el("lfBg").dispatchEvent(new Event("change"));');
+  check("«خلفية الفورمة: مخفية» — الطباعة بلا خلفية", /<img class="bg"/.test(w14.eval('lfPrintHtml()')), false);
+  check("«خلفية الفورمة: مخفية» — وورد بلا ترويسة صورة وبالهوامش نفسها",
+    (function(){ const z=unzipStored(new Uint8Array(w14.eval("Array.from(letterDocx())"))); return !z["word/header1.xml"] && /w:top="2268"/.test(z["word/document.xml"]); })(), true);
+  w14.eval('el("lfBg").checked=true; el("lfBg").dispatchEvent(new Event("change"));');
+  /* تأييد عامل: يسحب الاسم والقسم وتاريخ المباشرة */
+  w14.eval('lfReset(); el("lfTpl").value="conf"; lfWorkerFill(); el("lfWorker").value="a"; lfApplyTpl("conf");');
+  const ct14=w14.eval('el("lfEditor").textContent');
+  check("قالب التأييد: الاسم والقسم وتاريخ المباشرة", ct14.indexOf("أحمد كاظم")>0 && ct14.indexOf("قسم الإنتاج")>0 && ct14.indexOf("2024/03/01")>0, true);
+  /* العزل: الشركة ب بلا فورمة وبلا كتب أ، والمحرّر لا يحمل كتاب أ */
+  w14.eval('lfOpen(C().letters[0].id); state.active="coB"; bootView(); switchView("form");');
+  check("العزل: كتب الشركة أ لا تظهر بالشركة ب", w14.eval('el("lfList").textContent.indexOf("ك-2026-001")'), -1);
+  check("العزل: المحرّر لا يحمل كتاب الشركة أ", w14.eval('el("lfEditor").textContent.indexOf("مديرية الصحة")')<0 && w14.eval('lfEditId')===null, true);
+  check("العزل: الشركة ب بلا فورمة ← خلفية مخفية ومعطّلة", w14.eval('lfBgOn()+"/"+el("lfBg").disabled'), "false/true");
+  check("العزل: الشركة أ تحتفظ بفورمتها", w14.eval('state.companies[0].settings.letterhead===letterheadDefault()'), true);
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
