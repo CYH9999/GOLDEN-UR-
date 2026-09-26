@@ -231,6 +231,28 @@ label.field>span,.field>span:first-child{display:block;font-size:var(--fs-sm);co
 .daystat.ok{background:var(--present-bg);border-color:transparent;color:var(--present)}
 .daystat.no{background:var(--gold-bg);border-color:transparent;color:var(--gold-text)}
 .daystat.hol{background:var(--surface-2);border-color:var(--line);color:var(--ink-2)}
+.daystat.lock{background:var(--surface-2);border-color:var(--line-strong);color:var(--ink)}
+/* قفل الشهر بكشف الرواتب */
+.lockbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;margin:0 0 var(--sp-3);
+  border:1px dashed var(--line-strong);border-radius:var(--r-md);font-size:var(--fs-sm);color:var(--ink-2)}
+.lockbar.on{border-style:solid;background:var(--surface-2);color:var(--ink)}
+.lockbar .btn{margin-inline-start:auto}
+/* مركز التنبيهات */
+.alerts .panel-body{display:grid;gap:8px}
+.alrt{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:var(--r-md);border:1px solid var(--line);
+  border-inline-start:4px solid var(--gold);background:var(--panel)}
+.alrt.bad{border-inline-start-color:var(--absent)}
+.alrt .btn{margin-inline-start:auto;white-space:nowrap}
+.alrt b{font-size:var(--fs-sm)}
+/* البحث الشامل */
+.gsopen kbd{font:inherit;font-size:10px;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-inline-start:4px;color:var(--ink-2)}
+.gsbox{width:min(640px,100%)}
+#gsInput{width:100%;font-size:var(--fs-md);padding:10px 12px}
+#gsList{margin-top:10px;display:grid;gap:4px;max-height:55vh;overflow:auto}
+.gsrow{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r-sm);cursor:pointer;border:1px solid transparent}
+.gsrow:hover,.gsrow.on{background:var(--brand-lite);border-color:var(--line)}
+.gsrow .g{font-size:var(--fs-xs);color:var(--ink-2);min-width:62px}
+.gsrow .d{font-size:var(--fs-xs);color:var(--ink-2);margin-inline-start:auto;white-space:nowrap}
 .polhint{border:1px dashed var(--line-strong);border-radius:var(--r-md);padding:8px 12px;font-size:var(--fs-sm);
   color:var(--ink-2);background:var(--surface-2);line-height:1.8}
 .polhint b{color:var(--ink)}
@@ -495,6 +517,7 @@ tr.rowneg td{background:var(--absent-bg)}
     <select id="coSelect"></select>
   </div>
   <div class="spacer"></div>
+  <button class="btn sm ghost gsopen" id="gsOpen" title="بحث شامل: عامل، رقم وصل، كتاب (Ctrl+K)">بحث… <kbd>Ctrl+K</kbd></button>
   <span class="dbbadge ok" id="dbBadge" role="status" aria-live="polite">جاهز</span>
   <div class="datebox">
     <label class="lbl" for="dateInput">التاريخ</label>
@@ -541,6 +564,11 @@ tr.rowneg td{background:var(--absent-bg)}
 
 <!-- ===== جرد اليوم ===== -->
 <section id="view-daily" role="tabpanel" aria-labelledby="tab-daily" tabindex="-1">
+  <!-- مركز التنبيهات: يظهر فقط إذا كان هناك ما يستحق الانتباه، وكل تنبيه بزر إلى مكانه -->
+  <div class="panel alerts hidden" id="alertsPanel">
+    <div class="panel-head"><h2>التنبيهات</h2><span class="mini" id="alertsCount"></span></div>
+    <div class="panel-body" id="alertsList"></div>
+  </div>
   <div class="split">
     <div>
       <div class="panel">
@@ -854,6 +882,18 @@ tr.rowneg td{background:var(--absent-bg)}
       <div id="historyBody"></div>
     </div>
   </div>
+  <div class="panel">
+    <div class="panel-head">
+      <h2>سجل التدقيق</h2>
+      <input type="text" id="auditSearch" placeholder="بحث: اسم، نوع التعديل، تاريخ، رقم وثيقة…" style="flex:1;min-width:160px;width:auto">
+      <span class="mini" id="auditCount"></span>
+    </div>
+    <div class="panel-body">
+      <p class="hint" style="margin-top:0">كل تعديل راتب، وتغيير حالة، وحذف وثيقة، وتعديل يوم معتمد مضى، وقفل شهر أو فتحه —
+        بقيمته قبل وبعد. يُحفظ آخر ٢٠٠٠ قيد لكل شركة.</p>
+      <div id="auditList"></div>
+    </div>
+  </div>
 </section>
 
 <!-- ===== العمال والأقسام ===== -->
@@ -992,6 +1032,7 @@ tr.rowneg td{background:var(--absent-bg)}
     </div>
     <div class="panel-body">
       <div id="rpPeriod" class="pline"></div>
+      <div id="rpLock"></div>
       <div id="rpCards" class="cards"></div>
       <div id="rpWarn"></div>
     </div>
@@ -1265,6 +1306,8 @@ tr.rowneg td{background:var(--absent-bg)}
             <button class="btn sm danger" id="lhClear">حذف الفورمة</button>
             <span class="saved" id="lhState"></span>
           </div>
+          <label class="field" style="margin-top:12px"><span>تنبيه الغياب بالصفحة الأولى: أكثر من كم يوم غياب بالشهر؟ (٠ = بلا تنبيه)</span>
+            <input type="number" id="setAbsAlert" min="0" max="31" step="1" style="max-width:140px"></label>
         </div>
       </div>
 
@@ -1440,6 +1483,18 @@ tr.rowneg td{background:var(--absent-bg)}
 </div>
 
 <!-- ===== نافذة الكشف الخارجي ===== -->
+<div class="ovl hidden" id="gsBack">
+  <div class="ovlbox gsbox" role="dialog" aria-modal="true" aria-labelledby="gsTitle">
+    <div class="ovlhead"><h3 id="gsTitle">بحث شامل</h3>
+      <button class="btn sm ghost x" id="gsClose">إغلاق</button></div>
+    <div class="ovlbody">
+      <input type="text" id="gsInput" placeholder="اسم عامل أو هاتفه، رقم وصل (إ- ع- م- ت-)، أو كتاب (ك-)…" autocomplete="off"
+        role="combobox" aria-controls="gsList" aria-expanded="true">
+      <div id="gsList" role="listbox" aria-label="النتائج"></div>
+      <p class="mini" style="margin:8px 0 0">↑ ↓ للتنقّل · Enter للفتح · Esc للإغلاق</p>
+    </div>
+  </div>
+</div>
 <div class="ovl hidden" id="extBack">
   <div class="ovlbox" role="dialog" aria-modal="true" aria-labelledby="extTitle">
     <div class="ovlhead"><h3 id="extTitle">كشف خارجي — بلا معلومات شخصية</h3>
@@ -1986,7 +2041,56 @@ function setWorkerStatus(w, next, opts){
     if(opts.undo) e.undo=true;
     w.statusHistory.push(e);
   }
+  /* سجل التدقيق: كل تغيير حالة (من أي واجهة أو قرار) بقيمته قبل وبعد */
+  if(from!==nx || fromDate!==(w.statusChangedAt||""))
+    audit("status", w.name, from+(fromDate?" ("+dateSlash(fromDate)+")":""),
+      nx+(w.statusChangedAt?" ("+dateSlash(w.statusChangedAt)+")":""), opts.ref?{ref:String(opts.ref)}:null);
   return true;
+}
+
+/* ==================== [بيانات] قفل الشهر وسجل التدقيق ====================
+   قفل الشهر: بعد صرف رواتب شهر يُقفل، فيصير كل ما يمسّ أرقامه للقراءة فقط — تأشير
+   الحضور واعتماد الأيام وحذفها، والإجازات والعقوبات والمكافآت بتواريخه، وتغيير حالة
+   عامل أو تاريخ مباشرته داخله، والعطل والأوف بتواريخه، وحذف عامل خدم فيه. وصل المواد
+   والكتب لا تمسّ الراتب فلا تُقفل. الفتح بسبب مكتوب يُسجَّل.
+   عند القفل تُحفظ صورة صافي كل عامل: تغيير من خارج الشهر (راتب عامل، سياسة استقطاع،
+   أيام الراحة) يظهر فرقاً صريحاً على كشف الشهر المقفل بدل أن يمرّ بصمت. */
+function monthKey(iso){ return String(iso||"").slice(0,7); }
+function monthLock(iso){ const L=C().locks||{}; return iso ? (L[monthKey(iso)]||null) : null; }
+function monthLocked(iso){ return !!monthLock(iso); }
+/* أول يوم من كل شهر تلمسه المدة (إجازة ممتدة على شهرين) */
+function monthsOf(from,to){
+  const out=[]; if(!from) return out;
+  let m=monthKey(from), g=0; const e=monthKey(to||from);
+  while(m<=e && g++<600){ out.push(m+"-01"); const y=+m.slice(0,4), mm=+m.slice(5,7);
+    m=mm===12 ? (y+1)+"-01" : y+"-"+String(mm+1).padStart(2,"0"); }
+  return out;
+}
+/* حارس كل كتابة: يرجّع true إذا منعها (مع رسالة تشرح طريق الفتح) */
+function lockBlock(dates, what){
+  const hit=[].concat(dates).filter(Boolean).find(monthLocked);
+  if(!hit) return false;
+  alertBox("راتب "+monthNameOf(hit)+" مقفل — "+what+" ممنوع حتى لا تتغيّر أرقام شهر صُرف.\n\n"+
+    "للتعديل: التقارير والرواتب ← اختر الشهر ← «فتح القفل» مع كتابة السبب (يُسجَّل بسجل التدقيق).","الشهر مقفل");
+  return true;
+}
+/* عامل خدم يوماً داخل شهر مقفل؟ (يمنع حذفه نهائياً) */
+function workerInLockedMonth(w){
+  return Object.keys(C().locks||{}).find(m=>{ const r=monthOf(m+"-01"); return serviceDaysIn(w,r[0],r[1])>0; })||null;
+}
+const AUDIT_MAX=2000;
+const AUDIT_KIND={salary:"تعديل راتب", status:"تغيير حالة", del:"حذف وثيقة", day:"تعديل يوم معتمد",
+  lock:"قفل شهر", unlock:"فتح قفل شهر"};
+const DAY_TXT={present:"حاضر", absent:"غائب", misc:"متفرقة"};
+function nowStamp(){ const d=new Date(), p=n=>String(n).padStart(2,"0");
+  return todayISO()+" "+p(d.getHours())+":"+p(d.getMinutes()); }
+/* قيد واحد: متى، النوع، على ماذا، القيمة قبل وبعد (+ سبب أو مرجع). يُحفظ بقائمة الشركة
+   نفسها، والأقدم يُحذف بعد ٢٠٠٠ قيد حتى لا يثقل ملف البيانات. */
+function audit(kind, what, before, after, extra){
+  const c=C(); if(!Array.isArray(c.audit)) c.audit=[];
+  c.audit.push(Object.assign({at:nowStamp(), kind:kind, what:String(what==null?"":what),
+    before:String(before==null?"":before), after:String(after==null?"":after)}, extra||{}));
+  if(c.audit.length>AUDIT_MAX) c.audit.splice(0, c.audit.length-AUDIT_MAX);
 }
 
 function blankCompany(name){
@@ -2166,6 +2270,15 @@ function ensureFields(st){
        شركة: ما موجود لا يُلمس، وفورمة حذفها المستخدم ("") لا ترجع بعد الترحيل. */
     if(!Array.isArray(c.letters)) c.letters=[];
     if(typeof c.letterSeq!=="number") c.letterSeq=0;
+    /* ترحيل المجموعة أ (auditV1): سجل التدقيق، أقفال الأشهر، وحدّ تنبيه الغياب */
+    if(!c.auditV1){
+      if(!Array.isArray(c.audit)) c.audit=[];
+      if(!c.locks || typeof c.locks!=="object" || Array.isArray(c.locks)) c.locks={};
+      if(S2.absAlert===undefined) S2.absAlert=3;
+      c.auditV1=true;
+    }
+    if(!Array.isArray(c.audit)) c.audit=[];
+    if(!c.locks || typeof c.locks!=="object") c.locks={};
     if(!c.formV1){
       if(S2.letterhead===undefined) S2.letterhead=letterheadDefault();
       if(!S2.lhBg) S2.lhBg="show";
@@ -2342,7 +2455,14 @@ function wcard(w){
 let sheetTimer=null;
 el("roster").addEventListener("click",e=>{
   const b=e.target.closest("button[data-set]"); if(!b)return;
-  const rec=dayRec(curDate); rec.states[b.dataset.w]=b.dataset.set; rec.confirmed=true;
+  if(lockBlock(curDate,"تعديل حضور يوم")) return;
+  const rec=dayRec(curDate), prev=stateOf(curDate,b.dataset.w);
+  /* تعديل يوم معتمد مضى (لا تأشير اليوم نفسه) يُسجَّل بقيمته قبل وبعد */
+  if(rec.confirmed && curDate<todayISO() && prev!==b.dataset.set){
+    const w=C().workers.find(x=>x.id===b.dataset.w);
+    audit("day", dateSlash(curDate)+" — "+(w?w.name:""), DAY_TXT[prev]||prev, DAY_TXT[b.dataset.set]||b.dataset.set);
+  }
+  rec.states[b.dataset.w]=b.dataset.set; rec.confirmed=true;
   queueSave();
   const card=b.closest(".wcard");
   if(!card){ refresh(); return; }
@@ -2362,16 +2482,21 @@ el("roster").addEventListener("click",e=>{
 el("search").addEventListener("input",renderRoster);
 /* «الكل حاضر» يمسح كل تأشيرات اليوم — ما ينضغط سهواً على يوم مؤشَّر */
 el("allPresent").onclick=()=>{
+  if(lockBlock(curDate,"تعديل حضور يوم")) return;
   const r=dayRec(curDate), st=r.states||{};
   let a=0, m=0;
   Object.keys(st).forEach(k=>{ if(st[k]==="absent") a++; else if(st[k]==="misc") m++; });
-  const go=()=>{ r.states={}; r.confirmed=true; queueSave(); refresh(); };
+  const go=()=>{
+    if(r.confirmed && curDate<todayISO() && (a||m))
+      audit("day", dateSlash(curDate)+" — الكل حاضر", [a?fmtNum(a)+" غياب":"", m?fmtNum(m)+" متفرقة":""].filter(Boolean).join(" و"), "الكل حاضر");
+    r.states={}; r.confirmed=true; queueSave(); refresh(); };
   if(!a && !m){ go(); return; }
   const parts=[]; if(a) parts.push(fmtNum(a)+" غياب"); if(m) parts.push(fmtNum(m)+" متفرقة");
   confirmBox("الكل حاضر","باليوم "+dateTextOf(curDate)+" مؤشّر "+parts.join(" و")+".\n"+
     "«الكل حاضر» يمسحها كلها ويعتبر الجميع حاضرين.",{ok:"امسح واعتبر الكل حاضر",danger:true}).then(ok=>{ if(ok) go(); });
 };
 el("confirmDay").onclick=()=>{
+  if(lockBlock(curDate,"اعتماد يوم")) return;
   const r=dayRec(curDate); r.confirmed=true; queueSave(); refresh();
   el("savedNote").textContent="تم اعتماد اليوم ✓"; setTimeout(()=>el("savedNote").textContent="",1600);
 };
@@ -2380,6 +2505,7 @@ el("confirmDay").onclick=()=>{
 el("notes").addEventListener("input",()=>{ const r=dayRec(curDate); r.notes=el("notes").value; queueSave();
   clearTimeout(drawTimer); drawTimer=setTimeout(()=>{ drawSheet(); renderDayStatus(); },220); });
 el("insertDefaultNote").onclick=()=>{
+  if(lockBlock(curDate,"تعديل ملاحظات يوم")) return;
   const t=S().defNote||""; const cur=el("notes").value.trim();
   el("notes").value = cur ? cur+"\n"+t : t;
   const r=dayRec(curDate); r.notes=el("notes").value; queueSave(); drawSheet(); renderDayStatus();
@@ -2390,7 +2516,10 @@ function renderDayStatus(){
   const ok=!!(r && r.confirmed);
   const b=el("dayStatus");
   if(!b || !b.classList) return;
-  if(isHoliday(curDate)){
+  const nt=document.getElementById("notes"); if(nt) nt.readOnly=monthLocked(curDate);
+  if(monthLocked(curDate)){
+    b.className="daystat lock"; b.textContent="راتب "+monthNameOf(curDate)+" مقفل — هذا اليوم للقراءة فقط"+(ok?" (معتمد)":" (غير معتمد)");
+  }else if(isHoliday(curDate)){
     b.className="daystat hol"; b.textContent="عطلة: "+holidayReason(curDate)+" — مدفوعة وبلا استقطاع";
   }else if(ok){
     b.className="daystat ok"; b.textContent="اليوم معتمد ✓ — داخل حساب الرواتب";
@@ -2864,11 +2993,13 @@ el("historyBody").addEventListener("click",e=>{
   if(o){ curDate=o.dataset.open; el("dateInput").value=curDate; switchView("daily"); refresh(); }
   if(d){
     const k=d.dataset.del, rec=C().days[k]||{}, st=rec.states||{};
+    if(lockBlock(k,"حذف يوم جرد")) return;
     const n=Object.keys(st).length;
     confirmBox("حذف يوم جرد","يتحذف جرد يوم "+dateTextOf(k)+"؟"+
       (n?"\nفيه "+fmtNum(n)+" تأشير غياب أو متفرقة.":"")+
       (rec.confirmed?"\nاليوم معتمد: حذفه يخرجه من حساب الرواتب.":""),{ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
+      if(rec.confirmed) audit("del","يوم جرد معتمد "+dateSlash(k), n?fmtNum(n)+" تأشير":"معتمد", "محذوف");
       delete C().days[k]; queueSave(); refresh(); renderHistory();
     });
   }
@@ -3136,6 +3267,8 @@ function purgeWorker(w){
 el("wTable").addEventListener("click",e=>{
   const d=e.target.closest("[data-wdel]"); if(!d)return;
   const c=C(), w=c.workers.find(x=>x.id===d.dataset.wdel); if(!w) return;
+  const lm=workerInLockedMonth(w);
+  if(lm){ lockBlock([lm+"-01"],"حذف عامل خدم فيه (استعمل «تغيير الحالة»)"); return; }
   const n=workerRecordCounts(w), total=n.days+n.lv+n.pn+n.ac+n.iss;
   if(!total){
     confirmBox("حذف عامل","يتحذف «"+w.name+"» نهائياً؟\nماكو أي سجل مرتبط بيه — ولا يوم جرد ولا وصل.",
@@ -3178,6 +3311,8 @@ function statusOptions(sel, allLabel){
 }
 /* تطبيق التغيير ثم تحديث كل الواجهات المعنية */
 function applyStatusChange(w,nx,when,note){
+  if(lockBlock([when, getWorkerStatus(w)!==WS_ACTIVE?w.statusChangedAt:""],"تغيير حالة عامل بتاريخ داخله")){
+    renderPeople(); renderVariables(); renderSalTable(); return false; }
   setWorkerStatus(w,nx,{date:when, note:note});
   queueSave(); refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable();
   if(RP) runReport();
@@ -3202,8 +3337,7 @@ function changeWorkerStatus(id,next,opts){
   const cur=getWorkerStatus(w), nx=normStatus(next);
   if(opts.silent){
     if(cur===nx && !opts.date) return Promise.resolve(false);
-    applyStatusChange(w,nx,opts.date||todayISO(),opts.note);
-    return Promise.resolve(true);
+    return Promise.resolve(applyStatusChange(w,nx,opts.date||todayISO(),opts.note)!==false);
   }
   if(cur===nx){ reset(); return Promise.resolve(false); }
   const dateLbl=t=>normStatus(t)===WS_ACTIVE ? "تاريخ الرجوع للعمل" : "تاريخ السريان — آخر يوم عمل";
@@ -3230,8 +3364,7 @@ function changeWorkerStatus(id,next,opts){
       alertBox("آخر يوم عمل ("+dateTextOf(d)+") قبل مباشرة «"+w.name+"» ("+dateTextOf(s0)+"). صحّح التاريخ.");
       reset(); return false;
     }
-    applyStatusChange(w,nx2,d,v.dsNote);
-    return true;
+    return applyStatusChange(w,nx2,d,v.dsNote)!==false;
   });
 }
 
@@ -3245,6 +3378,7 @@ const setMap={ setCompany:"company", setTitle:"title", setAddress:"address", set
 function fillSettings(){
   Object.keys(setMap).forEach(id=>{ el(id).value=S()[setMap[id]]||""; });
   fillLogoPrev(); fillLhPrev();
+  el("setAbsAlert").value=S().absAlert==null?3:S().absAlert;
   if(!S().exportDPI){ S().exportDPI="300"; el("setDPI").value="300"; }
   if(!S().printMode){ S().printMode="color"; el("setPrintMode").value="color"; }
   const c=C();
@@ -3467,6 +3601,7 @@ el("coTable").addEventListener("click",e=>{
     copy.achievements=[]; copy.achSeq=0;
     copy.issues=[]; copy.issueSeq=0;
     copy.letters=[]; copy.letterSeq=0;      // الكتب وثائق مثل الوصولات؛ الفورمة نفسها تُنسخ
+    copy.audit=[]; copy.locks={};           // سجل التدقيق والأقفال تخصّ بيانات الشركة الأصلية
     copy.zones.forEach(z=>{ const old=z.id; z.id=uid();
       copy.sections.forEach(s=>{ if(s.zoneId===old) s.zoneId=z.id; }); });
     copy.sections.forEach(s=>{ const old=s.id; s.id=uid();
@@ -3747,6 +3882,7 @@ el("lvSave").onclick=()=>{
   const to=addDays(from,days-1);
   const open=lvRec();
   if(lvEditId && !open){ lvEditId=null; }
+  if(lockBlock(monthsOf(from,to).concat(open?monthsOf(open.from,leaveEnd(open)):[]),"حفظ إجازة بتاريخه")) return;
   const g=serviceGuardMsg(w,from,"الإجازة","بداية")||serviceGuardMsg(w,to,"الإجازة","نهاية");
   if(g){ alertBox(g,"إجازة خارج مدة الخدمة"); return; }
   const clash=overlappingLeave(w.id,from,to,open?open.id:null);
@@ -3807,10 +3943,12 @@ el("leavesList").addEventListener("click",e=>{
     el("lvReason").value=l.reason||""; el("lvAdmin").value=l.admin||"";
     lvSyncSave(); renderLeaves(); drawLeave(); lvHint(); }
   if(d){ const l=c.leaves.find(x=>x.id===d.dataset.ldel); if(!l) return;
+    if(lockBlock(monthsOf(l.from,leaveEnd(l)),"حذف إجازة بتاريخه")) return;
     confirmBox("حذف وصل إجازة","يتحذف وصل "+l.no+" («"+(l.name||"")+"»)؟\nأيامه ترجع تُحسب حسب تأشير الجرد.",
       {ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
       if(lvEditId===l.id){ lvEditId=null; lvSyncSave(); }
+      audit("del","وصل إجازة "+l.no+" — "+(l.name||""), (l.type||"")+" · "+dateSlash(l.from)+(l.hours?" · "+hoursText(l.hours):" · "+daysText(l.days||1)), "محذوف");
       c.leaves=c.leaves.filter(x=>x.id!==l.id); queueSave(); renderLeaves();
       if(RP) runReport(); refresh();
     }); }
@@ -4155,6 +4293,7 @@ el("pnSave").onclick=async()=>{
   const term=isTerminationType(type);
   const open=pnRec();
   if(pnEditId && !open){ pnEditId=null; }
+  if(lockBlock([date, open&&open.date],"حفظ عقوبة بتاريخه")) return;
   /* تبديل العامل داخل قرار إنهاء خدمة ممنوع: القرار غيّر حالة عامل معيّن،
      ونقله لعامل ثاني يترك الأول منتهي الخدمة بلا قرار. */
   if(open && open.terminates && open.workerId!==w.id){
@@ -4246,6 +4385,7 @@ el("penaltiesList").addEventListener("click",e=>{
     el("pnReason").value=l.reason||""; el("pnAdmin").value=l.admin||"";
     pnSyncKind(); pnSyncSave(); renderPenalties(); drawPenalty(); pnHintRender(); }
   if(d){ const l=(c.penalties||[]).find(x=>x.id===d.dataset.pdel); if(!l) return;
+    if(lockBlock([l.date],"حذف عقوبة بتاريخها")) return;
     const w=c.workers.find(x=>x.id===l.workerId);
     /* حذف قرار إنهاء الخدمة يرجّع الحالة والتاريخ والملاحظة معاً — فقط إن
        كان هذا القرار هو صاحب الحالة الحالية فعلاً */
@@ -4257,6 +4397,7 @@ el("penaltiesList").addEventListener("click",e=>{
       {ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
       if(pnEditId===l.id){ pnEditId=null; pnSyncSave(); }
+      audit("del","إشعار عقوبة "+l.no+" — "+(l.name||""), (l.type||"")+" · "+dateSlash(l.date)+" · "+fmtMoney(penaltyAmount(l,w))+" "+(S().currency||""), "محذوف");
       c.penalties=c.penalties.filter(x=>x.id!==l.id);
       if(undoTerm) undoTermination(w,l);
       queueSave(); renderPenalties();
@@ -4492,6 +4633,7 @@ el("acSave").onclick=async()=>{
   const acDate=el("acDate").value||curDate;
   const open=acRec();
   if(acEditId && !open){ acEditId=null; }
+  if(lockBlock([acDate, open&&open.date],"حفظ مكافأة بتاريخها")) return;
   const g=serviceGuardMsg(w,acDate,"المكافأة");
   if(g){ alertBox(g,"مكافأة خارج مدة الخدمة"); return; }
   if(k==="amount"){ v=await roundAmountField("acAmount",v); if(v==null) return; }
@@ -4550,9 +4692,11 @@ el("achList").addEventListener("click",e=>{
     el("acReason").value=l.reason||""; el("acAdmin").value=l.admin||"";
     acSyncKind(); acSyncSave(); renderAchievements(); drawAchievement(); acHintRender(); }
   if(d){ const l=(c.achievements||[]).find(x=>x.id===d.dataset.adel); if(!l) return;
+    if(lockBlock([l.date],"حذف مكافأة بتاريخها")) return;
     confirmBox("حذف إشعار","يتحذف إشعار "+l.no+" («"+(l.name||"")+"»)؟",{ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
       if(acEditId===l.id){ acEditId=null; acSyncSave(); }
+      audit("del","إشعار مكافأة "+l.no+" — "+(l.name||""), (l.type||"")+" · "+dateSlash(l.date)+" · "+fmtMoney(achAmount(l,c.workers.find(x=>x.id===l.workerId)))+" "+(S().currency||""), "محذوف");
       c.achievements=c.achievements.filter(x=>x.id!==l.id); queueSave(); renderAchievements();
       if(RP) runReport();
     }); }
@@ -4931,6 +5075,7 @@ el("issuesList").addEventListener("click",e=>{
     confirmBox("حذف وصل مواد","يتحذف وصل "+l.no+" («"+(l.name||"")+"»)؟",{ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
       if(mtEditId===l.id){ mtEditId=null; mtSyncSave(); }
+      audit("del","وصل صرف مواد "+l.no+" — "+(l.name||""), dateSlash(l.from)+" · "+fmtNum((l.items||[]).length)+" مادة", "محذوف");
       c.issues=c.issues.filter(x=>x.id!==l.id); queueSave(); renderIssues(); mtStatusRender();
     }); }
 });
@@ -6494,7 +6639,7 @@ function runReport(manual){
   }
   if(!sameMonth(from,to)){
     RP=null;
-    el("rpCards").innerHTML=""; el("rpPeriod").innerHTML=""; el("rpNote").textContent="";
+    el("rpCards").innerHTML=""; el("rpPeriod").innerHTML=""; el("rpNote").textContent=""; el("rpLock").innerHTML="";
     el("rpTable").innerHTML="";
     el("rpWarn").innerHTML='<div class="errbox"><b>المدى يمتد على أكثر من شهر — الحساب مرفوض.</b><br>'+
       'الرواتب شهرية، وحساب مدى متعدد الأشهر يطبّق راتب شهر واحد على شهرين فيطلع نصف راتب لكل عامل.'+
@@ -6539,6 +6684,7 @@ function renderReport(){
   const P=periodInfo(RP);
   el("rpPeriod").innerHTML=periodLineHtml(P);
   el("rpNote").textContent=P?periodNoteText(P):"";
+  renderLockBar();
   el("rpCards").innerHTML=[
     ['<div class="card hero"><div class="k">صافي الرواتب</div><div class="v">'+fmtMoney(T.net)+'</div><div class="k">'+esc(cur)+'</div></div>'],
     ['<div class="card"><div class="k">أيام مجرودة</div><div class="v">'+fmtNum(d)+'</div></div>'],
@@ -6581,6 +6727,7 @@ function renderReport(){
   el("rpWarn").innerHTML=warn;
   const fg=document.getElementById("fixGaps");
   if(fg) fg.onclick=()=>{
+    if(lockBlock(RP.gaps,"اعتماد أيام")) return;
     /* هذا الزر يكتب حضوراً كاملاً لكل عامل بكل يوم ناقص، وينزل مباشرة
        على الرواتب. التحذير يذكر عدد العمال المتأثرين فعلاً، والتأكيد
        يطلب كتابة كلمة — لا ضغطة زر واحدة. */
@@ -6681,6 +6828,14 @@ function updatePolicyHint(){
   el("leavePolicyHint").innerHTML = ex+
     "<br><span class='mini'>مثال: يوم إجازة + يوم متفرقة = ٢ ← استقطاع "+fmtNum(leaveDeductDays(2,p))+"</span>";
 }
+/* الراتب الافتراضي بسجل التدقيق عند إتمام التعديل (change)، لا مع كل ضغطة زر */
+let salAuditBefore=null;
+el("setSalary").addEventListener("focus",()=>{ salAuditBefore=S().salary; });
+el("setSalary").addEventListener("change",()=>{
+  if(salAuditBefore!=null && Number(salAuditBefore)!==Number(S().salary))
+    audit("salary","الراتب الافتراضي للشركة", fmtMoney(salAuditBefore), fmtMoney(S().salary));
+  salAuditBefore=S().salary; queueSave();
+});
 /* الحقول النصية لا تُحوَّل لأرقام */
 const salTextKeys={dedMode:1,miscPaid:1,currency:1,leavePolicy:1,proRate:1};
 Object.keys(salMap).forEach(id=>{
@@ -6731,9 +6886,16 @@ el("salTable").addEventListener("change",e=>{
   const s=e.target.closest("[data-sal]"), d=e.target.closest("[data-ded]"), t=e.target.closest("[data-start]"),
         p=e.target.closest("[data-lpol]");
   const find=id=>c.workers.find(w=>w.id===id);
-  if(s){ const w=find(s.dataset.sal); if(w) w.salary=s.value===""?null:Number(s.value); }
-  if(d){ const w=find(d.dataset.ded); if(w) w.deduct=d.value===""?null:Number(d.value); }
-  if(t){ const w=find(t.dataset.start); if(w) w.startDate=t.value||""; }
+  const money2=v=>(v==null||v==="")?"الافتراضي":fmtMoney(v);
+  if(s){ const w=find(s.dataset.sal); if(w){ const nv=s.value===""?null:Number(s.value);
+    if(String(w.salary==null?"":w.salary)!==String(nv==null?"":nv)) audit("salary", w.name, money2(w.salary), money2(nv));
+    w.salary=nv; } }
+  if(d){ const w=find(d.dataset.ded); if(w){ const nv=d.value===""?null:Number(d.value);
+    if(String(w.deduct==null?"":w.deduct)!==String(nv==null?"":nv)) audit("salary", w.name+" — استقطاع اليوم الخاص", money2(w.deduct), money2(nv));
+    w.deduct=nv; } }
+  if(t){ const w=find(t.dataset.start);
+    if(w && lockBlock([w.startDate, t.value],"تغيير تاريخ مباشرة داخله")){ t.value=w.startDate||""; return; }
+    if(w) w.startDate=t.value||""; }
   if(p){ const w=find(p.dataset.lpol); if(w) w.leavePolicy=p.value||null; }
   if(s||d||t||p){ queueSave(); if(RP) runReport(); }
 });
@@ -6742,6 +6904,8 @@ el("applyAllSalary").onclick=()=>{
   confirmBox("تطبيق الراتب الافتراضي","تطبيق الإعداد الافتراضي على كل العمال وإلغاء أي راتب أو استقطاع أو سياسة خاصة؟",
     {ok:"طبّق على الكل",danger:true}).then(go=>{
     if(!go) return;
+    const n=C().workers.filter(w=>w.salary!=null&&w.salary!==""||w.deduct!=null&&w.deduct!=="").length;
+    if(n) audit("salary","كل العمال ← الراتب الافتراضي", fmtNum(n)+" عامل براتب أو استقطاع خاص", "الافتراضي للجميع");
     C().workers.forEach(w=>{ w.salary=null; w.deduct=null; w.leavePolicy=null; });
     queueSave(); renderSalTable(); if(RP) runReport();
   });
@@ -6819,6 +6983,7 @@ el("addHoliday").onclick=()=>{
   if(d2 && d2<d){ alertBox("تاريخ النهاية قبل تاريخ البداية."); return; }
   const st=S();
   if(!Array.isArray(st.holidays)) st.holidays=[];
+  if(lockBlock(monthsOf(d,d2||d),"إضافة عطلة بتاريخه")) return;
   const name=el("hlName").value.trim()||"عطلة رسمية";
   let cur=d, added=0, skipped=0, guard=0;
   const last=d2||d;
@@ -6834,6 +6999,7 @@ el("addHoliday").onclick=()=>{
 };
 el("holidayList").addEventListener("click",e=>{
   const b=e.target.closest("[data-hdel]"); if(!b)return;
+  if(lockBlock([b.dataset.hdel],"حذف عطلة بتاريخها")) return;
   const st=S();
   st.holidays=(st.holidays||[]).filter(h=>h.date!==b.dataset.hdel);
   queueSave(); renderHolidays(); if(RP) runReport(); refresh();
@@ -6894,6 +7060,7 @@ el("addOffDate").onclick=()=>{
   const d=el("offDate").value;
   if(!d){ el("offDate").focus(); return; }
   if(!Array.isArray(w.offDates)) w.offDates=[];
+  if(lockBlock([d],"إضافة أوف بتاريخه")) return;
   if(w.offDates.indexOf(d)>=0){ alertBox("هذا التاريخ مضاف مسبقاً لهذا العامل."); return; }
   w.offDates.push(d); el("offDate").value="";
   queueSave(); renderOffDates(); renderOffSummary(); renderOffWorkerList();
@@ -6902,6 +7069,7 @@ el("addOffDate").onclick=()=>{
 el("offDateList").addEventListener("click",e=>{
   const b=e.target.closest("[data-offdel]"); if(!b)return;
   const w=currentOffWorker(); if(!w) return;
+  if(lockBlock([b.dataset.offdel],"حذف أوف بتاريخه")) return;
   w.offDates=offDatesOf(w).filter(d=>d!==b.dataset.offdel);
   queueSave(); renderOffDates(); renderOffSummary(); renderOffWorkerList();
   if(RP) runReport(); refresh();
@@ -10229,6 +10397,7 @@ el("lfList").addEventListener("click",e=>{
     const c=C(), r=(c.letters||[]).find(x=>x.id===d.dataset.lfdel); if(!r) return;
     confirmBox("حذف كتاب","يُحذف الكتاب "+r.no+(r.title?" («"+r.title+"»)":"")+" نهائياً؟",{ok:"حذف",danger:true}).then(y=>{
       if(!y) return;
+      audit("del","كتاب "+r.no+" — "+(r.title||""), (r.to||"")+(r.subject?" · "+r.subject:""), "محذوف");
       c.letters=c.letters.filter(x=>x.id!==r.id);
       if(lfEditId===r.id){ lfEditId=null; el("lfNo").value=""; }
       queueSave(); renderLetters();
@@ -10290,6 +10459,207 @@ el("lhClear").onclick=()=>{
     if(co===C()){ fillLhPrev(); if(lfInited) lfPaintBg(); lhState("انحذفت الفورمة"); }
   });
 };
+/* ==================== [واجهة] قفل الشهر بكشف الرواتب ==================== */
+/* صورة الصافي عند القفل: لكل عامل ومجموعاً — من buildReport نفسه، لا حساب جديد */
+function lockSnapshot(R){
+  const rows={}; R.rows.forEach(r=>{ rows[r.id]=money(r.net); });
+  return {net:money(R.tot.net), n:R.rows.length, rows:rows};
+}
+/* من تغيّر صافيه منذ القفل (تغيير من خارج الشهر: راتب، سياسة، أيام راحة…) */
+function lockDrift(L,R){
+  const out=[], snap=L.rows||{};
+  R.rows.forEach(r=>{
+    const a=snap[r.id];
+    if(a===undefined){ if(Math.abs(r.net)>0.5) out.push({name:r.name,a:null,b:r.net}); }
+    else if(Math.abs(a-r.net)>0.5) out.push({name:r.name,a:a,b:r.net});
+  });
+  Object.keys(snap).forEach(id=>{ if(!R.rows.some(r=>r.id===id)) out.push({name:"عامل محذوف",a:snap[id],b:null}); });
+  return out;
+}
+function renderLockBar(){
+  const box=el("rpLock"); if(!box||box.innerHTML===undefined) return;
+  if(!RP || RP.invalid){ box.innerHTML=""; return; }
+  const mr=monthOf(RP.from), full=RP.from===mr[0] && RP.to===mr[1], L=monthLock(RP.from);
+  if(!full){ box.innerHTML=""; return; }
+  const mn=esc(monthNameOf(RP.from));
+  if(L){
+    const dr=lockDrift(L,RP);
+    box.innerHTML='<div class="lockbar on"><span><b>راتب '+mn+' مقفل</b> منذ '+esc(L.at)+
+      ' — الحضور والوصولات والحالات بتواريخه للقراءة فقط.</span><button class="btn sm" id="rpUnlock">فتح القفل…</button></div>'+
+      (dr.length?'<div class="errbox"><b>تغيّر صافي '+fmtNum(dr.length)+' عامل منذ القفل</b> — تغيير من خارج الشهر '+
+        '(راتب عامل، سياسة استقطاع، أيام الراحة…):<br>'+
+        dr.slice(0,8).map(x=>esc(x.name)+': '+(x.a==null?'—':fmtMoney(x.a))+' ← '+(x.b==null?'—':fmtMoney(x.b))).join(' · ')+
+        (dr.length>8?' …':'')+'<br><span class="mini">الصافي عند القفل '+fmtMoney(L.net)+' — الآن '+fmtMoney(RP.tot.net)+
+        '. السبب بسجل التدقيق (تبويب السجل).</span></div>':'');
+  }else if(RP.to<todayISO()){
+    box.innerHTML='<div class="lockbar"><span>راتب '+mn+' غير مقفل — بعد الصرف أقفله حتى لا تتغيّر أرقامه.</span>'+
+      '<button class="btn sm gold" id="rpLockBtn">قفل الشهر</button></div>';
+  }else box.innerHTML='<div class="lockbar"><span>يُقفل راتب '+mn+' بعد انتهاء الشهر ('+dateSlash(mr[1])+').</span></div>';
+  const lb=document.getElementById("rpLockBtn"); if(lb) lb.onclick=()=>lockMonth(RP.from);
+  const ub=document.getElementById("rpUnlock"); if(ub) ub.onclick=()=>unlockMonth(RP.from);
+}
+function lockMonth(iso){
+  const r=monthOf(iso), R=buildReport(r[0],r[1]), mk=monthKey(iso), mn=monthNameOf(iso);
+  return confirmBox("قفل راتب "+mn,
+    "بعد القفل يصير للقراءة فقط كل ما يمسّ رواتب "+mn+": تأشير الحضور واعتماد الأيام، والإجازات والعقوبات والمكافآت "+
+    "بتواريخه، وتغيير الحالة بتاريخ داخله، والعطل والأوف فيه.\nالصافي الحالي: "+fmtMoney(R.tot.net)+" "+(S().currency||"")+
+    (R.gaps.length?"\n\nتنبيه: "+fmtNum(R.gaps.length)+" يوم عمل غير معتمد — يبقى خارج الحساب بعد القفل.":""),
+    {ok:"اقفل الشهر"}).then(y=>{
+    if(!y) return false;
+    C().locks[mk]=Object.assign({at:nowStamp()}, lockSnapshot(R));
+    audit("lock","راتب "+mn,"مفتوح","مقفل — الصافي "+fmtMoney(R.tot.net));
+    queueSave(); if(RP) renderReport(); refresh(); scheduleAlerts();
+    return true;
+  });
+}
+function unlockMonth(iso){
+  const mk=monthKey(iso), mn=monthNameOf(iso);
+  return dlgShow({title:"فتح قفل راتب "+mn, danger:true, ok:"افتح القفل",
+    message:"فتح القفل يسمح بتعديل أرقام شهر صُرف. السبب إلزامي ويُسجَّل بسجل التدقيق مع الوقت.",
+    fields:[{id:"ulReason",label:"سبب الفتح",type:"textarea",placeholder:"مثال: تصحيح غياب مؤشّر خطأً يوم ١٢ بطلب الإدارة"}]}).then(v=>{
+    if(!v) return false;
+    const why=String(v.ulReason||"").trim();
+    if(why.length<3){ alertBox("اكتب سبب الفتح — القفل لا يُفتح بلا سبب مسجَّل."); return false; }
+    delete C().locks[mk];
+    audit("unlock","راتب "+mn,"مقفل","مفتوح",{reason:why});
+    queueSave(); if(RP) renderReport(); refresh(); scheduleAlerts();
+    return true;
+  });
+}
+
+/* ==================== [واجهة] سجل التدقيق (تبويب السجل) ==================== */
+function renderAudit(){
+  const box=el("auditList"); if(!box||box.innerHTML===undefined) return;
+  const all=(C().audit||[]), q=String(el("auditSearch").value||"").trim();
+  let list=all.slice().reverse();
+  if(q) list=list.filter(a=>[a.at,AUDIT_KIND[a.kind]||a.kind,a.what,a.before,a.after,a.reason,a.ref].some(x=>String(x||"").indexOf(q)!==-1));
+  el("auditCount").textContent=fmtNum(all.length)+" قيد"+(q?" · يطابق البحث "+fmtNum(list.length):"");
+  if(!list.length){ box.innerHTML='<div class="empty"><p>'+(q?"ماكو قيد يطابق البحث.":"ماكو قيود بعد.")+'</p></div>'; return; }
+  const MAX=300, shown=list.slice(0,MAX);
+  box.innerHTML='<div class="tblwrap tight"><table><thead><tr><th>الوقت</th><th>النوع</th><th>على</th><th>قبل</th><th>بعد</th><th>السبب / المرجع</th></tr></thead><tbody>'+
+    shown.map(a=>'<tr><td class="dt">'+esc(a.at)+'</td><td>'+esc(AUDIT_KIND[a.kind]||a.kind)+'</td><td>'+esc(a.what)+'</td>'+
+      '<td>'+esc(a.before||"—")+'</td><td>'+esc(a.after||"—")+'</td><td>'+esc(a.reason||a.ref||"")+'</td></tr>').join("")+
+    '</tbody></table></div>'+(list.length>MAX?'<p class="hint">يظهر أحدث '+fmtNum(MAX)+' من '+fmtNum(list.length)+' — ضيّق البحث للباقي.</p>':'');
+}
+el("auditSearch").addEventListener("input",renderAudit);
+
+/* ==================== [واجهة] مركز التنبيهات (الصفحة الأولى) ====================
+   كل تنبيه يقرأ من دوال الحساب نفسها (missingDays، salaryFor، buildReport) ويحمل زراً
+   إلى مكانه. يُحسب بعد توقّف التحديث (٣٠٠ مللي ثانية) لا مع كل نقرة. */
+let alertGo=[], alertTimer=null;
+function scheduleAlerts(){ clearTimeout(alertTimer); alertTimer=setTimeout(renderAlerts,300); }
+function gotoView(v){ switchView(v); try{ window.scrollTo(0,0); }catch(e){} }
+function alertItems(){
+  const c=C(), s=S(), today=todayISO(), items=[];
+  const mCur=monthOf(today), mPrev=monthOf(addDays(mCur[0],-1));
+  const firstDay=Object.keys(c.days).sort()[0];
+  /* ١) أيام عمل مرّت بلا اعتماد — الشهر الحالي والسابق إن لم يُقفل، من أول يوم جُرد فعلاً */
+  if(firstDay && c.workers.length){
+    const gaps=[].concat(monthLocked(mPrev[0])?[]:missingDays(mPrev[0],mPrev[1]), missingDays(mCur[0],mCur[1]))
+      .filter(d=>d>=firstDay && d<today);
+    if(gaps.length) items.push({sev:"bad", t:fmtNum(gaps.length)+" يوم عمل مرّ ولم يُعتمد",
+      d:"أولها "+dateSlash(gaps[0])+" — لا يدخل حساب الرواتب حتى يُعتمد.", b:"افتح أول يوم",
+      go:()=>{ curDate=gaps[0]; el("dateInput").value=curDate; gotoView("daily"); refresh(); }});
+  }
+  /* ٢) عامل على رأس عمله بلا راتب */
+  const noSal=c.workers.filter(w=>inService(w,today) && !(salaryFor(w)>0));
+  if(noSal.length) items.push({sev:"bad", t:fmtNum(noSal.length)+" عامل بلا راتب",
+    d:noSal.slice(0,3).map(w=>w.name).join("، ")+(noSal.length>3?" …":""), b:"إعداد الرواتب",
+    go:()=>{ gotoView("report"); const p=document.getElementById("pnSalary"); if(p&&p.scrollIntoView) try{ p.scrollIntoView({block:"start"}); }catch(e){} }});
+  /* ٣) وثيقة بلا رقم */
+  const V=[["leaves","إجازة","leaves"],["penalties","عقوبة","penalties"],["achievements","مكافأة","achievements"],["issues","صرف مواد","materials"]];
+  V.forEach(v=>{ const n=(c[v[0]]||[]).filter(x=>x && !String(x.no||"").trim()).length;
+    if(n) items.push({sev:"warn", t:fmtNum(n)+" وصل "+v[1]+" بلا رقم", d:"الوصل بلا رقم لا يُرجع إليه ولا يُطابق بالكشوف.", b:"افتح القائمة", go:()=>gotoView(v[2])}); });
+  /* ٤) غياب فوق الحدّ بالشهر الحالي — من كشف الرواتب نفسه */
+  const th=Number(s.absAlert)||0;
+  if(th>0 && c.workers.length){
+    const over=buildReport(mCur[0],mCur[1]).rows.filter(r=>r.absent>th).sort((a,b)=>b.absent-a.absent);
+    if(over.length) items.push({sev:"warn", t:fmtNum(over.length)+" عامل غيابه فوق "+fmtNum(th)+" يوم هذا الشهر",
+      d:over.slice(0,3).map(r=>r.name+" ("+fmtNum(r.absent)+")").join("، ")+(over.length>3?" …":""), b:"الجرد التفصيلي",
+      go:()=>{ gotoView("ledger"); el("lgFrom").value=mCur[0]; el("lgTo").value=mCur[1]; el("lgScope").value="worker"; lgTargetFill();
+        el("lgTarget").value=over[0].id; runLedger(true); }});
+  }
+  /* ٥) شهر انتهى وفيه أيام معتمدة ولم يُقفل */
+  const months={}; Object.keys(c.days).forEach(k=>{ if(c.days[k] && c.days[k].confirmed && k<mCur[0]) months[monthKey(k)]=1; });
+  const open=Object.keys(months).filter(m=>!(c.locks||{})[m]).sort();
+  if(open.length){ const last=open[open.length-1]+"-01";
+    items.push({sev:"warn", t:fmtNum(open.length)+" شهر سابق غير مقفل", d:"آخرها راتب "+monthNameOf(last)+" — القفل يمنع تغيّر أرقام شهر صُرف.",
+      b:"افتح كشفه", go:()=>{ const r=monthOf(last); gotoView("report"); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; runReport(true); }}); }
+  /* ٦) النسخة الاحتياطية */
+  const nb=daysSinceBackup();
+  if(!fileHandle && !backupDir) items.push({sev:"bad", t:"بياناتك داخل المتصفح فقط", d:"بلا ملف داتا ولا مجلد نسخ — مسح بيانات المتصفح يضيّعها.", b:"الإعدادات", go:()=>gotoView("settings")});
+  else if(nb!==null && nb>=3) items.push({sev:"warn", t:"آخر نسخة خارجية قبل "+fmtNum(nb)+" يوم", d:"نسخة اليوم تحمي رواتب هذا الشهر.", b:"نسخة الآن", go:()=>gotoView("settings")});
+  return items;
+}
+function renderAlerts(){
+  const box=el("alertsList"), pn=el("alertsPanel"); if(!box||box.innerHTML===undefined||!pn||!pn.classList) return;
+  let items=[]; try{ items=alertItems(); }catch(e){ items=[]; }
+  alertGo=items.map(x=>x.go);
+  pn.classList.toggle("hidden",!items.length);
+  el("alertsCount").textContent=items.length?fmtNum(items.length)+" تنبيه":"";
+  box.innerHTML=items.map((x,i)=>'<div class="alrt '+x.sev+'"><div><b>'+esc(x.t)+'</b><div class="mini">'+esc(x.d)+'</div></div>'+
+    '<button class="btn sm" data-alrt="'+i+'">'+esc(x.b)+'</button></div>').join("");
+}
+el("alertsList").addEventListener("click",e=>{
+  const b=e.target.closest("[data-alrt]"); if(!b) return;
+  const f=alertGo[+b.dataset.alrt]; if(f) f();
+});
+el("setAbsAlert").addEventListener("change",()=>{
+  S().absAlert=Math.max(0,Math.min(31,parseInt(el("setAbsAlert").value,10)||0)); el("setAbsAlert").value=S().absAlert;
+  queueSave(); scheduleAlerts();
+});
+
+/* ==================== [واجهة] البحث الشامل (Ctrl+K) ====================
+   عامل (اسم، اسم الأم، هاتف) ← جرده التفصيلي لهذا الشهر · رقم وصل ← يفتح الوصل
+   بتبويبه · كتاب (عدد، اسم، جهة، موضوع) ← يفتح بالفورمة. بيانات الشركة الحالية فقط. */
+let gsItems=[], gsAt=0;
+const GS_DOCS=[["leaves","إجازة","leaves","lopen","lvSearch"],["penalties","عقوبة","penalties","popen","pnSearch"],
+  ["achievements","مكافأة","achievements","aopen","acSearch"],["issues","صرف مواد","materials","iopen","mtSearch"]];
+function gsNorm(t){ return String(t||"").replace(/[٠-٩]/g,d=>String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).toLowerCase(); }
+function gsOpenDoc(v,id){
+  gotoView(v[2]);
+  const sx=document.getElementById(v[4]); if(sx){ sx.value=""; sx.dispatchEvent(new Event("input")); }
+  const b=document.querySelector('[data-'+v[3]+'="'+id+'"]'); if(b && b.click) b.click();
+}
+function gsResults(q){
+  const c=C(), out=[], qn=gsNorm(q).trim(); if(!qn) return out;
+  const has=x=>gsNorm(x).indexOf(qn)!==-1;
+  c.workers.filter(w=>workerMatches(w,q)).slice(0,8).forEach(w=>out.push({g:"عامل", t:w.name,
+    d:sectionLabel(w)+" · "+getWorkerStatus(w), go:()=>{ const m=monthOf(curDate); gotoView("ledger");
+      el("lgFrom").value=m[0]; el("lgTo").value=m[1]; el("lgScope").value="worker"; lgTargetFill(); el("lgTarget").value=w.id; runLedger(true); }}));
+  GS_DOCS.forEach(v=>(c[v[0]]||[]).filter(x=>x && has(x.no)).slice(0,6).forEach(x=>out.push({g:v[1], t:x.no,
+    d:(x.name||"")+" · "+dateSlash(x.date||x.from||""), go:()=>gsOpenDoc(v,x.id)})));
+  (c.letters||[]).filter(l=>[l.no,l.title,l.to,l.subject].some(has)).slice(0,6).forEach(l=>out.push({g:"كتاب", t:l.no+(l.title?" — "+l.title:""),
+    d:(l.to||"")+" · "+dateSlash(l.date), go:()=>{ gotoView("form"); lfOpen(l.id); }}));
+  return out;
+}
+function gsRender(){
+  gsItems=gsResults(el("gsInput").value); if(gsAt>=gsItems.length) gsAt=0;
+  const box=el("gsList"); if(!box||box.innerHTML===undefined) return;
+  if(!String(el("gsInput").value||"").trim()){ box.innerHTML='<p class="mini">اكتب للبحث.</p>'; return; }
+  box.innerHTML=gsItems.length ? gsItems.map((x,i)=>'<div class="gsrow'+(i===gsAt?' on':'')+'" role="option" aria-selected="'+(i===gsAt)+'" data-gs="'+i+'">'+
+    '<span class="g">'+esc(x.g)+'</span><b>'+esc(x.t)+'</b><span class="d">'+esc(x.d)+'</span></div>').join("")
+    : '<p class="mini">ماكو نتيجة بهذه الشركة.</p>';
+}
+function gsShow(){ const b=el("gsBack"); if(!b||!b.classList) return; b.classList.remove("hidden"); el("gsInput").value=""; gsAt=0; gsRender();
+  const i=el("gsInput"); if(i.focus) i.focus(); }
+function gsHide(){ const b=el("gsBack"); if(b && b.classList) b.classList.add("hidden"); }
+function gsPick(i){ const x=gsItems[i]; if(!x) return; gsHide(); x.go(); }
+el("gsOpen").onclick=gsShow;
+el("gsClose").onclick=gsHide;
+el("gsBack").addEventListener("click",e=>{ if(e.target===el("gsBack")) gsHide(); });
+el("gsInput").addEventListener("input",()=>{ gsAt=0; gsRender(); });
+el("gsInput").addEventListener("keydown",e=>{
+  if(e.key==="ArrowDown"){ e.preventDefault(); if(gsItems.length){ gsAt=(gsAt+1)%gsItems.length; gsRender(); } }
+  else if(e.key==="ArrowUp"){ e.preventDefault(); if(gsItems.length){ gsAt=(gsAt-1+gsItems.length)%gsItems.length; gsRender(); } }
+  else if(e.key==="Enter"){ e.preventDefault(); gsPick(gsAt); }
+});
+el("gsList").addEventListener("click",e=>{ const r=e.target.closest("[data-gs]"); if(r) gsPick(+r.dataset.gs); });
+document.addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey) && !e.altKey && (e.key==="k"||e.key==="K"||e.code==="KeyK")){ e.preventDefault(); gsShow(); return; }
+  if(e.key==="Escape"){ const b=document.getElementById("gsBack"); if(b && b.classList && !b.classList.contains("hidden")) gsHide(); }
+});
+
 
 function switchView(v){
   ["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form","settings"].forEach(x=>
@@ -10298,7 +10668,8 @@ function switchView(v){
     const on=b.dataset.view===v;
     b.setAttribute("aria-selected",on?"true":"false"); b.tabIndex=on?0:-1; });
   el("tally").classList.toggle("hidden",v!=="daily");
-  if(v==="history") renderHistory();
+  if(v==="history"){ renderHistory(); renderAudit(); }
+  if(v==="daily") scheduleAlerts();
   if(v==="people") renderPeople();
   if(v==="variables") renderVariables();
   if(v==="leaves") initLeaveView();
@@ -10400,6 +10771,7 @@ function refresh(){
   if(!el("view-settings").classList.contains("hidden")) renderCompanies();
   if(!el("view-report").classList.contains("hidden")){ fillSalary(); runReport(); }
   if(!el("view-ledger").classList.contains("hidden")){ lgTargetFill(); if(LG) runLedger(false); }
+  scheduleAlerts();
 }
 /* وصولات الإجازة والعقوبة مرقّمة داخل كل شركة على حدة،
    فلازم تُفرّغ النماذج عند التبديل حتى لا يُحفظ وصل برقم شركة ثانية. */
@@ -10425,7 +10797,7 @@ function resetReceiptForms(){
    فلتر أو صندوق تعديل أو صورة من شركة على شاشة شركة ثانية:
    نص البحث كان يبقى، فكشف رواتب الشركة الثانية يطلع «٠ من ٢ عامل». */
 const COMPANY_SEARCH_IDS=["search","lvSearch","pnSearch","acSearch","mtSearch","histSearch",
-  "dirSearch","varSearch","rpSearch","lgSearch","extTo","lfSearch"];
+  "dirSearch","varSearch","rpSearch","lgSearch","extTo","lfSearch","auditSearch","gsInput"];
 function resetCompanyUI(){
   COMPANY_SEARCH_IDS.forEach(id=>{ const n=document.getElementById(id); if(n) n.value=""; });
   openMonths=null;                 // مجلدات السجل: أحدث شهر للشركة الجديدة مفتوح
@@ -10439,6 +10811,7 @@ function resetCompanyUI(){
   sigCache.src=null; logoCache.src=null; sigLoadGen++;
   /* الفورمة: الكتاب المفتوح والمحرّر يخصّان الشركة السابقة — يُفرَّغان ويُبنيان من جديد */
   lfEditId=null; lfInited=false; lfDirty=false;
+  gsHide();                        // نتائج البحث الشامل تخصّ الشركة السابقة
   const le=document.getElementById("lfEditor"); if(le) le.innerHTML="";
   const x=document.getElementById("extBack"); if(x && x.classList) x.classList.add("hidden");
 }
