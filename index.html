@@ -212,6 +212,11 @@ label.field>span,.field>span:first-child{display:block;font-size:var(--fs-sm);co
 .saved{font-size:var(--fs-sm);color:var(--ink-2);align-self:center}
 .hint{font-size:var(--fs-sm);color:var(--ink-2);margin-top:6px;line-height:1.7}
 .mini{font-size:var(--fs-xs);color:var(--ink-2)}
+/* سطر بيان المدة وملاحظة التذييل بكشف الرواتب والجرد التفصيلي */
+.pline{font-size:var(--fs-sm);color:var(--ink-2);margin:0 0 var(--sp-3);font-variant-numeric:tabular-nums;line-height:1.7}
+.pline b{color:var(--ink)} .pline .pwarn{color:var(--absent);font-weight:var(--fw-bold)}
+.pnote{font-size:var(--fs-xs);color:var(--ink-2);margin:var(--sp-3) 0 0}
+.pnote:empty,.pline:empty{display:none}
 .ltr{direction:ltr;text-align:right;unicode-bidi:embed}
 .subhead{font-size:var(--fs-md);font-weight:var(--fw-bold);color:var(--ink);margin:var(--sp-5) 0 6px;
   padding-top:var(--sp-4);border-top:1px solid var(--line)}
@@ -969,6 +974,7 @@ tr.rowneg td{background:var(--absent-bg)}
       <button class="btn primary sm" id="rpRun">احسب</button>
     </div>
     <div class="panel-body">
+      <div id="rpPeriod" class="pline"></div>
       <div id="rpCards" class="cards"></div>
       <div id="rpWarn"></div>
     </div>
@@ -986,6 +992,7 @@ tr.rowneg td{background:var(--absent-bg)}
     </div>
     <div class="panel-body" style="overflow-x:auto">
       <table id="rpTable"><tbody></tbody></table>
+      <p id="rpNote" class="pnote"></p>
     </div>
   </div>
 
@@ -1118,6 +1125,7 @@ tr.rowneg td{background:var(--absent-bg)}
         <label class="field grow" style="margin:0"><span>بحث</span>
           <input type="text" id="lgSearch" placeholder="اسم العامل أو اسم الأم أو القسم أو الهاتف…"></label>
       </div>
+      <div id="lgPeriod" class="pline" style="margin-top:12px"></div>
       <div id="lgCards" class="cards" style="margin-top:12px"></div>
       <div id="lgWarn"></div>
       <div class="actions">
@@ -2411,6 +2419,21 @@ function wrapFit(c,text,maxW,boxH,size,weight){
   const cap=Math.max(1,Math.floor((boxH-8)/lh));
   if(lines.length>cap){ lines=lines.slice(0,cap); lines[cap-1]=clipText(c,lines[cap-1]+" …",maxW); }
   return {lines:lines, lh:lh, size:s};
+}
+/* [رسم] سطر بمقاطع مختلفة الوزن (بيان المدة): يُرسم من اليمين مقطعاً مقطعاً،
+   ويصغر الخط كله معاً إن لم يسع العرض */
+function drawSegs(c,segs,xR,y,maxW,size){
+  const sep=" · ";
+  const width=sz=>segs.reduce((a,x,i)=>{ c.font=f(x.b?700:400,sz); let w=c.measureText(x.t).width;
+    if(i){ c.font=f(400,sz); w+=c.measureText(sep).width; } return a+w; },0);
+  let sz=size; while(width(sz)>maxW && sz>9) sz-=.5;
+  const d=c.direction,a=c.textAlign; c.direction="rtl"; c.textAlign="right";
+  let x=xR;
+  segs.forEach((s,i)=>{
+    if(i){ c.font=f(400,sz); c.fillText(sep,x,y); x-=c.measureText(sep).width; }
+    c.font=f(s.b?700:400,sz); c.fillText(s.t,x,y); x-=c.measureText(s.t).width;
+  });
+  c.direction=d; c.textAlign=a;
 }
 function drawWrapFit(c,text,xR,yTop,maxW,boxH,size,weight){
   const r=wrapFit(c,text,maxW,boxH,size,weight);
@@ -6120,6 +6143,62 @@ function totalsOf(rows, totalDays){
   return tot;
 }
 
+/* ---- [حساب→وصف] بيان المدة: من أين جاءت «أيام العمل» ----
+   لا حساب جديد هنا: يقسم holidayDatesBetween إلى عطل رسمية (holidayOf أولاً، بنفس
+   أولوية holidayReason) وراحة أسبوعية، ويقرأ المعتمد وغير المعتمد من التقرير نفسه
+   (R.days = recordedDays، R.gaps = missingDays) — فالسطر يطابق الكشف دائماً.
+   أيام المدة = راحة أسبوعية + عطل رسمية + أيام العمل،
+   وأيام العمل = المعتمد + غير معتمد (مرّ ولم يُعتمد) + لم يحلّ بعد. */
+function periodInfo(R){
+  if(!R || R.invalid || !R.from || !R.to || R.from>R.to) return null;
+  const hol=holidayDatesBetween(R.from,R.to), official=[]; let weekly=0;
+  hol.forEach(d=>{ const h=holidayOf(d); if(h) official.push({date:d,name:h.name||"عطلة رسمية"}); else weekly++; });
+  const periodDays=daysBetween(R.from,R.to)+1, work=periodDays-hol.length;
+  const confirmed=(R.days||[]).length, missing=(R.gaps||[]).slice();
+  return {from:R.from, to:R.to, periodDays:periodDays, weekly:weekly, official:official, work:work,
+    confirmed:confirmed, missing:missing, pending:Math.max(0,work-confirmed-missing.length),
+    wdNames:(S().weekendDays||[]).slice().sort((a,b)=>a-b).map(i=>WD_NAMES[i])};
+}
+/* «أ، ب وج» */
+function listAnd(a){ return a.length<2 ? a.join("") : a.slice(0,-1).join("، ")+" و"+a[a.length-1]; }
+/* رقم اليوم وحده داخل شهر واحد، ويوم/شهر إن امتدت المدة */
+function periodDayRef(P,d){
+  return P.from.slice(0,7)===P.to.slice(0,7) ? fmtNum(+d.slice(8)) : fmtNum(+d.slice(8))+"/"+fmtNum(+d.slice(5,7));
+}
+/* مقاطع السطر: {t نص، b عريض، warn أيام غير معتمدة} — مصدر واحد للشاشة والوورد والرسم والطباعة */
+function periodSegs(P){
+  const s=[{t:"أيام المدة "+fmtNum(P.periodDays)}];
+  if(P.weekly || P.wdNames.length) s.push({t:"راحة أسبوعية "+fmtNum(P.weekly)+(P.wdNames.length?" ("+listAnd(P.wdNames)+")":"")});
+  if(P.official.length){
+    const names=P.official.map(h=>h.name).filter((n,i,a)=>a.indexOf(n)===i);
+    /* أكثر من ٣ عطل: العدد وحده هنا، والتفاصيل بالتذييل (periodHolidayDetail) */
+    s.push({t:"عطل رسمية "+fmtNum(P.official.length)+(P.official.length<=3?" ("+names.join("، ")+")":"")});
+  }
+  s.push({t:"أيام العمل "+fmtNum(P.work), b:true});
+  if(!P.missing.length && !P.pending) s.push({t:"المعتمد منها "+fmtNum(P.confirmed)});
+  else{
+    s.push({t:"المعتمد "+fmtNum(P.confirmed)});
+    if(P.missing.length){
+      const ref=P.missing.slice(0,6).map(d=>periodDayRef(P,d));
+      s.push({t:"غير معتمد "+fmtNum(P.missing.length)+" ("+(P.missing.length>6?ref.join("، ")+" …":listAnd(ref))+")", warn:true});
+    }
+    if(P.pending) s.push({t:"لم تحلّ بعد "+fmtNum(P.pending)});
+  }
+  return s;
+}
+const PERIOD_SEP=" · ";
+function periodLineText(P){ return P ? periodSegs(P).map(x=>x.t).join(PERIOD_SEP) : ""; }
+function periodLineHtml(P){
+  return P ? periodSegs(P).map(x=>x.b?'<b>'+esc(x.t)+'</b>':(x.warn?'<span class="pwarn">'+esc(x.t)+'</span>':esc(x.t))).join(PERIOD_SEP) : "";
+}
+/* ملاحظة التذييل — مرة واحدة بكل مخرج رواتب */
+const PERIOD_NOTE="العطل مدفوعة ولا تُستقطع؛ استثناؤها من أيام الجرد لا ينقص الراتب. الراتب يُحسب شهرياً كاملاً، والاستقطاع يقع على أيام الغياب فقط.";
+function periodHolidayDetail(P){
+  if(!P || P.official.length<=3) return "";
+  return "العطل الرسمية بالمدة: "+P.official.map(h=>periodDayRef(P,h.date)+" "+h.name).join("، ")+".";
+}
+function periodNoteText(P){ const d=periodHolidayDetail(P); return PERIOD_NOTE+(d?" "+d:""); }
+
 /* ==================== [محرّك] الجرد التفصيلي ====================
    الجرد التفصيلي لا يحسب شيئاً من عنده: كل رقم مالي يُقرأ من صف
    buildReport للعامل نفسه، وكل يوم يُصنَّف بـ classifyDay نفسها التي
@@ -6304,7 +6383,7 @@ function runReport(manual){
   }
   if(!sameMonth(from,to)){
     RP=null;
-    el("rpCards").innerHTML="";
+    el("rpCards").innerHTML=""; el("rpPeriod").innerHTML=""; el("rpNote").textContent="";
     el("rpTable").innerHTML="";
     el("rpWarn").innerHTML='<div class="errbox"><b>المدى يمتد على أكثر من شهر — الحساب مرفوض.</b><br>'+
       'الرواتب شهرية، وحساب مدى متعدد الأشهر يطبّق راتب شهر واحد على شهرين فيطلع نصف راتب لكل عامل.'+
@@ -6336,8 +6415,8 @@ function rpTot(){ return RP ? totalsOf(rpRows(), RP.totalDays) : null; }
 function rpScopeText(){
   if(!RP) return "";
   const q=rpQuery(), n=rpRows().length, all=RP.rows.length;
-  let t="المدة من "+dateNumeric(RP.from)+" إلى "+dateNumeric(RP.to)+
-    "  ·  أيام معتمدة: "+fmtNum(RP.days.length);
+  /* عدد الأيام انتقل لسطر بيان المدة (periodLineText) مع تفصيله */
+  let t="المدة من "+dateNumeric(RP.from)+" إلى "+dateNumeric(RP.to);
   if(q) t+="  ·  بحث: "+q+" ("+fmtNum(n)+" من "+fmtNum(all)+" عامل)";
   return t;
 }
@@ -6346,6 +6425,9 @@ function renderReport(){
   const st=S(), cur=st.currency||"";
   const d=RP.days.length;
   const rows=rpRows(), T=rpTot(), q=rpQuery();
+  const P=periodInfo(RP);
+  el("rpPeriod").innerHTML=periodLineHtml(P);
+  el("rpNote").textContent=P?periodNoteText(P):"";
   el("rpCards").innerHTML=[
     ['<div class="card hero"><div class="k">صافي الرواتب</div><div class="v">'+fmtMoney(T.net)+'</div><div class="k">'+esc(cur)+'</div></div>'],
     ['<div class="card"><div class="k">أيام مجرودة</div><div class="v">'+fmtNum(d)+'</div></div>'],
@@ -6778,10 +6860,12 @@ function drawReportPage(rows, pageNo, pages, k){
 
   let y=hTop+hH+30;
   ctx.fillStyle=CLR.ink2; ctx.font=f(600,17);
-  ctx.fillText("المدة: من "+dateNumeric(RP.from)+" إلى "+dateNumeric(RP.to)+"   ·   أيام مجرودة: "+fmtNum(RP.days.length),R,y);
+  ctx.fillText("المدة: من "+dateNumeric(RP.from)+" إلى "+dateNumeric(RP.to),R,y);
   ctx.textAlign="left";
   ctx.fillText("صفحة "+fmtNum(pageNo)+" من "+fmtNum(pages),L,y);
   ctx.textAlign="right";
+  const P=periodInfo(RP);
+  if(P){ y+=28; ctx.fillStyle=CLR.ink; drawSegs(ctx,periodSegs(P),R,y,W,15); }
   y+=22;
 
   // رأس الجدول — كل عمود يحمل مفتاحه، والقيمة واللون يُطلبان بالمفتاح.
@@ -6888,9 +6972,9 @@ function drawReportPage(rows, pageNo, pages, k){
       " يوم   ·   نسبة الحضور: "+fmtNum(Math.round(T.rate*100))+"%",R,y,W,14,400,{keep:true});
     y+=24;
     const anyPartial=SRC.some(x=>x.partial);
-    ctx.font=f(400,13); ctx.fillStyle=CLR.ink2;
-    ctx.fillText("أيام العمل بالمدة: "+fmtNum(RP.totalDays)+" (بعد استبعاد العطل وأيام الراحة)"+
-      (anyPartial?"   ·   (*) راتب نسبي: حُسم أجر أيام خارج الخدمة من الراتب الكامل":""),R,y);
+    ctx.fillStyle=CLR.ink2;
+    if(anyPartial){ fitFill(ctx,"(*) راتب نسبي: حُسم أجر أيام خارج الخدمة من الراتب الكامل",R,y,W,13,400); y+=22; }
+    if(P){ const r=wrapFit(ctx,periodNoteText(P),W,60,13,400); r.lines.forEach(t=>{ ctx.fillText(t,R,y); y+=r.lh; }); y-=r.lh; }
     y+=26;
     // توقيع
     const sx=L+40, ly=Math.min(SH_H-PAD-60,y+50);
@@ -7071,7 +7155,15 @@ function wPara(t,o){
        '" w:line="240" w:lineRule="auto"/>';
   pPr+='<w:jc w:val="'+jc+'"/>';
   pPr+='</w:pPr>';
-  return '<w:p>'+pPr+(t===""?"":wRun(t,o))+'</w:p>';
+  /* o.runs: مقاطع بتنسيق مختلف داخل الفقرة نفسها [{t, bold, color}] */
+  const body=o.runs ? o.runs.map(r=>wRun(r.t,Object.assign({},o,r))).join("") : (t===""?"":wRun(t,o));
+  return '<w:p>'+pPr+body+'</w:p>';
+}
+/* سطر بيان المدة بالوورد: «أيام العمل» عريضة، والفاصل مقطع عادي */
+function wPeriodPara(P,o){
+  if(!P) return "";
+  const runs=[]; periodSegs(P).forEach((x,i)=>{ if(i) runs.push({t:PERIOD_SEP,bold:false}); runs.push({t:x.t,bold:!!x.b}); });
+  return wPara("",Object.assign({runs:runs,size:9,color:CL().ink},o||{}));
 }
 /* فاصل بارتفاع معروف بالتويب: الفقرة الفارغة العادية تأخذ ارتفاع
    سطر كامل (٢٤٠ تويب) وتختلف بين وورد وغيره، فتخرب حساب ارتفاع الصفحة.
@@ -7785,6 +7877,8 @@ function payrollDocx(){
   const PAY_FULL=16838-560*2;
   const SRC=rpRows(), t=rpTot();
   let b=docHeader("كشف الحضور والرواتب", rpScopeText(), PAY_FULL);
+  const P=periodInfo(RP);
+  b+=wPeriodPara(P,{align:"right",after:100});
 
   /* عمود «الحالة» مستقل بين الاسم والقسم: كلمة واحدة ملوّنة، وخلية
      المستمر تبقى فارغة حتى يلفت غير المستمر النظر. خلية الاسم لا
@@ -7839,6 +7933,7 @@ function payrollDocx(){
   if(RP.gaps.length)
     b+=wPara("تنبيه: "+fmtNum(RP.gaps.length)+" يوم عمل ضمن المدة لم يُعتمد بعد.",
       {size:10,color:CLR.absent,bold:true});
+  if(P) b+=wPara(periodNoteText(P),{size:8,color:CLR.ink2,before:60,after:0});
 
   b+=docSignature(media);
   return buildDocx(b,{landscape:true,media:media,margin:560});
@@ -8517,6 +8612,9 @@ function lgCss(){
   let css='.lg{font:400 8.8pt/1.35 '+FF+';color:'+CLR.ink+';direction:rtl;background:#fff;'+
       '-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:right}'+
     '.lg *{box-sizing:border-box}'+
+    '.lg .pline{font-size:8.8pt;color:'+CLR.ink+';margin:0 0 5px;font-variant-numeric:tabular-nums}'+
+    '.lg .pline .pwarn{font-weight:700}'+
+    '.lg .pnote{font-size:7.5pt;color:'+CLR.ink2+';margin:6px 0 4px}'+
     '.lg .lg-hd{display:flex;align-items:center;gap:10px;border-bottom:3px solid '+CLR.gold+';padding-bottom:5px;margin-bottom:7px}'+
     '.lg .lg-hd img{max-height:15mm;max-width:32mm;object-fit:contain}'+
     '.lg .lg-co{font-size:14pt;font-weight:800;color:'+CLR.purple+';line-height:1.2}'+
@@ -9012,7 +9110,7 @@ function lgInit(){
 function runLedger(manual){
   let from=el("lgFrom").value, to=el("lgTo").value;
   if(!from||!to){ const r=monthRange(0); from=from||r[0]; to=to||r[1]; el("lgFrom").value=from; el("lgTo").value=to; }
-  const fail=msg=>{ LG=null; el("lgCards").innerHTML=""; el("lgBody").innerHTML="";
+  const fail=msg=>{ LG=null; el("lgCards").innerHTML=""; el("lgPeriod").innerHTML=""; el("lgBody").innerHTML="";
     el("lgWarn").innerHTML='<div class="errbox">'+msg+'</div>'; };
   if(from>to){ fail("<b>تاريخ البداية بعد تاريخ النهاية.</b>"); if(manual) alertBox("تاريخ البداية بعد تاريخ النهاية."); return; }
   if(!sameMonth(from,to)){
@@ -9066,6 +9164,8 @@ function renderLedger(){
   const sc=el("lgScope").value;
   const S0=lgScopeRows(), list=S0.shown.map(r=>lgLedger(r.id)).filter(Boolean);
   const t=ledgerTotals(list), diff=ledgerVsPayroll(list, S0.shown);
+  const P=periodInfo(LG.rp);
+  el("lgPeriod").innerHTML=periodLineHtml(P);
   el("lgCards").innerHTML=
     '<div class="card"><div class="k">عمال بالجرد</div><div class="v">'+fmtNum(list.length)+'</div></div>'+
     '<div class="card good"><div class="k">حضور</div><div class="v">'+fmtNum(t.present)+'</div></div>'+
@@ -9089,7 +9189,7 @@ function renderLedger(){
     ab.textContent=lgAll?"الأيام غير الاعتيادية فقط":"أظهر كل الأيام"; }
   if(!list.length){ el("lgBody").innerHTML='<p class="hint">ماكو عمال ضمن هذا النطاق.</p>'; return; }
   const one=list.length===1;
-  el("lgBody").innerHTML=list.map(L=>{
+  el("lgBody").innerHTML=(P?'<p class="pnote" style="margin:0 0 8px">'+esc(periodNoteText(P))+'</p>':'')+list.map(L=>{
     const r=L.row, open=one || lgOpen.has(L.w.id);
     return '<div class="mfold lgfold'+(open?" open":"")+'">'+
       '<div class="mhead" data-lgw="'+L.w.id+'" tabindex="0" role="button" aria-expanded="'+(open?"true":"false")+'">'+
@@ -9169,11 +9269,14 @@ el("lgPrint").onclick=()=>{
      بالعرض الموسّع كل عامل يبدأ بصفحة جديدة كما كان. */
   const head=lgHeadLine({from:LG.from, to:LG.to, printed:true,
     no:single?list[0].no:"", sub:single?list[0].info.name:lgScopeText()});
-  let rows=list.map((L,i)=>'<tr class="lgrow'+(full&&i>0?' pb':'')+'"><td><div class="lgw'+(i===list.length-1?' last':'')+'">'+
-    lgSheet(L,{allDays:lgAll})+(single?lgSigsHtml(true,L.info.name):'')+'</div></td></tr>').join("");
+  /* بيان المدة مرة واحدة أول الوثيقة، وملاحظة العطل مرة واحدة قبل التوقيع */
+  const P=periodInfo(LG.rp), pnote=P?'<p class="pnote">'+esc(periodNoteText(P))+'</p>':'';
+  let rows=(P?'<tr><td><div class="pline">'+periodLineHtml(P)+'</div></td></tr>':'')+
+    list.map((L,i)=>'<tr class="lgrow'+(full&&i>0?' pb':'')+'"><td><div class="lgw'+(i===list.length-1?' last':'')+'">'+
+    lgSheet(L,{allDays:lgAll})+(single?pnote+lgSigsHtml(true,L.info.name):'')+'</div></td></tr>').join("");
   if(!single)
     rows+='<tr class="lgrow pb"><td><div class="h5" style="font-size:10.5pt">التغييرات خلال الشهر وخلاصة الجرد</div>'+
-      lgSummaryHtml(list, LG.from, LG.to, lgScopeRows().shown)+lgSigsHtml(false)+'</td></tr>';
+      lgSummaryHtml(list, LG.from, LG.to, lgScopeRows().shown)+pnote+lgSigsHtml(false)+'</td></tr>';
   w.document.write(PRINT_DOC_OPEN+'<title>الجرد التفصيلي</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:9mm 10mm 13mm;'+printPageFootCss()+'}html,body{margin:0;padding:0;background:#fff;direction:rtl}'+
     lgCss()+
@@ -9479,6 +9582,10 @@ function ledgerDocx(list){
       {raw:true,width:LG_FULL,valign:"top"})])),{frame:"rows",border:BRD,borderSize:8,grid:[LG_FULL]});
   }
   if(!single) body+=pageBreakXml()+lgSummaryDocXml(list,m,CLR);
+  /* بيان المدة أول الوثيقة مرة واحدة، وملاحظة العطل مرة واحدة قبل التوقيع */
+  const P=periodInfo(LG.rp);
+  body=wPeriodPara(P,{align:"right",after:80})+body;
+  if(P) body+=wPara(periodNoteText(P),{size:7.5,color:CLR.ink2,before:80,after:0});
   body+=lgDocSigs(single, single?list[0].info.name:"", m, CLR);
   return buildDocx(body,{media:m.media, header:head, footer:wPageFoot(),
     pgMar:{top:1300,bottom:900,right:LG_MG,left:LG_MG,header:320,footer:360}});
@@ -9684,6 +9791,7 @@ function resetCompanyUI(){
   editWorkerId=null; editSecId=null; editDirId=null;
   extSel=null;
   LG=null; lgOpen=new Set();      // الجرد التفصيلي يُبنى من جديد لبيانات الشركة الجديدة
+  ["lgCards","lgPeriod","lgBody","lgWarn"].forEach(id=>{ const n=document.getElementById(id); if(n) n.innerHTML=""; });
   const lt=document.getElementById("lgTarget"); if(lt) lt.innerHTML="";
   const ls=document.getElementById("lgScope"); if(ls) ls.value="all";   // العامل/القسم المختار يخصّ الشركة السابقة
   const lst=document.getElementById("lgStatus"); if(lst) lst.value="";

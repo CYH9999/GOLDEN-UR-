@@ -502,6 +502,53 @@ try{
     check(fn+" — الجدول بتخطيط ثابت", /<w:tblLayout w:type="fixed"\/>/.test(d), true);
     if(fn!=="payrollDocx") check(fn+" — الهاتف بلا التفاف", /<w:noWrap\/>/.test(d), true);
   });
+
+  /* ---- ١٢) سطر بيان المدة ---- */
+  group("١٢ · سطر بيان المدة (أيلول ٢٠٢٦: ٤ جُمع + عطلة رسمية)");
+  const w12=await boot();
+  const HOL=[{date:"2026-09-10",name:"عيد الغدير"}];
+  load(w12,stateOf([company({settings:{holidays:HOL},workers:[{id:"a",name:"أحمد"},{id:"b",name:"باسم"}]})]));
+  const per=()=>JSON.parse(w12.eval('JSON.stringify((function(){ RP=buildReport("2026-09-01","2026-09-30"); applyPaySort(); var P=periodInfo(RP);'+
+    'return {P:P, line:periodLineText(P), note:periodNoteText(P), days:RP.days.length, total:RP.totalDays}; })())'));
+  let q=per();
+  check("أيام المدة", q.P.periodDays, 30);
+  check("راحة أسبوعية (الجُمع ٤، ١١، ١٨، ٢٥)", q.P.weekly, 4);
+  check("عطل رسمية", q.P.official.length, 1);
+  check("أيام العمل = ٣٠ − ٤ − ١", q.P.work, 25);
+  check("المعتمد = أيام الكشف المعتمدة نفسها", q.P.confirmed, q.days);
+  check("السطر كاملاً", q.line, "أيام المدة 30 · راحة أسبوعية 4 (الجمعة) · عطل رسمية 1 (عيد الغدير) · أيام العمل 25 · المعتمد منها 25");
+  check("ملاحظة التذييل بالنص المطلوب", q.note, "العطل مدفوعة ولا تُستقطع؛ استثناؤها من أيام الجرد لا ينقص الراتب. الراتب يُحسب شهرياً كاملاً، والاستقطاع يقع على أيام الغياب فقط.");
+  /* يومان غير معتمدين (٥ و١٢ سبتان) */
+  w12.eval('C().days["2026-09-05"].confirmed=false; C().days["2026-09-12"].confirmed=false;');
+  q=per();
+  check("غير المعتمد يظهر صراحة بأرقام أيامه", q.line, "أيام المدة 30 · راحة أسبوعية 4 (الجمعة) · عطل رسمية 1 (عيد الغدير) · أيام العمل 25 · المعتمد 23 · غير معتمد 2 (5 و12)");
+  check("المعادلة: المدة = راحة + عطل + عمل، والعمل = معتمد + غير معتمد + لم يحلّ",
+    q.P.periodDays===q.P.weekly+q.P.official.length+q.P.work && q.P.work===q.P.confirmed+q.P.missing.length+q.P.pending, true);
+  /* الشاشة والوورد والرسم والجرد التفصيلي */
+  w12.eval('switchView("report"); el("rpFrom").value="2026-09-01"; el("rpTo").value="2026-09-30"; runReport(true);');
+  check("الشاشة: السطر فوق البطاقات", w12.eval('el("rpPeriod").textContent'), q.line);
+  check("الشاشة: «أيام العمل» عريضة", w12.eval('el("rpPeriod").querySelector("b").textContent'), "أيام العمل 25");
+  check("الشاشة: الملاحظة تحت الجدول", w12.eval('el("rpNote").textContent'), q.note);
+  const pz=unzipStored(new Uint8Array(w12.eval("Array.from(payrollDocx())")))["word/document.xml"];
+  const cnt=(x,t)=>x.split(t).length-1;
+  check("كشف الرواتب Word: «أيام العمل 25» تشغيل عريض", /<w:b\/><w:bCs\/>(?:(?!<\/w:r>).)*أيام العمل 25/.test(pz), true);
+  check("كشف الرواتب Word: غير المعتمد ظاهر", pz.indexOf("غير معتمد 2 (5 و12)")>0, true);
+  check("كشف الرواتب Word: الملاحظة مرة واحدة", cnt(pz,"العطل مدفوعة ولا تُستقطع"), 1);
+  check("صفحة الكشف المرسومة تُبنى بالسطر", w12.eval('(function(){ var a=rpRows().map(function(r,i){return Object.assign({},r,{idx:i+1});}); return typeof drawReportPage(a,1,1,1); })()'), "string");
+  w12.eval('switchView("ledger"); el("lgScope").value="all"; el("lgFrom").value="2026-09-01"; el("lgTo").value="2026-09-30"; runLedger(false);');
+  check("الجرد التفصيلي (شاشة): نفس السطر", w12.eval('el("lgPeriod").textContent'), q.line);
+  w12.eval('C().days["2026-09-05"].confirmed=true; C().days["2026-09-12"].confirmed=true; runLedger(false);');
+  const lz=unzipStored(new Uint8Array(w12.eval("Array.from(ledgerDocx(lgList()))")))["word/document.xml"];
+  check("الجرد التفصيلي Word: السطر مرة واحدة", cnt(lz,"راحة أسبوعية 4 (الجمعة)"), 1);
+  check("الجرد التفصيلي Word: الملاحظة مرة واحدة", cnt(lz,"العطل مدفوعة ولا تُستقطع"), 1);
+  const lp=w12.eval('(function(){ var h=""; var op=window.open; window.open=function(){ return {document:{write:function(x){h+=x;},close:function(){}},focus:function(){},print:function(){}}; }; el("lgPrint").onclick(); window.open=op; return h; })()');
+  check("الجرد التفصيلي (طباعة): السطر مرة والملاحظة مرة", [cnt(lp,'class="pline"'),cnt(lp,"العطل مدفوعة ولا تُستقطع")].join("/"), "1/1");
+  /* أكثر من ٣ عطل: العدد وحده بالسطر والتفاصيل بالتذييل */
+  w12.eval('S().holidays=[{date:"2026-09-01",name:"أ"},{date:"2026-09-02",name:"ب"},{date:"2026-09-03",name:"ج"},{date:"2026-09-10",name:"عيد الغدير"}];');
+  q=per();
+  check("أكثر من ٣ عطل: العدد وحده بالسطر", q.line.indexOf("عطل رسمية 4 ·")>0 && q.line.indexOf("(أ")<0, true, q.line);
+  check("أكثر من ٣ عطل: التفاصيل بالتذييل", q.note.indexOf("العطل الرسمية بالمدة: 1 أ، 2 ب، 3 ج، 10 عيد الغدير.")>0, true);
+  check("أكثر من ٣ عطل: أيام العمل = ٣٠ − ٤ − ٤", q.P.work, 22);
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
