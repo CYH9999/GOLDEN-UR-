@@ -82,6 +82,8 @@ function render(){
    من خادم محلي: يُقرأ ../index.html مباشرة. من file:// يمنع المتصفح القراءة،
    فيظهر زر لاختيار الملف يدوياً — اختيار المستخدم مسموح بلا خادم ولا إنترنت. */
 const PRELUDE=`<script>(function(){
+  /* البرنامج يطلب الدخول للخادم قبل الإقلاع؛ الفحص بلا خادم فيُقلعه مباشرة */
+  window.__JARD_TEST__=true;
   var mem={};
   try{ Object.defineProperty(window,'localStorage',{configurable:true,value:{
     getItem:function(k){return Object.prototype.hasOwnProperty.call(mem,k)?mem[k]:null;},

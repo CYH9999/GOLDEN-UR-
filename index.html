@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>نظام الجرد اليومي — v4.0</title>
+<!-- الخادم: مكتبة Supabase ثم طبقة الخادم db.js — كل استدعاء للخادم يمرّ من db.js حصراً -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="db.js"></script>
 <style>
 /* =====================================================================
    نظام التصميم — v4.0
@@ -191,7 +194,7 @@ section[role="tabpanel"]{animation:fadeIn .18s var(--ease)}
 .btn[aria-pressed="true"]{background:var(--brand-soft);color:var(--brand-text);border-color:var(--brand)}
 
 /* ---- الحقول: عنوان فوق كل حقل، ارتفاع مريح، وحلقة تركيز واضحة ---- */
-input[type=text],input[type=date],input[type=number],input[type=search],input[type=tel],input[type=email],input:not([type]),select,textarea{border:1px solid var(--line-strong);
+input[type=text],input[type=date],input[type=number],input[type=search],input[type=tel],input[type=email],input[type=password],input:not([type]),select,textarea{border:1px solid var(--line-strong);
   border-radius:var(--r-md);padding:7px 12px;background:var(--panel);width:100%;min-height:var(--ctl-h);
   transition:border-color .15s,box-shadow .15s}
 select{padding-inline-end:28px}
@@ -465,6 +468,49 @@ tr.rowneg td{background:var(--absent-bg)}
   pointer-events:none;transition:opacity .2s,transform .2s var(--ease);z-index:70}
 .toast.on{opacity:1;transform:translate(50%,0)}
 
+/* =================== شاشة الدخول ===================
+   تغطّي الصفحة كلها حتى يكتمل الدخول وتحميل الصلاحيات ثم فتح البرنامج؛
+   البرنامج نفسه (#app) مخفي تحتها ولا يُقلع قبلها. */
+.auth{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;
+  padding:var(--sp-4);background:var(--ground);overflow:auto}
+.auth::before{content:"";position:fixed;inset-inline:0;top:0;height:3px;background:linear-gradient(to left,var(--brand),var(--gold))}
+.authbox{width:min(400px,100%);background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--sh-2);padding:var(--sp-5)}
+.authbrand{display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-5)}
+.authbrand .mk{width:40px;height:40px;border-radius:var(--r-md);flex:none;background:var(--brand);color:var(--on-brand);
+  display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);font-weight:var(--fw-black);
+  box-shadow:inset 0 -3px 0 var(--gold)}
+.authbrand b{display:block;font-size:var(--fs-lg);font-weight:var(--fw-bold);color:var(--ink);line-height:1.3}
+.authbrand small{display:block;font-size:var(--fs-xs);color:var(--ink-2)}
+.authbox h1{margin:0 0 var(--sp-4);font-size:var(--fs-xl);font-weight:var(--fw-bold);color:var(--ink)}
+.authbox .btn.primary{width:100%;margin-top:var(--sp-3)}
+.authbox .errbox{margin:0 0 var(--sp-2)}
+.authwait{display:flex;align-items:center;gap:10px;color:var(--ink-2);font-size:var(--fs-sm);min-height:var(--ctl-h)}
+.authwait::before{content:"";width:16px;height:16px;border-radius:50%;flex:none;
+  border:2px solid var(--line-strong);border-top-color:var(--brand);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.authmsg{margin:0 0 var(--sp-3);font-size:var(--fs-md);color:var(--ink);line-height:1.8}
+
+/* ---- المستخدم الحالي بالشريط العلوي: الاسم، شارات الرولات بألوانها، والخروج ---- */
+.ubox{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;min-width:0}
+.uname{display:inline-flex;align-items:center;gap:8px;min-height:var(--ctl-h-sm);padding:2px 12px 2px 3px;
+  border:1px solid var(--line);border-radius:var(--r-pill);background:var(--surface-2);color:var(--ink);
+  font-size:var(--fs-sm);font-weight:var(--fw-bold);white-space:nowrap;max-width:220px}
+.uname:hover{border-color:var(--line-strong);background:var(--surface-3)}
+.uname .av{width:26px;height:26px;border-radius:50%;flex:none;background:var(--brand);color:var(--on-brand);
+  display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:var(--fw-black)}
+.uname .nm{overflow:hidden;text-overflow:ellipsis}
+.uroles{display:flex;gap:4px;flex-wrap:wrap}
+/* لون الرول من الخادم (--rc): حدّ ونقطة وخلفية خفيفة، والنص بلون الواجهة فيبقى مقروءاً بالوضعين */
+.rbadge{position:relative;display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:var(--r-pill);
+  border:1px solid var(--rc,var(--brand));color:var(--ink);font-size:var(--fs-xs);font-weight:var(--fw-bold);
+  white-space:nowrap;overflow:hidden;line-height:1.6}
+.rbadge::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--rc,var(--brand));flex:none}
+.rbadge::after{content:"";position:absolute;inset:0;background:var(--rc,var(--brand));opacity:.13;pointer-events:none}
+.merole{border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px;background:var(--panel)}
+.merole .sc{font-size:var(--fs-sm);color:var(--ink-2);margin:6px 0 4px}
+.merole ul{margin:0;padding-inline-start:20px;font-size:var(--fs-sm)}
+
 /* =================== الشاشات الأضيق =================== */
 @media(max-width:1280px){ :root{--side-w:208px} .wrap,.tally{padding-inline:var(--sp-4)} }
 /* لوحي وهاتف: الشريط الجانبي يصير شريطاً أفقياً قابلاً للتمرير تحت الشريط العلوي */
@@ -487,8 +533,9 @@ tr.rowneg td{background:var(--absent-bg)}
 }
 @media(max-width:560px){
   .topbar .brand small{display:none}
-  .coBox,.datebox{flex:1 1 100%}
+  .coBox,.datebox,.ubox{flex:1 1 100%}
   .coBox select,.datebox input{flex:1}
+  .authbox{padding:var(--sp-4)}
   .grid{grid-template-columns:1fr}
   .panel-head{padding:var(--sp-2) var(--sp-3)}
   .panel-body{padding:var(--sp-3)}
@@ -509,7 +556,33 @@ tr.rowneg td{background:var(--absent-bg)}
 </head>
 <body>
 
-<div class="app" id="app">
+<!-- ===== شاشة الدخول: لا يظهر شيء من البرنامج قبل اكتمال الدخول ===== -->
+<div class="auth" id="authScreen">
+  <div class="authbox">
+    <div class="authbrand"><span class="mk" aria-hidden="true">ج</span>
+      <div><b>نظام الجرد اليومي</b><small>الجرد والرواتب — حساب مشترك</small></div></div>
+    <div class="authwait" id="authWait" role="status" aria-live="polite">جارٍ التحقق من الجلسة…</div>
+    <form id="authForm" class="hidden" novalidate>
+      <h1>تسجيل الدخول</h1>
+      <label class="field"><span>البريد الإلكتروني</span>
+        <input type="email" id="authEmail" dir="ltr" autocomplete="username" inputmode="email"
+          autocapitalize="off" spellcheck="false" required></label>
+      <label class="field"><span>كلمة المرور</span>
+        <input type="password" id="authPass" dir="ltr" autocomplete="current-password" required></label>
+      <div id="authErr" role="alert"></div>
+      <button class="btn primary" id="authGo" type="submit">دخول</button>
+    </form>
+    <div id="authBlocked" class="hidden">
+      <p class="authmsg" id="authBlockedMsg" role="alert"></p>
+      <div class="actions">
+        <button class="btn primary" id="authRetry" type="button">إعادة المحاولة</button>
+        <button class="btn ghost" id="authOut" type="button">تسجيل الخروج</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app hidden" id="app">
 <header class="topbar">
   <div class="brand"><span class="mk" id="tbMark" aria-hidden="true">ج</span><span>نظام الجرد اليومي<small id="tbCompany">—</small></span></div>
   <div class="coBox">
@@ -519,6 +592,11 @@ tr.rowneg td{background:var(--absent-bg)}
   <div class="spacer"></div>
   <button class="btn sm ghost gsopen" id="gsOpen" title="بحث شامل: عامل، رقم وصل، كتاب (Ctrl+K)">بحث… <kbd>Ctrl+K</kbd></button>
   <span class="dbbadge ok" id="dbBadge" role="status" aria-live="polite">جاهز</span>
+  <div class="ubox hidden" id="uBox">
+    <button class="uname" id="uName" type="button" title="حسابي: الرولات والصلاحيات"></button>
+    <span class="uroles" id="uRoles"></span>
+    <button class="btn sm ghost" id="uLogout" type="button">خروج</button>
+  </div>
   <div class="datebox">
     <label class="lbl" for="dateInput">التاريخ</label>
     <input type="date" id="dateInput">
@@ -10669,7 +10747,9 @@ el("gsInput").addEventListener("keydown",e=>{
 });
 el("gsList").addEventListener("click",e=>{ const r=e.target.closest("[data-gs]"); if(r) gsPick(+r.dataset.gs); });
 document.addEventListener("keydown",e=>{
-  if((e.ctrlKey||e.metaKey) && !e.altKey && (e.key==="k"||e.key==="K"||e.code==="KeyK")){ e.preventDefault(); gsShow(); return; }
+  if((e.ctrlKey||e.metaKey) && !e.altKey && (e.key==="k"||e.key==="K"||e.code==="KeyK")){
+    if(!stateLoaded) return;   // قبل الدخول: البحث يفتح تحت شاشة الدخول ويسرق التركيز من النموذج
+    e.preventDefault(); gsShow(); return; }
   if(e.key==="Escape"){ const b=document.getElementById("gsBack"); if(b && b.classList && !b.classList.contains("hidden")) gsHide(); }
 });
 
@@ -10841,13 +10921,144 @@ function bootView(){
   const fv=document.getElementById("view-form"); if(fv && !fv.classList.contains("hidden")) lfInit();
 }
 
+/* ==================== [واجهة] الدخول والهوية ====================
+   البرنامج لا يُقلع قبل اكتمال الدخول: شاشة الدخول تغطّي كل شيء، و init()
+   لا تُنادى إلا بعد أن تُعرف هوية المستخدم ورولاته (ME من db.js). الجلسة
+   محفوظة بالمتصفح فلا يُطلب الدخول مع كل فتح.
+   الإخفاء هنا ترتيب للعرض فقط — الحماية الفعلية بسياسات RLS على الخادم. */
+let authEntered=false;
+/* mode: "wait" انتظار · "form" نموذج الدخول · "blocked" رسالة مع إعادة المحاولة/الخروج */
+function authView(mode,msg,opts){
+  opts=opts||{};
+  el("authWait").classList.toggle("hidden",mode!=="wait");
+  el("authForm").classList.toggle("hidden",mode!=="form");
+  el("authBlocked").classList.toggle("hidden",mode!=="blocked");
+  if(mode==="wait") el("authWait").textContent=msg||"جارٍ التحقق من الجلسة…";
+  if(mode==="blocked"){
+    el("authBlockedMsg").textContent=msg||"";
+    el("authRetry").classList.toggle("hidden",opts.retry===false);
+    el("authOut").classList.toggle("hidden",opts.out===false);
+  }
+  if(mode==="form"){
+    el("authErr").innerHTML=msg?'<div class="errbox">'+esc(msg)+'</div>':"";
+    const f=el(el("authEmail").value?"authPass":"authEmail");
+    try{ f.focus(); }catch(e){}
+  }
+}
+async function authStart(){
+  applyTheme();   // الوضع الفاتح/الداكن المختار بهذا الجهاز يسري على شاشة الدخول أيضاً
+  if(typeof dbReady!=="function" || !dbReady()){
+    authView("blocked","تعذّر تحميل مكتبة الاتصال بالخادم. تأكد من الإنترنت ثم أعد فتح الصفحة.",{out:false});
+    return;
+  }
+  dbOnAuthChange(authChanged);
+  await authCheck();
+}
+/* الجلسة المحفوظة: موجودة ← تحميل الهوية، غير موجودة ← نموذج الدخول */
+async function authCheck(){
+  authView("wait");
+  let session=null;
+  try{ session=await dbSession(); }
+  catch(e){ authView("blocked",e.message); return; }
+  if(!session){ authView("form"); return; }
+  await authLoad(session.user);
+}
+async function authLoad(user){
+  authView("wait","جارٍ تحميل الحساب والصلاحيات…");
+  try{ await dbLoadMe(user); }
+  catch(e){ console.warn("dbLoadMe:",e&&e.cause||e); authView("blocked",e.message); return; }
+  if(!ME.active){
+    authView("blocked","هذا الحساب معطّل. راجع مالك النظام.",{retry:false});
+    return;
+  }
+  if(!ME.roles.length){
+    authView("blocked","دخلت باسم «"+ME.name+"»، لكن حسابك بلا أي رول بعد، فلا يوجد ما تطّلع عليه. "+
+      "اطلب من مالك النظام أن يمنحك رولاً ثم اضغط «إعادة المحاولة».");
+    return;
+  }
+  await authEnter();
+}
+/* فتح البرنامج: يظهر تحت شاشة الدخول ويُقلع، ثم تُرفع الشاشة —
+   فلا تومض حالة فارغة، وتُقاس عناصر الصفحة وهي معروضة فعلاً. */
+async function authEnter(){
+  authEntered=true;
+  authView("wait","جارٍ فتح البرنامج…");
+  renderUserBox();
+  el("app").classList.remove("hidden");
+  try{ await init(); }
+  catch(e){ console.error("init:",e); }
+  el("authScreen").classList.add("hidden");
+}
+/* خرج المستخدم من نافذة ثانية، أو انتهت جلسته، أو دخل مستخدم آخر بنفس
+   المتصفح: الصفحة تُحمَّل من جديد فتعود لشاشة الدخول بلا بقايا من الحساب السابق. */
+function authChanged(ev,session){
+  if(!authEntered) return;
+  const other = session && session.user && ME && session.user.id!==ME.id;
+  if(ev==="SIGNED_OUT" || other) location.reload();
+}
+el("authForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const email=el("authEmail").value.trim(), pass=el("authPass").value;
+  if(!email || !pass){ authView("form","اكتب البريد الإلكتروني وكلمة المرور."); return; }
+  const go=el("authGo");
+  go.disabled=true; go.textContent="جارٍ الدخول…";
+  let user=null, err="";
+  try{ user=await dbSignIn(email,pass); }
+  catch(ex){ err=ex.message; }
+  go.disabled=false; go.textContent="دخول";
+  el("authPass").value="";
+  if(!user){ authView("form",err); return; }
+  await authLoad(user);
+});
+el("authRetry").onclick=()=>authCheck();
+el("authOut").onclick=async()=>{ await dbSignOut(); authView("form"); };
+
+/* لون الرول يأتي من الخادم ويُكتب داخل style — يُقبل لون hex فقط */
+function safeColor(c){ return /^#[0-9a-f]{3,8}$/i.test(String(c||"")) ? c : "var(--brand)"; }
+function roleBadge(r){
+  return '<span class="rbadge" style="--rc:'+safeColor(r.color)+'">'+esc(r.name)+'</span>';
+}
+function roleScopeText(r){
+  if(r.allZones) return "كل المناطق";
+  const names=Array.from(r.zones).map(z=>(ME.zoneNames&&ME.zoneNames[z])||"منطقة غير معروفة");
+  return names.length ? names.join("، ") : "بلا مناطق";
+}
+function renderUserBox(){
+  const box=el("uBox");
+  if(!ME){ box.classList.add("hidden"); return; }
+  el("uName").innerHTML='<span class="av" aria-hidden="true">'+esc((ME.name||"؟").trim().charAt(0))+'</span>'+
+    '<span class="nm">'+esc(ME.name)+'</span>';
+  el("uRoles").innerHTML=ME.roles.map(roleBadge).join("");
+  box.classList.remove("hidden");
+}
+/* «حسابي»: كل رول بنطاقه وصلاحياته — حتى يعرف المستخدم ما يُسمح له به ولماذا */
+el("uName").onclick=()=>{
+  if(!ME) return;
+  const html='<p class="hint" style="margin-top:0">'+esc(ME.name)+(ME.email?' · <span dir="ltr">'+esc(ME.email)+'</span>':"")+'</p>'+
+    ME.roles.map(r=>{
+      const ps=Array.from(r.perms).map(p=>'<li>'+esc(PERM_LABELS[p]||p)+'</li>').join("");
+      return '<div class="merole">'+roleBadge(r)+
+        '<div class="sc">النطاق: <b>'+esc(roleScopeText(r))+'</b></div>'+
+        (ps?'<ul>'+ps+'</ul>':'<div class="mini">اطلاع فقط — بلا صلاحيات تعديل</div>')+'</div>';
+    }).join("");
+  dlgShow({title:"حسابي", html:html, ok:"إغلاق", noCancel:true});
+};
+el("uLogout").onclick=async()=>{
+  if(!await confirmBox("تسجيل الخروج","تخرج من حسابك على هذا الجهاز؟ للدخول مرة ثانية تحتاج البريد الإلكتروني وكلمة المرور.",{ok:"خروج"})) return;
+  /* أي حفظ محلي معلّق يكتمل قبل الخروج */
+  if(stateLoaded){ clearTimeout(saveTimer); try{ await persistState(); }catch(e){} }
+  authEntered=false;   // خروج من هذه النافذة: إعادة تحميل واحدة هنا، لا ثانية من authChanged
+  await dbSignOut();
+  location.reload();
+};
+
 let bootNotice="";
 el("lockRetry").onclick=()=>{
   /* لو انسكّرت النافذة الأولى بلا إشعار: نسأل من جديد، والفعّالة تردّ فنبقى مقفلين */
   setReadOnly(false);
   lockSend({t:"hello"});
 };
-(async function init(){
+async function init(){
   idb=await openIDB();
   // البيانات تُقرأ فوراً من الجهاز — بدون فتح أي ملف
   const raw=await readState();
@@ -10906,7 +11117,11 @@ el("lockRetry").onclick=()=>{
   if(bootNotice) alertBox(bootNotice,"اعتماد الملف المرتبط");
   window.addEventListener("beforeunload",flushSync);
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushSync(); });
-})();
+}
+/* الإقلاع: الدخول أولاً ثم init(). الفحوص (tests/) تفتح البرنامج بإطار معزول
+   بذاكرة بديلة وبلا خادم، فتضع __JARD_TEST__ وتُقلعه مباشرة كما كان. */
+if(window.__JARD_TEST__){ el("authScreen").classList.add("hidden"); el("app").classList.remove("hidden"); init(); }
+else authStart();
 
 /* ==================== [بيانات] الفورمة الافتراضية ====================
    نسخة مضمَّنة من assets/letterhead.jpg (A4 ‏1810×2560، JPEG كما هو بلا إعادة ضغط).

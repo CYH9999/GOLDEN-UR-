@@ -88,6 +88,8 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;",
 
 /* ============ تحميل شيفرة البرنامج داخل إطار معزول ============ */
 const PRELUDE = `<script>(function(){
+  /* البرنامج يطلب الدخول للخادم قبل الإقلاع؛ الفحص بلا خادم فيُقلعه مباشرة */
+  window.__JARD_TEST__=true;
   var mem={};
   try{ Object.defineProperty(window,'localStorage',{configurable:true,value:{
     getItem:function(k){return mem[k]==null?null:mem[k];},
