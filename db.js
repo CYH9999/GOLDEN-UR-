@@ -747,7 +747,8 @@ function dbDeleteMaterial(id, what) {
 }
 
 /* ---- العطل وأقفال الأشهر ----
-   حذف العطلة بسياسة (company.settings)، والخادم يرفض إضافتها وحذفها بشهر مقفل برسالته.
+   إضافة العطلة وحذفها بسياسة month.lock (من يتحمّل أرقام المدة يحدّد عطلها)، والخادم يرفض
+   إضافتها وحذفها بشهر مقفل برسالته.
    صفر صفوف محذوفة يُعلن رفضاً صريحاً بدل أن يمرّ بصمت. */
 function dbInsertHolidays(hs, what) {
   if (!hs.length) return Promise.resolve(null);

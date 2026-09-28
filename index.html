@@ -271,6 +271,7 @@ label.field>span,.field>span:first-child{display:block;font-size:var(--fs-sm);co
 .alrt{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:var(--r-md);border:1px solid var(--line);
   border-inline-start:4px solid var(--gold);background:var(--panel)}
 .alrt.bad{border-inline-start-color:var(--absent)}
+.alrt.info{border-inline-start-color:var(--line-strong)}
 .alrt .btn{margin-inline-start:auto;white-space:nowrap}
 .alrt b{font-size:var(--fs-sm)}
 /* البحث الشامل */
@@ -669,7 +670,7 @@ tr.rowneg td{background:var(--absent-bg)}
     <button role="tab" id="tab-ledger" aria-controls="view-ledger" aria-selected="false" tabindex="-1" data-view="ledger" title="الجرد التفصيلي"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span class="tl">الجرد التفصيلي</span></button>
     <button role="tab" id="tab-form" aria-controls="view-form" aria-selected="false" tabindex="-1" data-view="form" title="الفورمة — كتاب رسمي"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5M9 12h8M9 16h8M9 8h3"/></svg><span class="tl">الفورمة</span></button>
     <div class="tsep" role="presentation"></div>
-    <button role="tab" id="tab-settings" data-perm="company.settings" aria-controls="view-settings" aria-selected="false" tabindex="-1" data-view="settings" title="الإعدادات"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="tl">الإعدادات</span></button>
+    <button role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1" data-view="settings" title="الإعدادات"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="tl">الإعدادات</span></button>
   </nav>
   <div class="side-foot">
     <button class="side-toggle" id="sideToggle" aria-expanded="true" title="طيّ الشريط الجانبي">
@@ -1235,7 +1236,7 @@ tr.rowneg td{background:var(--absent-bg)}
     </div>
   </div>
 
-  <div class="panel" id="pnHol" data-perm="company.settings">
+  <div class="panel" id="pnHol">
     <div class="panel-head"><h2>العطل وأيام الراحة</h2></div>
     <div class="panel-body">
       <p class="hint" style="margin-top:0">هذه الأيام لا تُعدّ أيام عمل، ولا يُستقطع عنها أي مبلغ من أي عامل.</p>
@@ -1253,6 +1254,10 @@ tr.rowneg td{background:var(--absent-bg)}
             المباشرة أو بعد آخر يوم عمل، واليوم الحادي والثلاثون لا يُحسم لأن الراتب ٣٠ يوماً. المستمر طوال
             الشهر يأخذ راتبه كاملاً مهما كان عدد أيام الشهر.</span></label>
       </div>
+      <p class="hint" data-perm-else="company.settings">أيام الراحة الأسبوعية وطريقة الاحتساب قاعدة دائمة لحساب كل شهر، وتُعدَّل
+        بصلاحية «إعدادات الشركة» — معروضة هنا للاطلاع.</p>
+      <h3 class="subhead">العطل الرسمية</h3>
+      <div data-perm="month.lock">
       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
         <label class="field" style="margin:0"><span>من تاريخ</span><input type="date" id="hlDate"></label>
         <label class="field" style="margin:0"><span>إلى تاريخ (اختياري)</span><input type="date" id="hlDate2"></label>
@@ -1261,6 +1266,8 @@ tr.rowneg td{background:var(--absent-bg)}
         <button class="btn primary" id="addHoliday">إضافة عطلة</button>
       </div>
       <p class="hint">لعطلة عدة أيام متتالية، حدّد «من» و«إلى» وستُضاف كل الأيام دفعة واحدة.</p>
+      </div>
+      <p class="hint" data-perm-else="month.lock">العطل الرسمية تُدخَل حين تُعلَن، ويُدخلها من يملك قفل الشهر وفتحه.</p>
       <div id="holidayList" style="margin-top:14px"></div>
     </div>
   </div>
@@ -1416,7 +1423,7 @@ tr.rowneg td{background:var(--absent-bg)}
 <section id="view-settings" role="tabpanel" aria-labelledby="tab-settings" tabindex="-1" class="hidden">
   <div class="split" style="grid-template-columns:1fr 1fr">
 
-    <div>
+    <div data-perm="company.settings">
       <div class="panel">
         <div class="panel-head"><h2>هوية الشركة الحالية</h2></div>
         <div class="panel-body">
@@ -1515,7 +1522,7 @@ tr.rowneg td{background:var(--absent-bg)}
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel" data-perm="company.settings">
         <div class="panel-head"><h2>خيارات الحساب</h2></div>
         <div class="panel-body">
           <div class="row2">
@@ -1561,7 +1568,8 @@ tr.rowneg td{background:var(--absent-bg)}
         </div>
       </div>
 
-      <div class="panel">
+      <!-- النسخة ملف واحد بأسماء العمال وهواتفهم وعناوينهم كلها: لمن يملك النظام وحده -->
+      <div class="panel" data-perm="company.settings">
         <div class="panel-head"><h2>النسخ الاحتياطي</h2><span class="dbbadge ok" id="dbState2">على الخادم</span></div>
         <div class="panel-body">
           <p class="hint" style="margin-top:0">البيانات محفوظة على الخادم ويتشاركها كل المستخدمين. «تنزيل نسخة» يسحب
@@ -2627,8 +2635,9 @@ function canConfirmBld(b){ return !!b && b.zones.length>0 && b.zones.every(z=>ca
 /* التأشير بصلاحية منطقة العامل (عامل بلا قسم: الصلاحية بأي منطقة) */
 function canMarkW(w){ const z=workerZoneId(w); return z ? canZone("roster.mark",z) : can("roster.mark"); }
 function canMarkBld(b){ return !!b && b.zones.length>0 && b.zones.every(z=>canZone("roster.mark",z.id)); }
-/* ملاحظة الجهة: لمن يؤشّر أو يعتمد على كل مناطقها */
-function canNoteBld(b){ return !!b && b.zones.length>0 && b.zones.every(z=>canZone("roster.mark",z.id)||canZone("roster.confirm",z.id)); }
+/* ملاحظة الجهة بصلاحية التأشير على كل مناطقها (سياسة day_zones)؛ تغيير «معتمد» صعوداً أو نزولاً
+   يحتاج roster.confirm فوقها (حارس الخادم) */
+function canNoteBld(b){ return canMarkBld(b); }
 /* اليوم كما يُعرض ويُطبع — للقراءة فقط؛ الكتابة بدوال «تعديل اليوم» تحت.
    confirmed: كل ما يلزم اعتماده بالعرض معتمد · partial: بعضه · blds: حالة كل جهة */
 function dayRec(iso){
@@ -3006,9 +3015,9 @@ function renderDayStatus(){
     const t=x.state==="all"?"معتمد ✓":(x.state==="some"?"معتمد جزئياً":(x.staffed?"غير معتمد":"بلا عمال"));
     const z=x.b.zones[0], col=(z&&z.color)||ZONE_COLORS[0];
     const hasMarks=Object.keys(viewStates(curDate,x.b)).length>0;
-    const acts=(locked||!x.canConfirm)?"":
+    const acts=locked?"":
       ((hasMarks && canMarkBld(x.b)?'<button class="btn sm ghost" data-bpres="'+esc(x.b.id)+'">الكل حاضر</button>':'')+
-       (x.state!=="all" && (x.staffed || x.state==="some" || !anyStaffed)
+       (x.canConfirm && x.state!=="all" && (x.staffed || x.state==="some" || !anyStaffed)
          ?'<button class="btn sm gold" data-bconf="'+esc(x.b.id)+'">اعتماد '+esc(x.b.short||x.b.name)+'</button>':''));
     return '<div class="dbld '+k+'" style="--zc:'+esc(col)+'"><span class="dz '+k+'">'+esc(x.b.name)+' · '+t+'</span>'+
       (acts?'<span class="dbact">'+acts+'</span>':'')+'</div>';
@@ -8924,7 +8933,7 @@ async function dirPermOK(h,ask){
 }
 /* st: نسخة جاهزة (عند الإقلاع هي نفسها ما حُمّل للتو)، وإلا تُسحب حديثة من الخادم */
 async function writeBackupFile(force, st){
-  if(!backupDir) return false;
+  if(!backupDir || !can("company.settings")) return false;   // النسخة لمن يملك النظام وحده
   const day=todayISO();
   if(!force && lsGet("bk_last")===day) return false;    // نسخة واحدة باليوم تكفي
   if(!await dirPermOK(backupDir,false)) return false;
@@ -11148,6 +11157,14 @@ function alertItems(){
   if(noSal.length) items.push({sev:"bad", t:fmtNum(noSal.length)+" عامل بلا راتب",
     d:noSal.slice(0,3).map(w=>w.name).join("، ")+(noSal.length>3?" …":""), b:"إعداد الرواتب",
     go:()=>{ gotoView("report"); const p=document.getElementById("pnSalary"); if(p&&p.scrollIntoView) try{ p.scrollIntoView({block:"start"}); }catch(e){} }});
+  /* ٢ب) عامل بلا قسم: لا تُعرف منطقته، فلا يراه إلا من نطاقه كل المناطق بعرض «الكل» — لا يظهر بكشف
+     أي جهة، وسكوت الواجهة عنه يخفيه شهوراً */
+  if(meAllZones() && !scoped()){
+    const noSec=c.workers.filter(w=>!sectionOf(w.sectionId) && inService(w,today));
+    if(noSec.length) items.push({sev:"info", t:fmtNum(noSec.length)+" عامل بلا قسم",
+      d:"لا يظهر في كشف أي جهة ولا يراه إداريّها: "+noSec.slice(0,3).map(w=>w.name).join("، ")+(noSec.length>3?" …":""),
+      b:"العمال والأقسام", go:()=>gotoView("people")});
+  }
   /* ٣) وثيقة بلا رقم */
   const V=[["leaves","إجازة","leaves"],["penalties","عقوبة","penalties"],["achievements","مكافأة","achievements"],["issues","صرف مواد","materials"]];
   V.forEach(v=>{ const n=(c[v[0]]||[]).filter(x=>x && !String(x.no||"").trim()).length;
@@ -11170,7 +11187,7 @@ function alertItems(){
       b:"افتح كشفه", go:()=>{ const r=monthOf(last); gotoView("report"); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; runReport(true); }}); }
   /* ٦) النسخة الاحتياطية */
   const nb=daysSinceBackup();
-  if(!viewAllowed("settings")) return items;     // النسخ من الإعدادات — لمن يفتحها
+  if(!can("company.settings")) return items;     // النسخ لمن يملك النظام وحده
   if(!backupDir) items.push({sev:"warn", t:"ماكو نسخة عندك خارج الخادم", d:"اربط مجلد النسخ اليومية حتى تنكتب نسخة مؤرّخة كل يوم تلقائياً.", b:"الإعدادات", go:()=>gotoView("settings")});
   else if(backupDir && nb!==null && nb>=3) items.push({sev:"warn", t:"آخر نسخة خارجية قبل "+fmtNum(nb)+" يوم", d:"نسخة اليوم تحمي رواتب هذا الشهر.", b:"نسخة الآن", go:()=>gotoView("settings")});
   return items;
@@ -11538,17 +11555,19 @@ function renderUserBox(){
    canConfirmBld، canNoteBld). هذا ترتيب للعرض فقط — الخادم يرفض ما لا يملكه المستخدم
    مهما ظهر، ورفضه يظهر بنصّه. */
 const PERM_HIDE={
-  "roster.mark":["[data-del]"],
-  "roster.confirm":["[data-fixgaps]"],
+  /* حذف يوم الجرد يمسح تأشيراته ويسحب اعتماده، و«اعتماد هذه الأيام» يؤشّر ويعتمد: يحتاجان الصلاحيتين */
+  "roster.mark":["[data-del]","[data-fixgaps]"],
+  "roster.confirm":["[data-del]","[data-fixgaps]"],
   "structure.manage":["[data-zup]","[data-zdn]","[data-zed]","[data-zdel]",
     "[data-secup]","[data-secdn]","[data-secedit]","[data-seczone]","[data-secdel]"],
   "workers.manage":["[data-wedit]","[data-wdel]","[data-dedit]","[data-vedit]","[data-vrestore]",
     "#applyAllSalary","[data-offclr]","[data-offdel]","#addOffDate"],
   "docs.manage":["#lvSave","#pnSave","#acSave","#mtSave","#lfSave",
     "[data-ldel]","[data-pdel]","[data-adel]","[data-idel]","[data-lfdel]","[data-medit]","[data-mdel]"],
-  "month.lock":["#rpLockBtn","#rpUnlock"]
+  "month.lock":["#rpLockBtn","#rpUnlock","[data-hdel]"]
 };
 const PERM_LOCK={
+  "company.settings":["[data-wd]","#setProRate"],
   "structure.manage":["[data-zcol]"],
   "workers.manage":["[data-wsec]","[data-wstat]","[data-sal]","[data-ded]","[data-start]","[data-lpol]","[data-off]","#offDate"]
 };
@@ -11563,6 +11582,8 @@ function applyPerms(){
   }
   Object.keys(PERM_LABELS).forEach(p=>document.body.classList.toggle(permClass(p),!can(p)));
   document.querySelectorAll("[data-perm]").forEach(n=>n.classList.toggle("noperm",!can(n.dataset.perm)));
+  /* شرح لمن لا يملك الصلاحية: يظهر له وحده بدل حقول معطّلة بلا تفسير */
+  document.querySelectorAll("[data-perm-else]").forEach(n=>n.classList.toggle("noperm",can(n.dataset.permElse)));
   permSweep(document);
   if(!permObs && Object.keys(PERM_LOCK).some(p=>!can(p)) && typeof MutationObserver==="function"){
     permObs=new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{ if(n.nodeType===1) permSweep(n); })));

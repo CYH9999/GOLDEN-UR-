@@ -1041,9 +1041,16 @@ try{
   check("ولا «عامل a» ولا «عامل b» في أي تبويب أو Word", [txt18.indexOf("عامل a"), txt18.indexOf("عامل b"), docs18.indexOf("عامل a"), docs18.indexOf("عامل b"), txt18.indexOf("عامل c")>=0].join(","), "-1,-1,-1,-1,true");
   check("ولا في البحث الشامل", W18('gsResults("عامل").map(function(x){return x.t;}).join(",").indexOf("عامل a")'), -1);
   check("نسخة البيانات بنطاقه: عامله وحده", W18('(function(){var c=backupScope(state).companies[0]; return c.workers.map(function(w){return w.id;}).join(",")+"|"+Object.keys(c.days["2026-09-15"].states).join(",");})()'), "c|c");
-  check("المخفي عنه: الإعدادات، السجل، افتراضيات الرواتب؛ والظاهر: إضافة عامل والرواتب",
-    W18('["tab-settings","pnAudit","salDefaults","wForm","pnSalary"].map(function(id){return el(id).classList.contains("noperm")?1:0;}).join("")'), "11100");
-  check("الإعدادات بالرابط تعيده لجرد اليوم", W18('switchView("settings"); currentView()'), "daily");
+  check("المخفي عنه: السجل، افتراضيات الرواتب؛ والظاهر: إضافة عامل والرواتب",
+    W18('["pnAudit","salDefaults","wForm","pnSalary"].map(function(id){return el(id).classList.contains("noperm")?1:0;}).join("")'), "1100");
+  const hid18=id=>'(!!el("'+id+'").closest(".noperm"))';
+  check("تبويب الإعدادات ظاهر وفيه مظهر الواجهة وحده (الهوية والتوقيع وخيارات الحساب والنسخة مخفية)",
+    W18('switchView("settings"); [currentView(), '+hid18("uiTheme")+', '+hid18("setCompany")+', '+hid18("setSigner")+', '+hid18("setNumerals")+', '+hid18("backupOut")+'].join(",")'),
+    "settings,false,true,true,true,true");
+  W18('switchView("report"); renderHolidays(); refresh();'); await tick(5);
+  check("العطل: الإضافة والحذف مخفيان (month.lock) وأيام الراحة للاطلاع بشرح", W18(''+
+    '['+hid18("addHoliday")+', [].every.call(document.querySelectorAll("#wdBoxes [data-wd]"),function(b){return b.disabled;}), el("setProRate").disabled,'+
+    ' [].filter.call(document.querySelectorAll("#pnHol [data-perm-else]"),function(n){return !n.classList.contains("noperm");}).length].join(",")'), "true,true,true,2");
   check("حارس القفل لا يقترح الفتح لمن لا يملكه", W18('(function(){ var m=""; var ab=alertBox; alertBox=function(t){ m=t; return Promise.resolve(true); };'+
     ' CF().locks["2026-09"]={at:"x",net:0,n:0,rows:{}}; lockBlock("2026-09-10","تجربة"); delete CF().locks["2026-09"]; alertBox=ab; return m.indexOf("فتح القفل"); })()'), -1);
   /* المراقب: كل المناطق بلا صلاحيات — قراءة وطباعة فقط */
@@ -1056,7 +1063,7 @@ try{
   check("المراقب: نماذج الإضافة مخفية، وحقول جدول العمال معطّلة",
     W18('[el("wForm").classList.contains("noperm"), [].every.call(document.querySelectorAll("select[data-wsec],select[data-wstat]"),function(s){return s.disabled;})].join(",")'), "true,true");
   W18('dbLocalOwner(); scopeBld=""; bootView(); switchView("daily");');
-  check("الرجوع لهوية الفحص: كل شيء ظاهر", W18('document.querySelectorAll(".noperm").length'), 0);
+  check("الرجوع لهوية الفحص: كل شيء ظاهر، وشروح «بلا صلاحية» مخفية", W18('document.querySelectorAll("[data-perm].noperm").length+","+document.querySelectorAll("[data-perm-else]:not(.noperm)").length'), "0,0");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
