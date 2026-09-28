@@ -713,7 +713,8 @@ try{
   check("الترحيل متكرر بلا أثر: فورمة محذوفة لا ترجع", w14.eval('state.companies[1].settings.letterhead'), "");
   check("الترحيل متكرر بلا أثر: فورمة الشركة الأولى كما هي", w14.eval('state.companies[0].settings.letterhead===letterheadDefault()'), true);
   /* مسوّدة: حفظ، ترقيم «ك»، تعديل، حفظ ثانٍ */
-  w14.eval('switchView("form"); el("lfTo").value="مديرية التربية"; el("lfSubject").value="تأييد"; el("lfTitle").value="كتاب ١"; lfApplyTpl("gov");'+
+  /* الحفظ ينتظر رقم الكتاب من الخادم (هنا عدّاد الفحص) — فيُنتظر */
+  await w14.eval('switchView("form"); el("lfTo").value="مديرية التربية"; el("lfSubject").value="تأييد"; el("lfTitle").value="كتاب ١"; lfApplyTpl("gov");'+
     'el("lfEditor").querySelectorAll("p")[3].innerHTML="نص <b>عريض</b> <script>x()<\/script><span onclick=y()>و</span>"; lfSave();');
   let LT1=J('C().letters[0]');
   check("أول كتاب يأخذ العدد ك-السنة-001", LT1.no, "ك-2026-001");
@@ -721,10 +722,10 @@ try{
   check("العدد المعطى عند الحفظ يظهر داخل نص الكتاب", LT1.html.indexOf(">ك-2026-001<")>0, true);
   check("المنظّف: لا script ولا onclick، والعريض باقٍ", /<script|onclick/.test(LT1.html)===false && LT1.html.indexOf("<b>عريض</b>")>0, true);
   check("صورة التوقيع لا تُخزَّن داخل الكتاب", /<img/.test(LT1.html), false);
-  w14.eval('el("lfTo").value="مديرية الصحة"; lfSave();');
+  await w14.eval('el("lfTo").value="مديرية الصحة"; lfSave();');
   LT1=J('C().letters[0]');
   check("إعادة الحفظ تعدّل الكتاب نفسه (لا نسخة ثانية)", w14.eval('C().letters.length')+" / "+LT1.to+" / "+(LT1.editedAt?"معدّل":"—"), "1 / مديرية الصحة / معدّل");
-  w14.eval('lfReset(); lfSave();');
+  await w14.eval('lfReset(); lfSave();');
   check("كتاب جديد يأخذ العدد التالي", w14.eval('C().letters[1].no'), "ك-2026-002");
   /* الحفظ والاستعادة */
   const lfBefore=w14.eval('JSON.stringify({l:C().letters, h:S().letterhead})');
@@ -867,8 +868,8 @@ try{
     check(k+" — بلا عنوان ملوّن بلون الشركة", /h1\{[^}]*color:#4B2E83/.test(PW_16[k]), false);
   });
 
-  /* ---- ١٧) الاعتماد لكل منطقة: جهتان، كل إداري يعتمد جهته ---- */
-  group("١٧ · الاعتماد لكل منطقة — جهتان، ملاحظات بالمناطق، وجهة فارغة");
+  /* ---- ١٧) الاعتماد والملاحظات لكل جهة: جهتان، كل إداري يعتمد جهته ---- */
+  group("١٧ · الاعتماد والملاحظات لكل جهة — جهتان، وجهة فارغة");
   const w17=await boot();
   const SET17={company:"شركة الفحص",title:"الجرد اليومي",address:"البصرة",signer:"عبد الله",role:"المسؤول الإداري",mark:"ج",
     numerals:"latn",miscInTotal:"no",secCount:"active",signature:"",salary:SAL,deduct:11166.67,dedMode:"auto",workDays:30,
@@ -876,18 +877,23 @@ try{
     defNote:"سار العمل بشكل اعتيادي.",pay31From:"0000-00"};
   const Z17=[["zOi","bO","داخل البناية القديمة","داخلي",1],["zOo","bO","الأقسام الخارجية","خارجي",2],
     ["zNi","bN","داخل البناية الجديدة","داخلي",1],["zNo","bN","الأقسام الخارجية — الجديدة","خارجي",2]];
-  const DZ17=[];
+  /* كتابة الجهة تسري على مناطقها كلها: القديمة معتمدة كل الأيام، والجديدة ١–١٠ فقط؛
+     ويوم ١٢ شاذ: داخلي الجديدة معتمد وخارجيها (بلا عمال) غير معتمد */
+  const DZ17=[], dz=(d,z,c,n)=>DZ17.push({date:d,zone_id:z,notes:n||"",confirmed:c});
   for(let d=1; d<=30; d++){ const iso="2026-09-"+String(d).padStart(2,"0");
-    DZ17.push({date:iso,zone_id:"zOi",notes:"",confirmed:true},{date:iso,zone_id:"zOo",notes:"",confirmed:true});
-    if(d<=10) DZ17.push({date:iso,zone_id:"zNi",notes:"",confirmed:true}); }
-  DZ17.find(x=>x.date==="2026-09-02"&&x.zone_id==="zOi").notes="ملاحظة القديمة";
-  DZ17.push({date:"2026-09-02",zone_id:"zNo",notes:"ملاحظة الجديدة",confirmed:false});
-  DZ17.find(x=>x.date==="2026-09-03"&&x.zone_id==="zOi").notes="نص واحد";
-  DZ17.find(x=>x.date==="2026-09-03"&&x.zone_id==="zNi").notes="نص واحد";
+    dz(iso,"zOi",true); dz(iso,"zOo",true);
+    if(d<=10){ dz(iso,"zNi",true); dz(iso,"zNo",true); } }
+  dz("2026-09-12","zNi",true); dz("2026-09-12","zNo",false);
+  const nt=(d,z,t)=>{ DZ17.find(x=>x.date===d&&x.zone_id===z).notes=t; };
+  nt("2026-09-02","zOi","ملاحظة القديمة"); nt("2026-09-02","zOo","ملاحظة القديمة");
+  nt("2026-09-02","zNi","ملاحظة الجديدة"); nt("2026-09-02","zNo","ملاحظة الجديدة");
+  ["zOi","zOo","zNi","zNo"].forEach(z=>nt("2026-09-03",z,"نص واحد"));
+  nt("2026-09-04","zOi","أ"); nt("2026-09-04","zOo","ب");
   const ROWS17={company:{id:"co",name:"شركة الفحص",theme:"#4B2E83",accent:"#B8912E",settings:SET17},
     buildings:[{id:"bN",name:"البناية الجديدة",short:"الجديدة",sort_order:2},{id:"bO",name:"البناية القديمة",short:"القديمة",sort_order:1}],
     zones:Z17.map(z=>({id:z[0],building_id:z[1],name:z[2],short:z[3],color:null,sort_order:z[4]})),
-    sections:[{id:"sOi",zone_id:"zOi",name:"الإنتاج"},{id:"sOo",zone_id:"zOo",name:"الساحة"},{id:"sNi",zone_id:"zNi",name:"الاستقبال"}],
+    sections:[{id:"sOi",zone_id:"zOi",name:"الإنتاج",sort_order:2},{id:"sOi2",zone_id:"zOi",name:"الأرشيف",sort_order:1},
+      {id:"sOo",zone_id:"zOo",name:"الساحة",sort_order:1},{id:"sNi",zone_id:"zNi",name:"الاستقبال",sort_order:1}],
     workers:[["a","sOi"],["b","sOo"],["c","sNi"]].map((x,i)=>({id:x[0],seq:i+1,name:"عامل "+x[0],section_id:x[1],status:"مستمر",
       status_history:[],salary:null,deduct:null,off_weekdays:[],off_dates:[]})),
     dayStates:[{date:"2026-09-05",worker_id:"c",state:"absent"},{date:"2026-09-15",worker_id:"a",state:"absent"},
@@ -897,45 +903,62 @@ try{
   w17.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; bootView();');
   const W17=x=>w17.eval(x), J17=x=>JSON.parse(w17.eval("JSON.stringify("+x+")"));
   check("ترتيب المناطق بالجهة ثم بترتيبها", W17('C().zones.map(function(z){return z.id;}).join(",")'), "zOi,zOo,zNi,zNo");
+  check("ترتيب الأقسام بـ sort_order داخل منطقتها", W17('sortedSections().map(function(s){return s.id;}).join(",")'), "sOi2,sOi,sOo,sNi");
+  check("الجهات المعروضة بمناطقها", W17('viewBuildings().map(function(b){return b.id+":"+b.zones.map(function(z){return z.id;}).join("+");}).join(",")'), "bO:zOi+zOo,bN:zNi+zNo");
   const R17=J17('(function(){var R=buildReport("2026-09-01","2026-09-30"); return {days:R.days.length,gaps:R.gaps.length,rows:R.rows.map(function(r){return [r.id,r.eligible,r.absent,r.net];})};})()');
-  check("اليوم بالكشف إن اعتُمدت فيه منطقة (٢٦ يوم عمل)", R17.days, 26);
+  check("اليوم بالكشف إن اعتُمدت فيه جهة (٢٦ يوم عمل)", R17.days, 26);
   check("لا يوم «غير معتمد» — القديمة معتمدة كل الأيام", R17.gaps, 0);
   check("عامل القديمة: كل الأيام وغيابه ١٥ محسوب", JSON.stringify(R17.rows[0]), JSON.stringify(["a",26,1,323750]));
   check("عامل خارجي القديمة: كل الأيام", JSON.stringify(R17.rows[1]), JSON.stringify(["b",26,0,335000]));
-  check("عامل الجديدة: أيام منطقته المعتمدة فقط (١–١٠)، وغياب ١٥ غير المعتمد لا يُحسم", JSON.stringify(R17.rows[2]), JSON.stringify(["c",9,1,323750]));
+  check("عامل الجديدة: أيام منطقته المعتمدة (١–١٠ و١٢)، وغياب ١٥ غير المعتمد لا يُحسم", JSON.stringify(R17.rows[2]), JSON.stringify(["c",10,1,323750]));
   checkLedger(w17,"2026-09-01","2026-09-30","جهتان باعتماد مختلف");
-  check("الجرد التفصيلي: أيام الجديدة بعد ١٠ «غير معتمد»", W17('lgLedger("c").cnt.unc'), 17);
-  check("أيام معتمدة جزئياً (١١–٣٠)", W17('partialDays(buildReport("2026-09-01","2026-09-30").days).length'), 17);
-  check("١٥ أيلول: معتمد جزئياً · ٥ أيلول: كامل (خارجي الجديدة بلا عمال لا يلزم)",
-    W17('dayConfirmState("2026-09-15")+"/"+dayConfirmState("2026-09-05")'), "some/all");
+  check("الجرد التفصيلي: أيام الجديدة غير المعتمدة «غير معتمد»", W17('lgLedger("c").cnt.unc'), 16);
+  check("أيام معتمدة لجهة دون أخرى (١١–٣٠)", W17('partialDays(buildReport("2026-09-01","2026-09-30").days).length'), 17);
+  check("١٥: جزئي · ٥: كامل · ١٢: الجديدة جزئية (مناطقها مختلفة — لا يُخفى الفرق)",
+    W17('dayConfirmState("2026-09-15")+"/"+dayConfirmState("2026-09-05")+"/"+bldState(dayCtx(),viewBuildings()[1],"2026-09-12")'), "some/all/some");
   W17('switchView("daily"); refresh();');
-  check("شريط اليوم: حالة كل منطقة", W17('[].map.call(document.querySelectorAll("#dayStatus .dz"),function(x){return x.className.replace("dz ","");}).join(",")'), "ok,ok,no,idle");
+  check("شريط اليوم: سطر لكل جهة بحالتها", W17('[].map.call(document.querySelectorAll("#dayStatus .dbld"),function(x){return x.className.replace("dbld ","");}).join(",")'), "ok,no");
+  check("زر اعتماد للجهة غير المعتمدة وحدها", W17('[].map.call(document.querySelectorAll("#dayStatus [data-bconf]"),function(x){return x.dataset.bconf;}).join(",")'), "bN");
+  check("لا زر عام يعتمد جهتين: «اعتماد اليوم» و«الكل حاضر» العامّان مخفيان", W17('el("confirmDay").classList.contains("hidden")+"/"+el("allPresent").classList.contains("hidden")'), "true/true");
   check("الكشف ينبّه للأيام المعتمدة جزئياً", W17('switchView("report"); el("rpFrom").value="2026-09-01"; el("rpTo").value="2026-09-30"; runReport(true); el("rpWarn").textContent.indexOf("معتمد جزئياً")>=0'), true);
-  /* التأشير يعتمد جهة العامل وحدها */
+  /* زر كل جهة يعتمد مناطقها كلها ولا يمسّ الأخرى */
   W17('setZonesConfirmed("2026-09-21",["zOi","zOo","zNi","zNo"],false); curDate="2026-09-21"; switchView("daily"); refresh();'+
+    'document.querySelector(\'#dayStatus [data-bconf="bN"]\').click();');
+  const zc=d=>W17('["zOi","zOo","zNi","zNo"].map(function(z){return zoneConfirmed("'+d+'",z)?1:0;}).join("")');
+  check("اعتماد الجديدة: مناطقها الاثنتان معاً (حتى التي بلا عمال) والقديمة كما هي", zc("2026-09-21"), "0011");
+  W17('document.querySelector(\'#dayStatus [data-bconf="bO"]\').click();');
+  check("ثم اعتماد القديمة بزرّها", zc("2026-09-21"), "1111");
+  /* التأشير يعتمد جهة العامل وحدها */
+  W17('setZonesConfirmed("2026-09-22",["zOi","zOo","zNi","zNo"],false); curDate="2026-09-22"; refresh();'+
     'document.querySelector(\'#roster button[data-w="c"][data-set="misc"]\').click();');
-  check("تأشير عامل الجديدة يعتمد منطقتي الجديدة ولا يمسّ القديمة",
-    W17('["zOi","zOo","zNi","zNo"].map(function(z){return zoneConfirmed("2026-09-21",z)?1:0;}).join("")'), "0011");
-  check("والتأشير نفسه صف واحد", W17('JSON.stringify(C().days["2026-09-21"].states)'), '{"c":"misc"}');
-  W17('el("confirmDay").onclick();');
-  check("«اعتماد اليوم» يعتمد كل مناطق العرض", W17('dayConfirmState("2026-09-21")+"/"+zoneConfirmed("2026-09-21","zOo")'), "all/true");
-  W17('curDate="2026-09-15"; refresh();'); const pAll=w17.eval('el("allPresent").onclick()'); await answer(w17,true); await pAll;
-  check("«الكل حاضر» يمسح تأشيرات مناطق العرض", W17('JSON.stringify(C().days["2026-09-15"].states)'), "{}");
-  /* الملاحظات */
-  check("ملاحظتان بمنطقتين: فقرة لكل منطقة باسمها، والفارغة تُحذف",
-    JSON.stringify(J17('dayNoteParts("2026-09-02")')), JSON.stringify([{name:"داخل البناية القديمة",text:"ملاحظة القديمة"},{name:"الأقسام الخارجية — الجديدة",text:"ملاحظة الجديدة"}]));
-  check("نص واحد بمنطقتين: مرة واحدة بلا عنوان", JSON.stringify(J17('dayNoteParts("2026-09-03")')), JSON.stringify([{name:"",text:"نص واحد"}]));
+  check("تأشير عامل الجديدة يعتمد الجديدة كلها ولا يمسّ القديمة", zc("2026-09-22"), "0011");
+  check("والتأشير نفسه صف واحد", W17('JSON.stringify(C().days["2026-09-22"].states)'), '{"c":"misc"}');
+  W17('curDate="2026-09-15"; refresh(); document.querySelector(\'#dayStatus [data-bpres="bO"]\').click();'); await answer(w17,true);
+  check("«الكل حاضر» للقديمة يمسح تأشيراتها وحدها", W17('JSON.stringify(C().days["2026-09-15"].states)'), '{"c":"absent"}');
+  /* الملاحظات لكل جهة */
+  check("جهتان بملاحظتين: فقرة لكل جهة باسمها",
+    JSON.stringify(J17('dayNoteParts("2026-09-02")')), JSON.stringify([{name:"البناية القديمة",text:"ملاحظة القديمة"},{name:"البناية الجديدة",text:"ملاحظة الجديدة"}]));
+  check("نص واحد بالجهتين: مرة واحدة بلا عنوان", JSON.stringify(J17('dayNoteParts("2026-09-03")')), JSON.stringify([{name:"",text:"نص واحد"}]));
+  check("مناطق جهة بنصّين مختلفين: يظهر النصّان (لا يُخفى الفرق)", JSON.stringify(J17('dayNoteParts("2026-09-04")')), JSON.stringify([{name:"البناية القديمة",text:"أ\nب"}]));
   W17('curDate="2026-09-02"; refresh();');
-  check("محرّر الملاحظات: مربع لكل منطقة، والمربع الواحد مخفي",
-    W17('document.querySelectorAll("#notesZones textarea").length+"/"+el("notes").classList.contains("hidden")'), "4/true");
-  W17('var t=document.querySelector(\'#notesZones [data-nz="zOo"]\'); t.value="نص الخارجي"; t.dispatchEvent(new Event("input",{bubbles:true}));');
-  check("الكتابة بمربع منطقة تحفظ لها وحدها", W17('zoneNotes("2026-09-02","zOo")+"|"+zoneNotes("2026-09-02","zOi")'), "نص الخارجي|ملاحظة القديمة");
-  check("Word: الملاحظات بأسماء مناطقها", (function(){ const z=unzipStored(new Uint8Array(w17.eval("Array.from(dailyDocx())")));
-    return z["word/document.xml"].indexOf("داخل البناية القديمة: ملاحظة القديمة")>0 && z["word/document.xml"].indexOf("الأقسام الخارجية: نص الخارجي")>0; })(), true);
+  check("محرّر الملاحظات: مربع لكل جهة، والمربع الواحد مخفي",
+    W17('document.querySelectorAll("#notesZones textarea").length+"/"+el("notes").classList.contains("hidden")'), "2/true");
+  W17('var t=document.querySelector(\'#notesZones [data-nb="bO"]\'); t.value="نص القديمة"; t.dispatchEvent(new Event("input",{bubbles:true}));');
+  check("الكتابة بمربع جهة تسري على مناطقها كلها، والأخرى كما هي",
+    W17('[zoneNotes("2026-09-02","zOi"),zoneNotes("2026-09-02","zOo"),zoneNotes("2026-09-02","zNi")].join("|")'), "نص القديمة|نص القديمة|ملاحظة الجديدة");
+  check("Word: الملاحظات بأسماء الجهات", (function(){ const z=unzipStored(new Uint8Array(w17.eval("Array.from(dailyDocx())")));
+    return z["word/document.xml"].indexOf("البناية القديمة: نص القديمة")>0 && z["word/document.xml"].indexOf("البناية الجديدة: ملاحظة الجديدة")>0; })(), true);
   const sh17=W17('(function(){var c=document.createElement("canvas"); drawSheet(c,1); return c.toDataURL();})()');
-  const sh17b=W17('(function(){var n=[zoneNotes(curDate,"zOi"),zoneNotes(curDate,"zOo"),zoneNotes(curDate,"zNo")]; ["zOi","zOo","zNo"].forEach(function(z){setZoneNotes(curDate,z,"");});'+
-    'var c=document.createElement("canvas"); drawSheet(c,1); var u=c.toDataURL(); setZoneNotes(curDate,"zOi",n[0]); setZoneNotes(curDate,"zOo",n[1]); setZoneNotes(curDate,"zNo",n[2]); return u;})()');
-  check("ورقة الجرد ترسم فقرات المناطق داخل مربع الملاحظات", sh17!==sh17b, true);
+  const sh17b=W17('(function(){var n=[zoneNotes(curDate,"zOi"),zoneNotes(curDate,"zNi")]; setZonesNotes(curDate,["zOi","zOo","zNi","zNo"],"");'+
+    'var c=document.createElement("canvas"); drawSheet(c,1); var u=c.toDataURL(); setZonesNotes(curDate,["zOi","zOo"],n[0]); setZonesNotes(curDate,["zNi","zNo"],n[1]); return u;})()');
+  check("ورقة الجرد ترسم فقرات الجهات داخل مربع الملاحظات", sh17!==sh17b, true);
+  /* مستخدم يرى جهة واحدة (إداري الجديدة): الواجهة كما كانت — زرّان بأعلى الكشف ومربع ملاحظات واحد */
+  W17('ME.allZones=false; ME.zones=new Set(["zNi","zNo"]); ME.roles.forEach(function(r){r.allZones=false; r.zones=new Set(["zNi","zNo"]);});'+
+    'curDate="2026-09-02"; refresh();');
+  check("جهة واحدة بالعرض: الزرّان العامّان ظاهران ومربع ملاحظات واحد بنصّها",
+    W17('el("confirmDay").classList.contains("hidden")+"/"+el("notes").classList.contains("hidden")+"/"+el("notes").value'), "false/false/ملاحظة الجديدة");
+  check("جهة واحدة: الورقة بلا عنوان للملاحظة", JSON.stringify(J17('dayNoteParts("2026-09-02")')), JSON.stringify([{name:"",text:"ملاحظة الجديدة"}]));
+  W17('dbLocalOwner(); refresh();');
   /* جهة فارغة: مناطق بلا أقسام ولا عمال (أول دخول لإداري الجديدة) */
   const w17e=await boot();
   w17e.__rows={company:ROWS17.company, buildings:[ROWS17.buildings[0]], zones:ROWS17.zones.filter(z=>z.building_id==="bN"),

@@ -1,7 +1,7 @@
 /* =====================================================================
    db.js — طبقة الخادم (Supabase)
    كل ما يخص الخادم يمرّ من هنا حصراً: الاتصال، الجلسة، هوية المستخدم
-   وصلاحياته، وتحميل البيانات كلها وبناؤها بشكل البرنامج — والكتابة لاحقاً.
+   وصلاحياته، تحميل البيانات كلها وبناؤها بشكل البرنامج، وكتابة كل تعديل سجلاً واحداً.
    index.html لا ينادي Supabase مباشرة أبداً، بل ينادي دوال هذا الملف.
 
    المفتاح anon علني بطبيعته. الحماية الفعلية كلها بسياسات RLS على
@@ -237,6 +237,8 @@ function dbCompanyId() {
   const ids = ME ? Array.from(new Set(ME.roles.map(r => r.companyId).filter(Boolean))) : [];
   return ids[0] || null;
 }
+/* الشركة المحمّلة — كل كتابة تحمل معرّفها */
+let DB_CID = null;
 
 /* جدول كامل على صفحات. الخادم يقصّ الطلب الواحد عند حدّ (١٠٠٠ صف افتراضياً
    وقد يُضبط أقل)، فقراءة بطلب واحد تقصّ الجرد بصمت بعد أشهر قليلة. العدد
@@ -275,6 +277,7 @@ async function dbFetchAll() {
   catch (e) { throw dbErr(e, "تعذّر تحميل بيانات الشركة."); }
   if (co.error) throw dbErr(co.error, "تعذّر تحميل بيانات الشركة.");
   if (!co.data) throw new Error("تعذّر الوصول إلى بيانات الشركة — راجع مالك النظام.");
+  DB_CID = co.data.id;
 
   const auditQ = (async () => {
     let r;
@@ -293,8 +296,8 @@ async function dbFetchAll() {
         q => q.order("sort_order").order("id")),
       dbReadAll("zones", "id,building_id,name,short,color,sort_order", "المناطق", cid,
         q => live(q).order("sort_order").order("id")),
-      dbReadAll("sections", "id,zone_id,name", "الأقسام", cid,
-        q => live(q).order("id")),
+      dbReadAll("sections", "id,zone_id,name,sort_order", "الأقسام", cid,
+        q => live(q).order("sort_order").order("id")),
       dbReadAll("workers",
         "id,seq,name,mother_name,dob,phone,phone2,address,section_id,status,status_changed_at," +
         "status_note,status_history,start_date,salary,deduct,leave_policy,off_weekdays,off_dates",
@@ -424,9 +427,15 @@ function dbBuildState(raw) {
     .map(z => ({ id: z.id, name: dbStr(z.name), short: dbStr(z.short), color: dbStr(z.color),
       buildingId: z.building_id || "" }));
 
-  /* الأقسام بلا عمود ترتيب على الخادم: أبجدياً ثابتاً */
-  const sections = (raw.sections || []).map(s => ({ id: s.id, name: dbStr(s.name), zoneId: dbStr(s.zone_id) }))
-    .sort((a, b) => DB_AR.compare(a.name, b.name) || (a.id < b.id ? -1 : 1));
+  /* الأقسام بترتيبها المقصود داخل منطقتها (ترتيب ورقة الجرد)، والمناطق بترتيبها أعلاه.
+     sortOrder يُحفظ مع القسم حتى يُكتب عند التحريك لأعلى/لأسفل. */
+  const zIdx = {};
+  zones.forEach((z, i) => { zIdx[z.id] = i; });
+  const zOf = id => (id in zIdx ? zIdx[id] : 999);
+  const sections = (raw.sections || []).map(s => ({ id: s.id, name: dbStr(s.name), zoneId: dbStr(s.zone_id),
+    sortOrder: Number(s.sort_order) || 0 }))
+    .sort((a, b) => (zOf(a.zoneId) - zOf(b.zoneId)) || (a.sortOrder - b.sortOrder) ||
+      DB_AR.compare(a.name, b.name) || (a.id < b.id ? -1 : 1));
 
   const workers = (raw.workers || []).map(dbWorker).sort((a, b) => (a.seq - b.seq) || (a.id < b.id ? -1 : 1));
 
@@ -441,8 +450,14 @@ function dbBuildState(raw) {
     if (r && r.zone_id) day(dbDay(r.date)).zones[r.zone_id] = { notes: dbStr(r.notes), confirmed: r.confirmed === true };
   });
 
+  /* وثيقة عامل محذوف (حذف منطقي) لا تظهر بالقوائم — كما كان حذف العامل يحذف وثائقه —
+     وتبقى على الخادم فترجع باستعادته */
+  const wIds = new Set(workers.map(w => w.id));
   const lists = { leaves: [], penalties: [], achievements: [], issues: [], letters: [], passes: [] };
-  (raw.documents || []).forEach(r => { const k = r && DB_DOC_LISTS[r.kind]; if (k) lists[k].push(dbDoc(r)); });
+  (raw.documents || []).forEach(r => {
+    const k = r && DB_DOC_LISTS[r.kind];
+    if (k && !(r.worker_id && !wIds.has(r.worker_id))) lists[k].push(dbDoc(r));
+  });
   /* الوصولات الأحدث أولاً كما يضيفها البرنامج، والكتب بترتيب إصدارها */
   const byNo = (a, b) => DB_AR.compare(dbStr(a.no), dbStr(b.no));
   ["leaves", "penalties", "achievements", "issues", "passes"].forEach(k => lists[k].sort((a, b) => byNo(b, a)));
@@ -489,3 +504,258 @@ function dbBuildState(raw) {
 async function dbLoadState() {
   return dbBuildState(await dbFetchAll());
 }
+
+/* ==================== الكتابة ====================
+   كل تعديل = كتابة سجل واحد (أو صفوف جهة واحدة بطلب واحد) — لا تُكتب الحالة ككتلة أبداً.
+   الكتابات تُرسل بالترتيب في طابور واحد: تأشير ثم تصحيحه لا ينقلبان على الخادم.
+   الرفض لا يُبلع: الخطأ يُعاد برسالة عربية — نص الخادم كما هو إن كان عربياً (الحُرّاس
+   كقفل الشهر ترفع رسائلها بالعربية)، وإلا ترجمة مفهومة لرمزه — وتُبلَّغ الواجهة
+   (dbOnWrite) فتعرضه وتعيد مزامنة بياناتها. لا ترسل الكتابات updated_by ولا updated_at
+   ولا seq: الخادم يختمها ويعطيها.
+   بلا خادم (الفحوص) الكتابة لا تفعل شيئاً، والتعديل يبقى بالذاكرة كما كان. */
+function dbLocal() {
+  return !sb || (typeof window !== "undefined" && !!window.__JARD_TEST__);
+}
+let dbQ = Promise.resolve(), dbBusy = 0, dbWriteCb = null;
+/* cb(حالة, خطأ, صامت): "saving" يحفظ · "saved" محفوظ · "rejected" رفضه الخادم ·
+   "offline" تعذّر الاتصال. صامت: المستدعي يعرض الخطأ بنفسه. */
+function dbOnWrite(cb) { dbWriteCb = cb; }
+function dbEmit(st, err, quiet) { if (dbWriteCb) { try { dbWriteCb(st, err, !!quiet); } catch (e) {} } }
+function dbMe() { return ME ? ME.id : null; }
+function dbNow() { return new Date().toISOString(); }
+
+function dbWriteErr(e, what) {
+  const raw = String((e && (e.message || e.msg || e.error_description)) || e || "");
+  const code = e && e.code;
+  const w = what ? "«" + what + "»" : "التعديل";
+  let msg, net = false;
+  if (/[؀-ۿ]/.test(raw)) msg = raw;
+  else if (/failed to fetch|networkerror|network request failed|load failed|fetch failed|timeout|aborted/i.test(raw) ||
+           (e && (e.name === "TypeError" || e.name === "AbortError"))) {
+    net = true; msg = "تعذّر الاتصال بالخادم — " + w + " لم يُحفظ.";
+  }
+  else if (code === "42501" || /row-level security|permission denied/i.test(raw))
+    msg = "الخادم رفض " + w + ": لا تملك صلاحية هذا التعديل.";
+  else if (code === "23505")
+    msg = "الخادم رفض " + w + ": القيمة مستعملة من قبل" + (/documents|\bno\b/i.test(raw) ? " — رقم الوثيقة موجود." : ".");
+  else if (code === "23503")
+    msg = "الخادم رفض " + w + ": يشير إلى سجل غير موجود (ربما حُذف من جهاز آخر).";
+  else if (code === "23502" || code === "23514" || code === "22P02" || code === "22007")
+    msg = "الخادم رفض " + w + ": قيمة ناقصة أو غير مقبولة.";
+  else msg = "الخادم رفض " + w + (raw ? " (" + raw + ")" : "") + ".";
+  const err = new Error(msg);
+  err.cause = e; err.network = net; err.code = code;
+  return err;
+}
+
+/* كتابة واحدة بالطابور. fn تُرجع وعد استعلام Supabase.
+   opts.quiet: المستدعي يعرض الخطأ بنفسه (الوثائق: لا تتغيّر الذاكرة إلا بعد القبول).
+   opts.expect: تعديل سجل موجود — صفر صفوف معدّلة رفضٌ صامت من السياسات، فيُعلن. */
+function dbWrite(what, fn, opts) {
+  opts = opts || {};
+  if (dbLocal()) return Promise.resolve(opts.local === undefined ? null : opts.local);
+  dbBusy++; dbEmit("saving");
+  const run = dbQ.then(async () => {
+    let r;
+    try { r = await fn(); } catch (e) { throw dbWriteErr(e, what); }
+    if (r && r.error) throw dbWriteErr(r.error, what);
+    if (opts.expect && !(r && Array.isArray(r.data) && r.data.length))
+      throw dbWriteErr({ message: "لم يتغيّر أي سجل على الخادم — السجل غير موجود أو لا تملك تعديله." }, what);
+    return r ? r.data : null;
+  });
+  dbQ = run.catch(() => {});
+  return run.then(
+    d => { if (!--dbBusy) dbEmit("saved"); return d; },
+    e => { dbBusy--; dbEmit(e.network ? "offline" : "rejected", e, opts.quiet); throw e; });
+}
+/* كتابة تتفاؤلية: الذاكرة تغيّرت سلفاً، والرفض تعالجه الواجهة مركزياً (dbOnWrite) */
+function dbFire(what, fn, opts) { return dbWrite(what, fn, opts).catch(() => null); }
+function dbPendingWrites() { return dbBusy; }
+
+/* ---- اليوم: day_states (صف لكل غائب أو متفرقة؛ الحاضر بلا صف) و day_zones ---- */
+function dbSaveDayState(iso, wid, st, what) {
+  return dbFire(what, () => (st === "absent" || st === "misc")
+    ? sb.from("day_states").upsert({ company_id: DB_CID, date: iso, worker_id: wid, state: st },
+        { onConflict: "company_id,date,worker_id" })
+    : sb.from("day_states").delete().eq("company_id", DB_CID).eq("date", iso).eq("worker_id", wid));
+}
+/* «الكل حاضر»: حذف تأشيرات عمال جهة بيوم — الحذف الفعلي الوحيد المسموح */
+function dbClearDayStates(iso, wids, what) {
+  if (!wids.length) return Promise.resolve(null);
+  return dbFire(what, () => sb.from("day_states").delete()
+    .eq("company_id", DB_CID).eq("date", iso).in("worker_id", wids));
+}
+/* اعتماد و/أو ملاحظة لمناطق (مناطق جهة واحدة عادة) بأيام — طلب واحد.
+   patch: { confirmed?: bool, notes?: string } */
+function dbSaveDayZones(isos, zids, patch, what) {
+  const rows = [];
+  [].concat(isos).forEach(d => zids.forEach(z => {
+    const r = { company_id: DB_CID, date: d, zone_id: z };
+    if (patch.notes !== undefined) r.notes = String(patch.notes || "");
+    if (patch.confirmed !== undefined) {
+      r.confirmed = !!patch.confirmed;
+      r.confirmed_by = patch.confirmed ? dbMe() : null;
+      r.confirmed_at = patch.confirmed ? dbNow() : null;
+    }
+    rows.push(r);
+  }));
+  if (!rows.length) return Promise.resolve(null);
+  return dbFire(what, () => sb.from("day_zones").upsert(rows, { onConflict: "company_id,date,zone_id" }));
+}
+
+/* ---- العمال ----
+   النصوص الحرة تُرسل نصاً (الفارغ ""), والتواريخ والمعرّفات والقيم المحدّدة null للفارغ:
+   عمود التاريخ لا يحمل نصاً فارغاً، والبرنامج يقرأ null نصاً فارغاً كما كان. */
+function dbWorkerRow(w) {
+  const t = v => (v == null ? "" : String(v));
+  const n = v => (v == null || v === "" ? null : v);
+  return { name: t(w.name), mother_name: t(w.motherName), dob: t(w.dob), phone: t(w.phone), phone2: t(w.phone2),
+    address: t(w.address), section_id: n(w.sectionId), status: w.status || "مستمر",
+    status_changed_at: n(w.statusChangedAt), status_note: t(w.statusNote),
+    status_history: Array.isArray(w.statusHistory) ? w.statusHistory : [], start_date: n(w.startDate),
+    salary: dbNumOrNull(w.salary), deduct: dbNumOrNull(w.deduct), leave_policy: n(w.leavePolicy),
+    off_weekdays: (w.offWeekdays || []).map(Number), off_dates: (w.offDates || []).slice() };
+}
+/* إدراج عمال (واحد أو دفعة بطلب واحد) بلا seq — يعطيه الخادم ويُقرأ من ردّه.
+   الوعد يُحلّ بـ { id: seq } */
+function dbInsertWorkers(ws, what) {
+  const rows = ws.map(w => Object.assign({ id: w.id, company_id: DB_CID, created_by: dbMe() }, dbWorkerRow(w)));
+  return dbWrite(what, () => sb.from("workers").insert(rows).select("id,seq"), { local: [] })
+    .then(d => { const m = {}; (d || []).forEach(r => { m[r.id] = Number(r.seq) || 0; }); return m; })
+    .catch(() => null);
+}
+function dbUpdateWorker(w, what) {
+  return dbFire(what, () => sb.from("workers").update(dbWorkerRow(w)).eq("company_id", DB_CID).eq("id", w.id).select("id"),
+    { expect: true });
+}
+function dbDeleteWorker(id, what) {
+  return dbFire(what, () => sb.from("workers").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+    .eq("company_id", DB_CID).eq("id", id).select("id"), { expect: true });
+}
+
+/* ---- الوثائق ----
+   الرقم من العدّاد الذرّي على الخادم حصراً (next_doc_no) — لا تخمين بالواجهة. بلا خادم
+   (الفحوص) يقوم مقامه عدّاد من القائمة نفسها. */
+function dbNextDocNo(kind, prefix, yr, list) {
+  if (dbLocal()) {
+    let mx = 0;
+    const re = new RegExp("^" + prefix + "-" + yr + "-(\\d+)$");
+    (list || []).forEach(x => { const m = re.exec(String((x && x.no) || "")); if (m) mx = Math.max(mx, +m[1]); });
+    return Promise.resolve(prefix + "-" + yr + "-" + String(mx + 1).padStart(3, "0"));
+  }
+  return dbWrite("رقم وثيقة جديد", () => sb.rpc("next_doc_no", { cid: DB_CID, k: kind, prefix: prefix, yr: String(yr) }),
+    { quiet: true })
+    .then(no => { if (!no) throw dbWriteErr({ message: "الخادم لم يُعطِ رقماً للوثيقة." }, "رقم وثيقة جديد"); return String(no); });
+}
+/* الوثيقة ← صف: الأعمدة (الرقم، العامل، التاريخان، النسخ السابقة) وما بقي في data —
+   عكس dbDoc تماماً */
+function dbDocRow(kind, rec) {
+  const f = DB_DOC_DATES[kind] || [];
+  const data = Object.assign({}, rec);
+  ["id", "no", "revisions", "workerId"].concat(f).forEach(k => { delete data[k]; });
+  return { no: String(rec.no || ""), worker_id: kind === "letter" ? null : (rec.workerId || null),
+    date: rec[f[0]] || null, date_to: f[1] ? (rec[f[1]] || null) : null, data: data,
+    revisions: Array.isArray(rec.revisions) ? rec.revisions : [] };
+}
+function dbInsertDoc(kind, rec, zoneId, what) {
+  const row = Object.assign({ id: rec.id, company_id: DB_CID, kind: kind, zone_id: zoneId || null, created_by: dbMe() },
+    dbDocRow(kind, rec));
+  return dbWrite(what, () => sb.from("documents").insert(row), { quiet: true });
+}
+/* تعديل وثيقة: الصف كله مع revisions (النسخة السابقة مدفوعة فيها). zoneId يُرسل فقط إذا
+   تغيّر العامل — المنطقة تُثبَّت وقت الإصدار. */
+function dbUpdateDoc(kind, rec, zoneId, what) {
+  const row = dbDocRow(kind, rec);
+  if (zoneId !== undefined) row.zone_id = zoneId || null;
+  return dbWrite(what, () => sb.from("documents").update(row).eq("company_id", DB_CID).eq("id", rec.id).select("id"),
+    { quiet: true, expect: true });
+}
+/* تعديل وثيقة بالخلفية (تصحيح اسم عامل بنسختها مثلاً): الرفض يُعالج مركزياً */
+function dbUpdateDocBg(kind, rec, what) {
+  return dbFire(what, () => sb.from("documents").update(dbDocRow(kind, rec)).eq("company_id", DB_CID).eq("id", rec.id)
+    .select("id"), { expect: true });
+}
+function dbDeleteDoc(id, what) {
+  return dbWrite(what, () => sb.from("documents").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+    .eq("company_id", DB_CID).eq("id", id).select("id"), { quiet: true, expect: true });
+}
+
+/* ---- الشركة: الإعدادات صف واحد. العطل ليست فيها (جدولها مستقل) ---- */
+function dbSaveCompany(c, what) {
+  const settings = Object.assign({}, c.settings || {});
+  delete settings.holidays;
+  return dbFire(what, () => sb.from("companies").update({ name: c.name, theme: c.theme, accent: c.accent, settings: settings })
+    .eq("id", DB_CID).select("id"), { expect: true });
+}
+
+/* ---- الهيكل: المناطق والأقسام (الحذف منطقي) ---- */
+function dbInsertZone(z, sortOrder, what) {
+  return dbFire(what, () => sb.from("zones").insert({ id: z.id, company_id: DB_CID, building_id: z.buildingId || null,
+    name: z.name, short: z.short || "", color: z.color || null, sort_order: sortOrder }));
+}
+function dbUpdateZone(z, sortOrder, what) {
+  const row = { name: z.name, short: z.short || "", color: z.color || null };
+  if (sortOrder !== undefined) row.sort_order = sortOrder;
+  return dbFire(what, () => sb.from("zones").update(row).eq("company_id", DB_CID).eq("id", z.id).select("id"), { expect: true });
+}
+function dbDeleteZone(id, what) {
+  return dbFire(what, () => sb.from("zones").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+    .eq("company_id", DB_CID).eq("id", id).select("id"), { expect: true });
+}
+function dbInsertSection(sec, what) {
+  return dbFire(what, () => sb.from("sections").insert({ id: sec.id, company_id: DB_CID, zone_id: sec.zoneId || null,
+    name: sec.name, sort_order: Number(sec.sortOrder) || 0 }));
+}
+function dbUpdateSection(sec, what) {
+  return dbFire(what, () => sb.from("sections").update({ zone_id: sec.zoneId || null, name: sec.name,
+    sort_order: Number(sec.sortOrder) || 0 }).eq("company_id", DB_CID).eq("id", sec.id).select("id"), { expect: true });
+}
+function dbDeleteSection(id, what) {
+  return dbFire(what, () => sb.from("sections").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+    .eq("company_id", DB_CID).eq("id", id).select("id"), { expect: true });
+}
+
+/* ---- كتالوج المواد ---- */
+function dbInsertMaterial(m, sortOrder, what) {
+  return dbFire(what, () => sb.from("materials").insert({ id: m.id, company_id: DB_CID, name: m.name, unit: m.unit || "",
+    qty: Number(m.qty) || 0, sort_order: sortOrder }));
+}
+function dbUpdateMaterial(m, sortOrder, what) {
+  const row = { name: m.name, unit: m.unit || "", qty: Number(m.qty) || 0 };
+  if (sortOrder !== undefined) row.sort_order = sortOrder;
+  return dbFire(what, () => sb.from("materials").update(row).eq("company_id", DB_CID).eq("id", m.id).select("id"), { expect: true });
+}
+function dbDeleteMaterial(id, what) {
+  return dbFire(what, () => sb.from("materials").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+    .eq("company_id", DB_CID).eq("id", id).select("id"), { expect: true });
+}
+
+/* ---- العطل وأقفال الأشهر ----
+   لا سياسة حذف على الجدولين: حذف عطلة وفتح قفل يُطلبان كحذف، وصفر صفوف محذوفة يُعلن
+   رفضاً صريحاً بدل أن يمرّ بصمت. */
+function dbInsertHolidays(hs, what) {
+  if (!hs.length) return Promise.resolve(null);
+  return dbFire(what, () => sb.from("holidays").insert(hs.map(h =>
+    ({ company_id: DB_CID, date: h.date, name: h.name || "", added_by: dbMe() }))));
+}
+function dbDeleteHoliday(date, what) {
+  return dbFire(what, () => sb.from("holidays").delete().eq("company_id", DB_CID).eq("date", date).select("date"),
+    { expect: true });
+}
+function dbInsertLock(month, snapshot, what) {
+  return dbWrite(what, () => sb.from("month_locks").insert({ company_id: DB_CID, month: month, snapshot: snapshot,
+    locked_by: dbMe(), locked_at: dbNow() }), { quiet: true });
+}
+function dbDeleteLock(month, what) {
+  return dbWrite(what, () => sb.from("month_locks").delete().eq("company_id", DB_CID).eq("month", month).select("month"),
+    { quiet: true, expect: true });
+}
+
+/* ---- سجل التدقيق: إضافة فقط ---- */
+function dbAudit(a) {
+  return dbFire("قيد سجل التدقيق", () => sb.from("audit_log").insert({ company_id: DB_CID, user_id: dbMe(),
+    kind: String(a.kind || ""), what: String(a.what || ""), before_val: String(a.before || ""),
+    after_val: String(a.after || ""), reason: (a.reason || a.ref) ? String(a.reason || a.ref) : null }));
+}
+/* يُحلّ حين يفرغ طابور الكتابة */
+function dbIdle() { return dbQ.then(() => {}); }
