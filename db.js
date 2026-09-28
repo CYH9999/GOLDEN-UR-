@@ -278,6 +278,8 @@ async function dbFetchAll() {
   if (co.error) throw dbErr(co.error, "تعذّر تحميل بيانات الشركة.");
   if (!co.data) throw new Error("تعذّر الوصول إلى بيانات الشركة — راجع مالك النظام.");
   DB_CID = co.data.id;
+  DB_CO_LAST = dbCanon({ name: co.data.name, theme: co.data.theme, accent: co.data.accent,
+    settings: (co.data.settings && typeof co.data.settings === "object") ? co.data.settings : {} });
 
   const auditQ = (async () => {
     let r;
@@ -681,11 +683,25 @@ function dbDeleteDoc(id, what) {
 }
 
 /* ---- الشركة: الإعدادات صف واحد. العطل ليست فيها (جدولها مستقل) ---- */
-function dbSaveCompany(c, what) {
+/* الصف يحمل الشعار والتوقيع والفورمة (نصف ميغابايت تقريباً)، فلا يُكتب إلا إذا تغيّر شيء
+   فعلاً: يُقارن بآخر ما قُرئ أو كُتب، بمفاتيح مرتّبة (jsonb لا يحفظ ترتيب المفاتيح). */
+let DB_CO_LAST = null;
+function dbCanon(v) {
+  if (Array.isArray(v)) return "[" + v.map(dbCanon).join(",") + "]";
+  if (v && typeof v === "object")
+    return "{" + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ":" + dbCanon(v[k])).join(",") + "}";
+  return JSON.stringify(v === undefined ? null : v);
+}
+function dbCompanyRow(c) {
   const settings = Object.assign({}, c.settings || {});
   delete settings.holidays;
-  return dbFire(what, () => sb.from("companies").update({ name: c.name, theme: c.theme, accent: c.accent, settings: settings })
-    .eq("id", DB_CID).select("id"), { expect: true });
+  return { name: c.name, theme: c.theme, accent: c.accent, settings: settings };
+}
+function dbSaveCompany(c, what) {
+  const row = dbCompanyRow(c), key = dbCanon(row);
+  if (key === DB_CO_LAST) return Promise.resolve(null);      // لا تغيير — لا كتابة
+  return dbFire(what, () => sb.from("companies").update(row).eq("id", DB_CID).select("id"), { expect: true })
+    .then(d => { if (d) DB_CO_LAST = key; return d; });
 }
 
 /* ---- الهيكل: المناطق والأقسام (الحذف منطقي) ---- */
@@ -731,8 +747,8 @@ function dbDeleteMaterial(id, what) {
 }
 
 /* ---- العطل وأقفال الأشهر ----
-   لا سياسة حذف على الجدولين: حذف عطلة وفتح قفل يُطلبان كحذف، وصفر صفوف محذوفة يُعلن
-   رفضاً صريحاً بدل أن يمرّ بصمت. */
+   حذف العطلة بسياسة (company.settings)، والخادم يرفض إضافتها وحذفها بشهر مقفل برسالته.
+   صفر صفوف محذوفة يُعلن رفضاً صريحاً بدل أن يمرّ بصمت. */
 function dbInsertHolidays(hs, what) {
   if (!hs.length) return Promise.resolve(null);
   return dbFire(what, () => sb.from("holidays").insert(hs.map(h =>
@@ -746,9 +762,10 @@ function dbInsertLock(month, snapshot, what) {
   return dbWrite(what, () => sb.from("month_locks").insert({ company_id: DB_CID, month: month, snapshot: snapshot,
     locked_by: dbMe(), locked_at: dbNow() }), { quiet: true });
 }
-function dbDeleteLock(month, what) {
-  return dbWrite(what, () => sb.from("month_locks").delete().eq("company_id", DB_CID).eq("month", month).select("month"),
-    { quiet: true, expect: true });
+/* فتح القفل بدالة الخادم لا بحذف: تفرض صلاحية month.lock وسبباً غير فارغ ووجود القفل،
+   وتكتب هي قيد التدقيق بالصافي عند القفل ثم تحذف — فلا يُكتب قيد ثانٍ من هنا. */
+function dbUnlockMonth(month, why, what) {
+  return dbWrite(what, () => sb.rpc("unlock_month", { cid: DB_CID, m: month, why: String(why) }), { quiet: true });
 }
 
 /* ---- سجل التدقيق: إضافة فقط ---- */

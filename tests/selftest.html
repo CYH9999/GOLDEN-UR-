@@ -800,10 +800,15 @@ try{
     'el("rpFrom").value=monthOf("'+pm_15+'-01")[0]; el("rpTo").value=monthOf("'+pm_15+'-01")[1]; runReport(true);');
   check("تعديل راتب بعد القفل: فرق صريح على كشف الشهر المقفل", W_15('el("rpLock").textContent.indexOf("تغيّر صافي 1 عامل")>=0 || el("rpLock").textContent.indexOf("تغيّر صافي ١ عامل")>=0'), true);
   /* الفتح بسبب إلزامي */
-  const pU1_15=w15.eval('unlockMonth("'+pm_15+'-01")'); await dlgWait(w15); W_15('document.getElementById("ulReason").value=""'); await answer(w15,true); await pU1_15;
-  if(await dlgWait(w15)) await answer(w15,true);
+  /* زر الفتح معطّل حتى يُكتب السبب */
+  const pU1_15=w15.eval('unlockMonth("'+pm_15+'-01")'); await dlgWait(w15); W_15('document.getElementById("ulReason").value=""');
+  check("الفتح بلا سبب: زر الفتح معطّل", W_15('el("dlgOk").disabled'), true);
+  await answer(w15,false); await pU1_15;
   check("الفتح بلا سبب مرفوض", W_15('monthLocked("'+D1_15+'")'), true);
-  const pU2_15=w15.eval('unlockMonth("'+pm_15+'-01")'); await dlgWait(w15); W_15('document.getElementById("ulReason").value="تصحيح غياب بطلب الإدارة"'); await answer(w15,true); await pU2_15;
+  const pU2_15=w15.eval('unlockMonth("'+pm_15+'-01")'); await dlgWait(w15);
+  W_15('var t=document.getElementById("ulReason"); t.value="تصحيح غياب بطلب الإدارة"; t.dispatchEvent(new Event("input"));');
+  check("بعد كتابة السبب: الزر يتفعّل", W_15('el("dlgOk").disabled'), false);
+  await answer(w15,true); await pU2_15;
   check("الفتح بسبب مكتوب", W_15('monthLocked("'+D1_15+'")'), false);
   /* سجل التدقيق */
   W_15('changeWorkerStatus("a","منقول",{silent:true,date:"'+D1_15+'",note:"نقل"});');

@@ -1689,6 +1689,7 @@ function dlgOpen(o,res){
   const ok=el("dlgOk"), cancel=el("dlgCancel");
   ok.textContent=dlgCur.ok||"تأكيد";
   ok.className="btn "+(dlgCur.danger?"danger":"primary");
+  ok.disabled=false;
   cancel.textContent=dlgCur.cancel||"إلغاء";
   cancel.classList.toggle("hidden",!!dlgCur.noCancel);
   el("dlgBack").classList.remove("hidden");
@@ -2088,13 +2089,13 @@ function nowStamp(){ const d=new Date(), p=n=>String(n).padStart(2,"0");
   return todayISO()+" "+p(d.getHours())+":"+p(d.getMinutes()); }
 /* قيد واحد: متى، النوع، على ماذا، القيمة قبل وبعد (+ سبب أو مرجع). يُحفظ بقائمة الشركة
    نفسها، والأقدم يُحذف بعد ٢٠٠٠ قيد حتى لا يثقل ملف البيانات. */
-function audit(kind, what, before, after, extra){
+function audit(kind, what, before, after, extra, serverWrote){
   const c=C(); if(!Array.isArray(c.audit)) c.audit=[];
   const a=Object.assign({at:nowStamp(), kind:kind, what:String(what==null?"":what),
     before:String(before==null?"":before), after:String(after==null?"":after)}, extra||{});
   c.audit.push(a);
   if(c.audit.length>AUDIT_MAX) c.audit.splice(0, c.audit.length-AUDIT_MAX);
-  dbAudit(a);   // على الخادم: إضافة فقط
+  if(!serverWrote) dbAudit(a);   // على الخادم: إضافة فقط (إلا قيداً كتبته دالة الخادم نفسها)
 }
 
 function blankCompany(name){
@@ -10916,17 +10917,24 @@ function lockMonth(iso){
     },e=>{ alertBox(e.message,"لم يُقفل الشهر"); return false; });
   });
 }
+/* فتح القفل بدالة الخادم unlock_month: السبب إلزامي (زر الفتح معطّل حتى يُكتب) ويُمرَّر كما
+   هو؛ الخادم يفرض الصلاحية والسبب ووجود القفل ويكتب قيد التدقيق بنفسه، ورفضه يظهر بنصّه. */
 function unlockMonth(iso){
   const mk=monthKey(iso), mn=monthNameOf(iso);
   return dlgShow({title:"فتح قفل راتب "+mn, danger:true, ok:"افتح القفل",
     message:"فتح القفل يسمح بتعديل أرقام شهر صُرف. السبب إلزامي ويُسجَّل بسجل التدقيق مع الوقت.",
-    fields:[{id:"ulReason",label:"سبب الفتح",type:"textarea",placeholder:"مثال: تصحيح غياب مؤشّر خطأً يوم ١٢ بطلب الإدارة"}]}).then(v=>{
+    fields:[{id:"ulReason",label:"سبب الفتح",type:"textarea",placeholder:"مثال: تصحيح غياب مؤشّر خطأً يوم ١٢ بطلب الإدارة"}],
+    onOpen:()=>{
+      const t=document.getElementById("ulReason"), ok=el("dlgOk");
+      const sync=()=>{ ok.disabled=String(t.value||"").trim().length<3; };
+      sync(); t.addEventListener("input",sync);
+    }}).then(v=>{
     if(!v) return false;
     const why=String(v.ulReason||"").trim();
     if(why.length<3){ alertBox("اكتب سبب الفتح — القفل لا يُفتح بلا سبب مسجَّل."); return false; }
-    return dbDeleteLock(mk,"فتح قفل راتب "+mn).then(()=>{
+    return dbUnlockMonth(mk,why,"فتح قفل راتب "+mn).then(()=>{
       delete C().locks[mk];
-      audit("unlock","راتب "+mn,"مقفل","مفتوح",{reason:why});
+      audit("unlock","راتب "+mn,"مقفل","مفتوح",{reason:why},true);
       if(RP) renderReport(); refresh(); scheduleAlerts();
       return true;
     },e=>{ alertBox(e.message,"لم يُفتح القفل"); return false; });
