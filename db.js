@@ -1,8 +1,8 @@
 /* =====================================================================
    db.js — طبقة الخادم (Supabase)
    كل ما يخص الخادم يمرّ من هنا حصراً: الاتصال، الجلسة، هوية المستخدم
-   وصلاحياته — ولاحقاً القراءة والكتابة. index.html لا ينادي Supabase
-   مباشرة أبداً، بل ينادي دوال هذا الملف.
+   وصلاحياته، وتحميل البيانات كلها وبناؤها بشكل البرنامج — والكتابة لاحقاً.
+   index.html لا ينادي Supabase مباشرة أبداً، بل ينادي دوال هذا الملف.
 
    المفتاح anon علني بطبيعته. الحماية الفعلية كلها بسياسات RLS على
    الخادم: أي إخفاء بالواجهة ترتيب للعرض فقط، لا يُبنى عليه أمان.
@@ -206,4 +206,286 @@ async function dbLoadMe(user) {
     zoneNames: zoneNames
   };
   return ME;
+}
+
+/* هوية الفحص المحلي (tests/): مالك بكل الصلاحيات على كل المناطق، حتى تمرّ
+   الفحوص بكل مسارات الواجهة بلا خادم. لا تُنادى إلا مع __JARD_TEST__ —
+   ولا تمنح شيئاً فعلياً: الخادم لا يعرفها، وكل حماية حقيقية بسياسات RLS. */
+function dbLocalOwner() {
+  const all = new Set(Object.keys(PERM_LABELS));
+  ME = {
+    id: "local", email: "", name: "فحص محلي", active: true,
+    perms: all, zones: new Set(), allZones: true, zoneNames: {},
+    roles: [{ id: "local", companyId: "", name: "مالك النظام", color: "#4B2E83",
+      perms: all, allZones: true, zones: new Set(), isSystem: true, sortOrder: 0 }]
+  };
+  return ME;
+}
+
+/* ==================== تحميل البيانات (القراءة) ====================
+   كل شيء يُسحب عند الإقلاع ويُبنى بنفس شكل state الذي تقرأ منه الواجهة
+   والمحرّك، فلا تتغيّر أي دالة حساب. البيانات كلها عشرات الكيلوبايت، فلا
+   تحميل جزئي بالشهور — الاستثناء سجل التدقيق: آخر ٢٠٠ قيد.
+   التحميل (dbFetchAll) منفصل عن البناء (dbBuildState): البناء دالة خالصة بلا
+   خادم، فتُفحص بالفحص الذاتي على صفوف مصنوعة بيد. */
+
+const DB_PAGE = 1000;          // حجم صفحة القراءة
+const DB_AUDIT_LIMIT = 200;    // سجل التدقيق: أحدث ٢٠٠ قيد فقط
+
+/* الشركة من رولات المستخدم — كل رولاته في شركة واحدة */
+function dbCompanyId() {
+  const ids = ME ? Array.from(new Set(ME.roles.map(r => r.companyId).filter(Boolean))) : [];
+  return ids[0] || null;
+}
+
+/* جدول كامل على صفحات. الخادم يقصّ الطلب الواحد عند حدّ (١٠٠٠ صف افتراضياً
+   وقد يُضبط أقل)، فقراءة بطلب واحد تقصّ الجرد بصمت بعد أشهر قليلة. العدد
+   الكلي يُطلب مع الصفحة الأولى، والقراءة تستمر حتى يكتمل مهما كان الحدّ.
+   shape تضيف الفلاتر والترتيب — الترتيب الثابت شرط حتى لا تتداخل الصفحات. */
+async function dbReadAll(table, cols, what, cid, shape) {
+  const out = [];
+  let total = null;
+  for (let guard = 0; guard < 100000; guard++) {
+    let q = sb.from(table).select(cols, out.length ? undefined : { count: "exact" }).eq("company_id", cid);
+    if (shape) q = shape(q);
+    let r;
+    try { r = await q.range(out.length, out.length + DB_PAGE - 1); }
+    catch (e) { throw dbErr(e, "تعذّر تحميل " + what + "."); }
+    if (r.error) throw dbErr(r.error, "تعذّر تحميل " + what + ".");
+    const rows = r.data || [];
+    if (total === null && typeof r.count === "number") total = r.count;
+    for (let i = 0; i < rows.length; i++) out.push(rows[i]);
+    /* بلا عدد كلي لا يُحكم بقصر الصفحة (حدّ الخادم قد يكون أقل من DB_PAGE): القراءة
+       تستمر حتى صفحة فارغة */
+    if (!rows.length) break;
+    if (total !== null && out.length >= total) break;
+  }
+  return out;
+}
+
+/* الصفوف الخام من كل الجداول. الخادم يعيد لكل مستخدم ما تسمح به سياساته فقط
+   (مناطق نطاقه وعمالها وأيامهم ووثائقهم) — فلا فلترة أمنية هنا. */
+async function dbFetchAll() {
+  const cid = dbCompanyId();
+  if (!cid) throw new Error("حسابك غير مرتبط بأي شركة — راجع مالك النظام.");
+  const live = q => q.is("deleted_at", null);
+
+  let co;
+  try { co = await sb.from("companies").select("id,name,theme,accent,settings").eq("id", cid).maybeSingle(); }
+  catch (e) { throw dbErr(e, "تعذّر تحميل بيانات الشركة."); }
+  if (co.error) throw dbErr(co.error, "تعذّر تحميل بيانات الشركة.");
+  if (!co.data) throw new Error("تعذّر الوصول إلى بيانات الشركة — راجع مالك النظام.");
+
+  const auditQ = (async () => {
+    let r;
+    try {
+      r = await sb.from("audit_log").select("id,user_id,kind,what,before_val,after_val,reason,at")
+        .eq("company_id", cid).order("at", { ascending: false }).order("id", { ascending: false })
+        .limit(DB_AUDIT_LIMIT);
+    } catch (e) { throw dbErr(e, "تعذّر تحميل سجل التدقيق."); }
+    if (r.error) throw dbErr(r.error, "تعذّر تحميل سجل التدقيق.");
+    return r.data || [];
+  })();
+
+  const [buildings, zones, sections, workers, dayStates, dayZones, documents, materials, holidays, locks, audit] =
+    await Promise.all([
+      dbReadAll("buildings", "id,name,short,sort_order", "الجهات", cid,
+        q => q.order("sort_order").order("id")),
+      dbReadAll("zones", "id,building_id,name,short,color,sort_order", "المناطق", cid,
+        q => live(q).order("sort_order").order("id")),
+      dbReadAll("sections", "id,zone_id,name", "الأقسام", cid,
+        q => live(q).order("id")),
+      dbReadAll("workers",
+        "id,seq,name,mother_name,dob,phone,phone2,address,section_id,status,status_changed_at," +
+        "status_note,status_history,start_date,salary,deduct,leave_policy,off_weekdays,off_dates",
+        "العمال", cid, q => live(q).order("seq").order("id")),
+      dbReadAll("day_states", "date,worker_id,state", "تأشيرات الجرد", cid,
+        q => q.order("date").order("worker_id")),
+      dbReadAll("day_zones", "date,zone_id,notes,confirmed", "اعتماد الأيام والملاحظات", cid,
+        q => q.order("date").order("zone_id")),
+      dbReadAll("documents", "id,kind,no,worker_id,zone_id,date,date_to,data,revisions",
+        "الوثائق", cid, q => live(q).order("id")),
+      dbReadAll("materials", "id,name,unit,qty,sort_order", "المواد", cid,
+        q => live(q).order("sort_order").order("id")),
+      dbReadAll("holidays", "date,name", "العطل", cid, q => q.order("date")),
+      dbReadAll("month_locks", "month,locked_at,snapshot", "أقفال الأشهر", cid, q => q.order("month")),
+      auditQ
+    ]);
+
+  return { company: co.data, buildings, zones, sections, workers, dayStates, dayZones,
+    documents, materials, holidays, locks, audit };
+}
+
+/* ---- أدوات التحويل ----
+   التاريخ (عمود date) يبقى نصاً YYYY-MM-DD كما جاء، ولا يمرّ عبر new Date —
+   المنطقة الزمنية تزيحه يوماً. أما الطوابع الزمنية (timestamptz) فلحظات
+   حقيقية، فتُحوَّل لوقت الجهاز المحلي. */
+function dbDay(v) { return v == null ? "" : String(v).slice(0, 10); }
+function dbStamp(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
+  const p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+function dbStr(v) { return v == null ? "" : String(v); }
+/* null يبقى null: الراتب والاستقطاع الفارغان يعنيان «الافتراضي»، والصفر
+   مبلغ حقيقي. Number(null) = 0 كان سيعطي راتباً صفراً بصمت. */
+function dbNumOrNull(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+}
+/* أرقام داخل jsonb الوثيقة: إن وصلت نصاً تُقرأ رقماً بدقتها كاملة، بلا تقريب */
+const DB_DOC_NUMS = ["amount", "days", "dayRate", "hours"];
+function dbFixNums(o) {
+  DB_DOC_NUMS.forEach(k => {
+    if (typeof o[k] === "string" && /^-?\d+(\.\d+)?(e-?\d+)?$/i.test(o[k].trim())) o[k] = Number(o[k]);
+  });
+  return o;
+}
+const DB_AR = (function () {
+  try { return new Intl.Collator("ar", { numeric: true }); }
+  catch (e) { return { compare: (a, b) => (a < b ? -1 : a > b ? 1 : 0) }; }
+})();
+
+/* أعمدة التاريخ في جدول الوثائق ← حقول الوثيقة بالبرنامج، لكل نوع.
+   حقل kind داخل العقوبة (none/days/amount) يبقى من data كما هو — غير documents.kind. */
+const DB_DOC_LISTS = { leave: "leaves", penalty: "penalties", achievement: "achievements",
+  issue: "issues", letter: "letters", pass: "passes" };
+const DB_DOC_DATES = { leave: ["from", "to"], issue: ["from", "to"], penalty: ["date"],
+  achievement: ["date"], letter: ["date"], pass: ["date"] };
+
+/* وثيقة بشكلها بالبرنامج: data أساسها، والأعمدة (المعرّف، الرقم، العامل،
+   التواريخ، النسخ السابقة) هي المرجع لأنها ما يفحصه الخادم (قفل الشهر،
+   تفرّد الرقم) وما تكتبه المرحلة التالية. */
+function dbDoc(r) {
+  const d = (r.data && typeof r.data === "object" && !Array.isArray(r.data)) ? r.data : {};
+  const o = dbFixNums(Object.assign({}, d));   // لا حقل يُخترع: الشكل كما حُفظ
+  o.id = r.id;
+  if (r.no != null) o.no = String(r.no);
+  if (r.kind !== "letter") o.workerId = r.worker_id != null ? r.worker_id : dbStr(d.workerId);
+  const f = DB_DOC_DATES[r.kind] || [];
+  if (f[0] && r.date != null) o[f[0]] = dbDay(r.date);
+  if (f[1] && r.date_to != null) o[f[1]] = dbDay(r.date_to);
+  const rv = Array.isArray(r.revisions) ? r.revisions : (Array.isArray(d.revisions) ? d.revisions : []);
+  if (rv.length) o.revisions = rv; else delete o.revisions;
+  return o;
+}
+
+function dbWorker(r) {
+  const w = {
+    id: r.id,
+    name: dbStr(r.name),
+    sectionId: dbStr(r.section_id),
+    salary: dbNumOrNull(r.salary),
+    deduct: dbNumOrNull(r.deduct),
+    offWeekdays: Array.isArray(r.off_weekdays) ? r.off_weekdays.map(Number) : [],
+    /* التاريخ الفارغ نص فارغ لا null — بنفس شكل البيانات المحلية */
+    startDate: dbDay(r.start_date),
+    dob: dbStr(r.dob),
+    motherName: dbStr(r.mother_name),
+    status: dbStr(r.status),
+    statusChangedAt: dbDay(r.status_changed_at),
+    statusNote: dbStr(r.status_note),
+    statusHistory: Array.isArray(r.status_history) ? r.status_history : [],
+    phone: dbStr(r.phone),
+    phone2: dbStr(r.phone2),
+    address: dbStr(r.address),
+    seq: Number(r.seq) || 0
+  };
+  if (Array.isArray(r.off_dates) && r.off_dates.length) w.offDates = r.off_dates.map(dbDay);
+  if (r.leave_policy) w.leavePolicy = String(r.leave_policy);
+  return w;
+}
+
+/* الصفوف الخام ← state بنفس شكل البرنامج { v:2, companies:[c], active }.
+   دالة خالصة: لا خادم ولا صفحة، فتُفحص مستقلة. */
+function dbBuildState(raw) {
+  const co = raw.company || {};
+  /* الإعدادات كلها كما هي (أربعون مفتاحاً) — لا تصفية ولا قائمة مفترضة */
+  const settings = Object.assign({}, (co.settings && typeof co.settings === "object" && !Array.isArray(co.settings)) ? co.settings : {});
+  /* العطل من جدولها، لا من settings */
+  settings.holidays = (raw.holidays || []).filter(h => h && h.date)
+    .map(h => ({ date: dbDay(h.date), name: dbStr(h.name) }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  const buildings = (raw.buildings || []).map(b => ({ id: b.id, name: dbStr(b.name), short: dbStr(b.short),
+    sortOrder: Number(b.sort_order) || 0 }))
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || DB_AR.compare(a.name, b.name));
+  const bIdx = {};
+  buildings.forEach((b, i) => { bIdx[b.id] = i; });
+  const bOf = id => (id in bIdx ? bIdx[id] : 999);
+
+  /* المناطق مرتّبة بجهتها ثم بترتيبها داخل الجهة — ترتيب خانات العدّاد والورقة */
+  const zones = (raw.zones || []).slice()
+    .sort((a, b) => (bOf(a.building_id) - bOf(b.building_id)) ||
+      ((Number(a.sort_order) || 0) - (Number(b.sort_order) || 0)) || DB_AR.compare(dbStr(a.name), dbStr(b.name)))
+    .map(z => ({ id: z.id, name: dbStr(z.name), short: dbStr(z.short), color: dbStr(z.color),
+      buildingId: z.building_id || "" }));
+
+  /* الأقسام بلا عمود ترتيب على الخادم: أبجدياً ثابتاً */
+  const sections = (raw.sections || []).map(s => ({ id: s.id, name: dbStr(s.name), zoneId: dbStr(s.zone_id) }))
+    .sort((a, b) => DB_AR.compare(a.name, b.name) || (a.id < b.id ? -1 : 1));
+
+  const workers = (raw.workers || []).map(dbWorker).sort((a, b) => (a.seq - b.seq) || (a.id < b.id ? -1 : 1));
+
+  /* الأيام: الحاضر لا يُخزَّن — الصف موجود للغائب والمتفرقة فقط.
+     الملاحظات والاعتماد لكل منطقة على حدة. */
+  const days = {};
+  const day = k => days[k] || (days[k] = { states: {}, zones: {} });
+  (raw.dayStates || []).forEach(r => {
+    if (r && (r.state === "absent" || r.state === "misc")) day(dbDay(r.date)).states[r.worker_id] = r.state;
+  });
+  (raw.dayZones || []).forEach(r => {
+    if (r && r.zone_id) day(dbDay(r.date)).zones[r.zone_id] = { notes: dbStr(r.notes), confirmed: r.confirmed === true };
+  });
+
+  const lists = { leaves: [], penalties: [], achievements: [], issues: [], letters: [], passes: [] };
+  (raw.documents || []).forEach(r => { const k = r && DB_DOC_LISTS[r.kind]; if (k) lists[k].push(dbDoc(r)); });
+  /* الوصولات الأحدث أولاً كما يضيفها البرنامج، والكتب بترتيب إصدارها */
+  const byNo = (a, b) => DB_AR.compare(dbStr(a.no), dbStr(b.no));
+  ["leaves", "penalties", "achievements", "issues", "passes"].forEach(k => lists[k].sort((a, b) => byNo(b, a)));
+  lists.letters.sort(byNo);
+
+  const materials = (raw.materials || []).map(m => ({ id: m.id, name: dbStr(m.name), unit: dbStr(m.unit),
+    qty: Number(m.qty) || 0 }));
+
+  /* قفل الشهر: الصورة كلها (at, net, n, rows) كما حُفظت */
+  const locks = {};
+  (raw.locks || []).forEach(r => {
+    if (!r || !r.month) return;
+    const s = (r.snapshot && typeof r.snapshot === "object" && !Array.isArray(r.snapshot)) ? Object.assign({}, r.snapshot) : {};
+    if (!s.at && r.locked_at) s.at = dbStamp(r.locked_at);
+    locks[String(r.month)] = s;
+  });
+
+  /* سجل التدقيق بالترتيب الزمني (الأقدم أولاً) كما يضيفه البرنامج */
+  const audit = (raw.audit || []).slice().reverse().map(r => {
+    const a = { at: dbStamp(r.at), kind: dbStr(r.kind), what: dbStr(r.what),
+      before: dbStr(r.before_val), after: dbStr(r.after_val) };
+    if (r.reason) a.reason = String(r.reason);
+    if (r.user_id) a.userId = r.user_id;
+    return a;
+  });
+
+  const c = {
+    id: co.id, name: dbStr(co.name), theme: co.theme || "#4B2E83", accent: co.accent || "#B8912E",
+    settings: settings,
+    buildings: buildings, zones: zones, sections: sections, workers: workers, days: days,
+    leaves: lists.leaves, penalties: lists.penalties, achievements: lists.achievements,
+    issues: lists.issues, letters: lists.letters, passes: lists.passes,
+    materials: materials, locks: locks, audit: audit,
+    /* الكود يقرأ شهر بدء إصلاح أشهر الـ٣١ يوماً من c.pay31From مباشرة (buildReport)،
+       وهو على الخادم داخل settings. يبقى في settings أيضاً حتى لا يسقط عند حفظها. */
+    pay31From: settings.pay31From ? String(settings.pay31From) : "",
+    /* البيانات مرحّلة سلفاً: علامات الترحيلات القديمة مضبوطة فلا يُعاد أيٌّ منها */
+    matSeeded: true, payV3: true, payV5: true, payV6: true, auditV1: true, formV1: true
+  };
+  return { v: 2, companies: [c], active: c.id };
+}
+
+/* التحميل الكامل: الصفوف من الخادم ثم البناء */
+async function dbLoadState() {
+  return dbBuildState(await dbFetchAll());
 }

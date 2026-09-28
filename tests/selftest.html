@@ -102,7 +102,14 @@ const PRELUDE=`<script>(function(){
   window.open=function(){ var h=''; var w={document:{write:function(x){h+=x;},close:function(){ window.__printed.push(h); }},focus:function(){},print:function(){}}; return w; };
 })();<\/script>`;
 let SRC=null;
-function withPrelude(txt){
+/* db.js (طبقة الخادم وبناء البيانات) يُضمَّن مكان وسمه — الإطار المعزول لا يقرأ ملفاً
+   بمسار نسبي. مكتبة Supabase من الإنترنت تُحذف: الفحص كله بلا خادم ولا شبكة. */
+function withPrelude(txt,dbjs){
+  const tag='<script src="db.js"><\/script>';
+  if(txt.indexOf(tag)<0) throw new Error("ما لقيت وسم db.js في index.html");
+  if(dbjs==null) throw new Error("db.js مطلوب مع index.html");
+  txt=txt.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/[^"]*"><\/script>/,"")
+         .replace(tag,()=>"<script>"+dbjs+"<\/script>");
   const at=txt.indexOf("<script>");
   if(at<0) throw new Error("ما لقيت وسم script في الملف المختار");
   return txt.slice(0,at)+PRELUDE+txt.slice(at);
@@ -110,19 +117,22 @@ function withPrelude(txt){
 async function loadSource(){
   const box=document.getElementById("srcBox");
   try{
-    const r=await fetch("../index.html",{cache:"no-store"});
-    if(!r.ok) throw new Error(r.status);
-    SRC=withPrelude(await r.text());
-    box.innerHTML="المصدر: <b>../index.html</b> (قُرئ مباشرة).";
+    const r=await fetch("../index.html",{cache:"no-store"}), d=await fetch("../db.js",{cache:"no-store"});
+    if(!r.ok||!d.ok) throw new Error(r.status+"/"+d.status);
+    SRC=withPrelude(await r.text(), await d.text());
+    box.innerHTML="المصدر: <b>../index.html</b> و<b>../db.js</b> (قُرئا مباشرة).";
     return;
   }catch(e){}
   box.innerHTML='المتصفح منع قراءة <b>../index.html</b> لأن الصفحة مفتوحة من ملف محلي. '+
-    'اختر ملف <b>index.html</b> من مجلد البرنامج ويبدأ الفحص:<br><input type="file" id="pick" accept=".html,text/html">';
+    'اختر الملفين <b>index.html</b> و<b>db.js</b> معاً من مجلد البرنامج ويبدأ الفحص:<br>'+
+    '<input type="file" id="pick" accept=".html,.js,text/html,text/javascript" multiple>';
   await new Promise(res=>{
     document.getElementById("pick").addEventListener("change",async e=>{
-      const f=e.target.files&&e.target.files[0]; if(!f) return;
-      SRC=withPrelude(await f.text());
-      box.innerHTML="المصدر: <b>"+esc(f.name)+"</b> (اختير يدوياً).";
+      const fs=Array.from(e.target.files||[]);
+      const h=fs.find(f=>/\.html?$/i.test(f.name)), j=fs.find(f=>/(^|\/)db\.js$/i.test(f.name));
+      if(!h||!j){ box.insertAdjacentHTML("beforeend",'<div class="note">اختر الملفين معاً: index.html و db.js.</div>'); return; }
+      SRC=withPrelude(await h.text(), await j.text());
+      box.innerHTML="المصدر: <b>"+esc(h.name)+"</b> و<b>"+esc(j.name)+"</b> (اختيرا يدوياً).";
       res();
     });
   });
@@ -175,7 +185,8 @@ function company(o){
       exportDPI:"300", printMode:"color", leavePolicy:"none", proRate:"yes", weekendDays:[5], holidays:[], defNote:"" }, o.settings||{}),
     zones:[{id:"z1",name:"المنطقة",short:"م",color:"#4B2E83"}],
     sections:[{id:"s1",name:"قسم الإنتاج",zoneId:"z1"}],
-    workers:(o.workers||[]).map(w=>Object.assign({sectionId:"s1",createdAt:"2025-01-01",status:"مستمر"},w)),
+    /* seq يعطيه الخادم عند إدراج العامل — الفحص يقوم مقامه */
+    workers:(o.workers||[]).map((w,i)=>Object.assign({sectionId:"s1",createdAt:"2025-01-01",status:"مستمر",seq:i+1},w)),
     days:days, leaves:o.leaves||[], leaveSeq:0, penalties:o.penalties||[], penSeq:0,
     achievements:o.achievements||[], achSeq:0,
     materials:[{id:"m1",name:"منظّف",unit:"لتر",qty:2}], issues:[], issueSeq:0,
@@ -202,6 +213,47 @@ function checkLedger(w,a,b,label){
   check(label+" — عدّ أيام كل عامل = صفّه", m.mism, 0);
   check(label+" — الصافي بالجرد = بالكشف", m.netL, m.netP);
   check(label+" — أيام الاستقطاع بالجرد = بالكشف", m.dL, m.dP);
+}
+
+/* ============ «خادم» الفحص: الحالة ← صفوف الجداول كما يكتبها سكربت النقل ============
+   صفوف بأسماء أعمدة الخادم يعيد dbBuildState (db.js) بناءها — فيُفحص البناء بلا شبكة.
+   حقول العامل والتواريخ تُحذف من data عمداً: البناء يجب أن يأخذها من أعمدتها. */
+function serverRows(c){
+  const settings=Object.assign({},c.settings||{}); delete settings.holidays;
+  if(c.pay31From) settings.pay31From=c.pay31From;
+  const bld=c.buildings||[{id:"b-old",name:"البناية القديمة",short:"القديمة"}];
+  const zones=c.zones.map((z,i)=>({id:z.id,building_id:z.buildingId||bld[0].id,name:z.name,short:z.short||null,
+    color:z.color||null,sort_order:i+1}));
+  const nul=v=>(v==null||v==="")?null:v;
+  const workers=c.workers.map(w=>({id:w.id,seq:w.seq,name:w.name,mother_name:nul(w.motherName),dob:nul(w.dob),
+    phone:nul(w.phone),phone2:nul(w.phone2),address:nul(w.address),section_id:nul(w.sectionId),status:w.status,
+    status_changed_at:nul(w.statusChangedAt),status_note:nul(w.statusNote),status_history:w.statusHistory||[],
+    start_date:nul(w.startDate),salary:nul(w.salary),deduct:nul(w.deduct),leave_policy:nul(w.leavePolicy),
+    off_weekdays:w.offWeekdays||[],off_dates:w.offDates||[]}));
+  const dayStates=[], dayZones=[];
+  Object.keys(c.days).sort().forEach(d=>{ const r=c.days[d];
+    Object.keys(r.states||{}).forEach(wid=>{ const v=r.states[wid]; if(v==="absent"||v==="misc") dayStates.push({date:d,worker_id:wid,state:v}); });
+    /* اليوم القديم: ملاحظته واعتماده لكل منطقة */
+    c.zones.forEach(z=>{ const zz=r.zones?(r.zones[z.id]||{}):{notes:r.notes,confirmed:r.confirmed};
+      dayZones.push({date:d,zone_id:z.id,notes:zz.notes||"",confirmed:zz.confirmed===true}); });
+  });
+  const documents=[];
+  const put=(kind,list,f)=>(list||[]).forEach(x=>{
+    const data=Object.assign({},x); ["id","no","revisions","workerId"].concat(f).forEach(k=>delete data[k]);
+    documents.push({id:x.id,kind:kind,no:x.no,worker_id:x.workerId||null,zone_id:null,date:x[f[0]]||null,
+      date_to:f[1]?(x[f[1]]||null):null,data:data,revisions:x.revisions||[],created_at:"2026-09-27T06:00:00Z"}); });
+  put("leave",c.leaves,["from","to"]); put("penalty",c.penalties,["date"]); put("achievement",c.achievements,["date"]);
+  put("issue",c.issues,["from","to"]); put("letter",c.letters,["date"]);
+  const iso=st=>{ const m=/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(st||""); return m?new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).toISOString():null; };
+  return { company:{id:c.id,name:c.name,theme:c.theme,accent:c.accent,settings:settings},
+    buildings:bld.map((b,i)=>({id:b.id,name:b.name,short:b.short||null,sort_order:i+1})),
+    zones:zones, sections:c.sections.map(s=>({id:s.id,zone_id:s.zoneId,name:s.name})), workers:workers,
+    dayStates:dayStates, dayZones:dayZones, documents:documents,
+    materials:(c.materials||[]).map((m,i)=>({id:m.id,name:m.name,unit:m.unit||null,qty:m.qty,sort_order:i+1})),
+    holidays:((c.settings||{}).holidays||[]).map(h=>({date:h.date,name:h.name})),
+    locks:Object.keys(c.locks||{}).map(m=>({month:m,locked_at:iso(c.locks[m].at),snapshot:c.locks[m]})),
+    audit:(c.audit||[]).map((a,i)=>({id:i+1,user_id:"u1",kind:a.kind,what:a.what,before_val:a.before,after_val:a.after,
+      reason:a.reason||null,at:iso(a.at)})).reverse() };
 }
 
 /* ============ الحالات ============ */
@@ -378,18 +430,70 @@ try{
   check("الأولى: فلتر حالاتها محفوظ لها", w7.eval("varSelected().join('،')"), "منقول");
 
   /* ---- ٨) الحفظ والاستعادة ---- */
-  group("٨ · الحفظ ثم القراءة (round-trip) والترحيل المتكرر");
-  const before=w7.eval("JSON.stringify(state)");
-  const netBefore=w7.eval('totalsOf(buildReport("2026-09-01","2026-09-30").rows,0).net');
-  await w7.eval("persistState()");
-  const raw=await w7.eval("readState()");
-  w7.__raw=raw;
-  const back=w7.eval("JSON.stringify(migrate(JSON.parse(__raw)))");
-  const strip=s=>JSON.stringify(Object.assign(JSON.parse(s),{savedAt:0}));
-  check("ما يُقرأ بعد الحفظ = الحالة نفسها", strip(back)===strip(before), true);
+  group("٨ · من صفوف الخادم إلى البرنامج (round-trip) والترحيل المتكرر");
+  /* شركة بمنطقتين وملاحظة يوم واحدة (كما في النظام السابق)، وكل أنواع الوثائق */
+  const w8=await boot();
+  const C8=company({settings:{holidays:[{date:"2026-09-10",name:"عيد"}],leavePolicy:"half",absAlert:3,miscPaid:"yes",netRound:"250",
+      lhBg:"show",logoW:120,logoH:60,address:"البصرة — الميناء"},
+    states:{"2026-09-02":{a:"absent",b:"misc"},"2026-09-03":{c:"absent"},"2026-09-15":{a:"misc"}},
+    workers:[{id:"a",name:"أحمد",salary:null,deduct:null,offWeekdays:[6],startDate:"",statusChangedAt:"",dob:"1986",motherName:"فاطمة",phone:"07701234567"},
+      {id:"b",name:"باسم",salary:400000,startDate:"2026-09-05",leavePolicy:"full",offDates:["2026-09-20"]},
+      {id:"c",name:"جاسم",sectionId:"s2",status:"منقول",statusChangedAt:"2026-09-18",statusNote:"نقل",
+        statusHistory:[{from:"مستمر",to:"منقول",date:"2026-09-18",note:"نقل",ref:"",at:"2026-09-18"}]}],
+    leaves:[{id:"l1",no:"إ-2026-004",workerId:"a",name:"أحمد",section:"الإنتاج — داخلي",type:"زمنية",from:"2026-09-07",days:1,hours:1,to:"2026-09-07",policy:"none",reason:"مراجعة",admin:"حسين",issued:"2026-09-06"},
+      {id:"l2",no:"إ-2026-003",workerId:"b",type:"اعتيادية",from:"2026-09-21",days:3,to:"2026-09-23",policy:"half",reason:"ظرف",issued:"2026-09-20",
+        revisions:[{workerId:"b",type:"اعتيادية",from:"2026-09-21",days:2,to:"2026-09-22",policy:"half"}],editedAt:"2026-09-21"}],
+    penalties:[{id:"p1",no:"ع-2026-012",workerId:"a",name:"أحمد",section:"شارع — داخلي",type:"إنذار أخير",kind:"none",amount:0,days:0,dayRate:11166.666666666666,date:"2026-09-12",terminates:false,reason:"تأخر",admin:"حسين",issued:"2026-09-12"},
+      {id:"p2",no:"ع-2026-011",workerId:"b",type:"استقطاع",kind:"days",days:2,dayRate:13333.333333333334,date:"2026-09-13",terminates:false,reason:"غياب"}],
+    achievements:[{id:"m1",no:"م-2026-001",workerId:"a",type:"مكافأة",kind:"amount",amount:15000,date:"2026-09-14"}]});
+  C8.zones=[{id:"z1",name:"داخل البناية القديمة",short:"داخلي",color:"#4B2E83"},{id:"z2",name:"الأقسام الخارجية",short:"خارجي",color:"#B8912E"}];
+  C8.sections=[{id:"s1",name:"قسم الإنتاج",zoneId:"z1"},{id:"s2",name:"الساحة",zoneId:"z2"}];
+  C8.days["2026-09-02"].notes="سار العمل بشكل اعتيادي.";
+  C8.days["2026-09-30"].confirmed=false;
+  C8.issues=[{id:"i1",no:"ت-2026-001",workerId:"a",name:"أحمد",section:"قسم الإنتاج",from:"2026-09-01",to:"2026-09-30",days:30,items:[{name:"منظّف",unit:"لتر",qty:2}],notes:"",admin:"حسين",issued:"2026-09-01"}];
+  C8.letters=[{id:"k1",no:"ك-2026-001",title:"كتاب",to:"الموانئ",subject:"موضوع",html:"<p>نص</p>",date:"2026-09-09",editedAt:""}];
+  C8.audit=[{at:"2026-09-26 08:15",kind:"salary",what:"باسم",before:"335,000",after:"400,000"},{at:"2026-09-27 09:09",kind:"lock",what:"راتب آب",before:"مفتوح",after:"مقفل"}];
+  C8.locks={"2026-08":{at:"2026-09-27 09:09",net:13980250,n:50,rows:{a:335000,b:0}}};
+  C8.pay31From="2026-09";
+  load(w8,stateOf([C8]));
+  const J8=x=>JSON.parse(w8.eval("JSON.stringify("+x+")"));
+  const orig=J8("C()");
+  const pay=()=>J8('buildReport("2026-09-01","2026-09-30").rows.map(function(r){return [r.id,r.net,r.present,r.absent,r.misc,r.leave,r.off,r.eligible,r.penDed,r.achAdd];})');
+  const pay0=pay(), sheet0=w8.eval('(function(){curDate="2026-09-02"; var c=document.createElement("canvas"); drawSheet(c,1); return c.toDataURL();})()');
+  const rows8=serverRows(orig);
+  /* dayRate نصاً بـ jsonb: يُقرأ رقماً بدقته */
+  rows8.documents.find(d=>d.id==="p2").data.dayRate="13333.333333333334";
+  w8.__rows=JSON.parse(JSON.stringify(rows8));
+  w8.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-25"; bootView();');
+  const built=J8("C()");
+  check("الكشف من صفوف الخادم = الكشف من البيانات الأصلية (كل عامل)", JSON.stringify(pay()), JSON.stringify(pay0));
+  checkLedger(w8,"2026-09-01","2026-09-30","بعد البناء من الخادم");
+  const bw=id=>built.workers.find(w=>w.id===id), bd=(k,id)=>built[k].find(x=>x.id===id);
+  check("العامل بنفس حقول البرنامج", Object.keys(bw("a")).sort().join(","),
+    "address,deduct,dob,id,motherName,name,offWeekdays,phone,phone2,salary,sectionId,seq,startDate,status,statusChangedAt,statusHistory,statusNote");
+  check("الراتب الافتراضي null لا صفر، والتاريخ الفارغ نص فارغ", JSON.stringify([bw("a").salary,bw("a").deduct,bw("a").startDate,bw("a").statusChangedAt]), '[null,null,"",""]');
+  check("راتب مخصّص، وأوف بتاريخ، وسياسة إجازة للعامل", JSON.stringify([bw("b").salary,bw("b").offDates,bw("b").leavePolicy]), '[400000,["2026-09-20"],"full"]');
+  check("سجل الحالة والتاريخ كما هما", JSON.stringify([bw("c").status,bw("c").statusChangedAt,bw("c").statusHistory]), JSON.stringify(["منقول","2026-09-18",orig.workers[2].statusHistory]));
+  check("أجر اليوم بالعقوبة بدقته الكاملة (رقم ونص)", JSON.stringify([bd("penalties","p1").dayRate,bd("penalties","p2").dayRate]), "[11166.666666666666,13333.333333333334]");
+  check("kind داخل العقوبة (days) غير نوع الوثيقة", bd("penalties","p2").kind, "days");
+  check("الإجازة: العامل والتاريخان من أعمدتها", JSON.stringify([bd("leaves","l2").workerId,bd("leaves","l2").from,bd("leaves","l2").to]), '["b","2026-09-21","2026-09-23"]');
+  check("الوثائق بحقولها كما هي (إجازة، عقوبة، مكافأة، مواد، كتاب)",
+    ["leaves","penalties","achievements","issues","letters"].every(k=>orig[k].every(x=>JSON.stringify(Object.keys(x).sort().reduce((o,f)=>(o[f]=x[f],o),{}))===
+      JSON.stringify(Object.keys(bd(k,x.id)).sort().reduce((o,f)=>(o[f]=bd(k,x.id)[f],o),{})))), true);
+  check("الإجازات الأحدث أولاً", built.leaves.map(x=>x.no).join(","), "إ-2026-004,إ-2026-003");
+  check("pay31From في c.pay31From", built.pay31From, "2026-09");
+  check("كل مفاتيح الإعدادات منقولة بقيمها", Object.keys(orig.settings).every(k=>JSON.stringify(orig.settings[k])===JSON.stringify(built.settings[k])), true);
+  check("العطل من جدولها", JSON.stringify(built.settings.holidays), '[{"date":"2026-09-10","name":"عيد"}]');
+  check("قفل الشهر: الصورة كاملة", JSON.stringify(built.locks), JSON.stringify(orig.locks));
+  check("سجل التدقيق: الأقدم أولاً وبالوقت المحلي", built.audit.map(a=>a.at+"|"+a.kind).join(","), "2026-09-26 08:15|salary,2026-09-27 09:09|lock");
+  check("الجهة والمناطق: buildingId والترتيب", JSON.stringify([built.buildings.map(b=>b.name),built.zones.map(z=>z.buildingId+"/"+z.short)]),
+    '[["البناية القديمة"],["b-old/داخلي","b-old/خارجي"]]');
+  check("اليوم: تأشيرات، واعتماد وملاحظة لكل منطقة", JSON.stringify(built.days["2026-09-02"]),
+    '{"states":{"a":"absent","b":"misc"},"zones":{"z1":{"notes":"سار العمل بشكل اعتيادي.","confirmed":true},"z2":{"notes":"سار العمل بشكل اعتيادي.","confirmed":true}}}');
+  check("يوم غير معتمد يبقى غير معتمد", w8.eval('dayConfirmState("2026-09-30")'), "none");
+  check("الملاحظة المكرّرة لكل منطقة تُطبع مرة واحدة: ورقة الجرد مطابقة حرفياً",
+    w8.eval('(function(){curDate="2026-09-02"; var c=document.createElement("canvas"); drawSheet(c,1); return c.toDataURL();})()')===sheet0, true);
   check("الترحيل مرتين بلا أثر", w7.eval("(function(){var a=JSON.stringify(migrate(JSON.parse(JSON.stringify(state)))); var b=JSON.stringify(migrate(JSON.parse(a))); return a===b;})()"), true);
-  w7.eval("state=migrate(JSON.parse(__raw)); bootView();");
-  check("الرواتب بعد الاستعادة كما قبلها", w7.eval('totalsOf(buildReport("2026-09-01","2026-09-30").rows,0).net'), netBefore);
   const old={v:2, active:"c0", companies:[{id:"c0", name:"قديمة", settings:{company:"قديمة", salary:335000, deduct:11632},
     zones:[{id:"z",name:"منطقة"}], sections:[{id:"s",name:"قسم",zoneId:"z"}],
     workers:[{id:"x",name:"قديم",sectionId:"s",createdAt:"2024-01-01",endDate:"2026-09-15"},{id:"y",name:"ثاني",sectionId:"s"}],
@@ -762,6 +866,90 @@ try{
     check(k+" — ترويسة موحّدة وتذييل صفحة X من Y", /class="(phd|lg-hl)"/.test(PW_16[k]) && /@bottom-center\{content:[^}]*counter\(page/.test(PW_16[k]), true);
     check(k+" — بلا عنوان ملوّن بلون الشركة", /h1\{[^}]*color:#4B2E83/.test(PW_16[k]), false);
   });
+
+  /* ---- ١٧) الاعتماد لكل منطقة: جهتان، كل إداري يعتمد جهته ---- */
+  group("١٧ · الاعتماد لكل منطقة — جهتان، ملاحظات بالمناطق، وجهة فارغة");
+  const w17=await boot();
+  const SET17={company:"شركة الفحص",title:"الجرد اليومي",address:"البصرة",signer:"عبد الله",role:"المسؤول الإداري",mark:"ج",
+    numerals:"latn",miscInTotal:"no",secCount:"active",signature:"",salary:SAL,deduct:11166.67,dedMode:"auto",workDays:30,
+    miscPaid:"yes",currency:"د.ع",exportDPI:"300",printMode:"color",leavePolicy:"none",proRate:"yes",weekendDays:[5],
+    defNote:"سار العمل بشكل اعتيادي.",pay31From:"0000-00"};
+  const Z17=[["zOi","bO","داخل البناية القديمة","داخلي",1],["zOo","bO","الأقسام الخارجية","خارجي",2],
+    ["zNi","bN","داخل البناية الجديدة","داخلي",1],["zNo","bN","الأقسام الخارجية — الجديدة","خارجي",2]];
+  const DZ17=[];
+  for(let d=1; d<=30; d++){ const iso="2026-09-"+String(d).padStart(2,"0");
+    DZ17.push({date:iso,zone_id:"zOi",notes:"",confirmed:true},{date:iso,zone_id:"zOo",notes:"",confirmed:true});
+    if(d<=10) DZ17.push({date:iso,zone_id:"zNi",notes:"",confirmed:true}); }
+  DZ17.find(x=>x.date==="2026-09-02"&&x.zone_id==="zOi").notes="ملاحظة القديمة";
+  DZ17.push({date:"2026-09-02",zone_id:"zNo",notes:"ملاحظة الجديدة",confirmed:false});
+  DZ17.find(x=>x.date==="2026-09-03"&&x.zone_id==="zOi").notes="نص واحد";
+  DZ17.find(x=>x.date==="2026-09-03"&&x.zone_id==="zNi").notes="نص واحد";
+  const ROWS17={company:{id:"co",name:"شركة الفحص",theme:"#4B2E83",accent:"#B8912E",settings:SET17},
+    buildings:[{id:"bN",name:"البناية الجديدة",short:"الجديدة",sort_order:2},{id:"bO",name:"البناية القديمة",short:"القديمة",sort_order:1}],
+    zones:Z17.map(z=>({id:z[0],building_id:z[1],name:z[2],short:z[3],color:null,sort_order:z[4]})),
+    sections:[{id:"sOi",zone_id:"zOi",name:"الإنتاج"},{id:"sOo",zone_id:"zOo",name:"الساحة"},{id:"sNi",zone_id:"zNi",name:"الاستقبال"}],
+    workers:[["a","sOi"],["b","sOo"],["c","sNi"]].map((x,i)=>({id:x[0],seq:i+1,name:"عامل "+x[0],section_id:x[1],status:"مستمر",
+      status_history:[],salary:null,deduct:null,off_weekdays:[],off_dates:[]})),
+    dayStates:[{date:"2026-09-05",worker_id:"c",state:"absent"},{date:"2026-09-15",worker_id:"a",state:"absent"},
+      {date:"2026-09-15",worker_id:"c",state:"absent"}],
+    dayZones:DZ17, documents:[], materials:[], holidays:[], locks:[], audit:[]};
+  w17.__rows=ROWS17;
+  w17.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; bootView();');
+  const W17=x=>w17.eval(x), J17=x=>JSON.parse(w17.eval("JSON.stringify("+x+")"));
+  check("ترتيب المناطق بالجهة ثم بترتيبها", W17('C().zones.map(function(z){return z.id;}).join(",")'), "zOi,zOo,zNi,zNo");
+  const R17=J17('(function(){var R=buildReport("2026-09-01","2026-09-30"); return {days:R.days.length,gaps:R.gaps.length,rows:R.rows.map(function(r){return [r.id,r.eligible,r.absent,r.net];})};})()');
+  check("اليوم بالكشف إن اعتُمدت فيه منطقة (٢٦ يوم عمل)", R17.days, 26);
+  check("لا يوم «غير معتمد» — القديمة معتمدة كل الأيام", R17.gaps, 0);
+  check("عامل القديمة: كل الأيام وغيابه ١٥ محسوب", JSON.stringify(R17.rows[0]), JSON.stringify(["a",26,1,323750]));
+  check("عامل خارجي القديمة: كل الأيام", JSON.stringify(R17.rows[1]), JSON.stringify(["b",26,0,335000]));
+  check("عامل الجديدة: أيام منطقته المعتمدة فقط (١–١٠)، وغياب ١٥ غير المعتمد لا يُحسم", JSON.stringify(R17.rows[2]), JSON.stringify(["c",9,1,323750]));
+  checkLedger(w17,"2026-09-01","2026-09-30","جهتان باعتماد مختلف");
+  check("الجرد التفصيلي: أيام الجديدة بعد ١٠ «غير معتمد»", W17('lgLedger("c").cnt.unc'), 17);
+  check("أيام معتمدة جزئياً (١١–٣٠)", W17('partialDays(buildReport("2026-09-01","2026-09-30").days).length'), 17);
+  check("١٥ أيلول: معتمد جزئياً · ٥ أيلول: كامل (خارجي الجديدة بلا عمال لا يلزم)",
+    W17('dayConfirmState("2026-09-15")+"/"+dayConfirmState("2026-09-05")'), "some/all");
+  W17('switchView("daily"); refresh();');
+  check("شريط اليوم: حالة كل منطقة", W17('[].map.call(document.querySelectorAll("#dayStatus .dz"),function(x){return x.className.replace("dz ","");}).join(",")'), "ok,ok,no,idle");
+  check("الكشف ينبّه للأيام المعتمدة جزئياً", W17('switchView("report"); el("rpFrom").value="2026-09-01"; el("rpTo").value="2026-09-30"; runReport(true); el("rpWarn").textContent.indexOf("معتمد جزئياً")>=0'), true);
+  /* التأشير يعتمد جهة العامل وحدها */
+  W17('setZonesConfirmed("2026-09-21",["zOi","zOo","zNi","zNo"],false); curDate="2026-09-21"; switchView("daily"); refresh();'+
+    'document.querySelector(\'#roster button[data-w="c"][data-set="misc"]\').click();');
+  check("تأشير عامل الجديدة يعتمد منطقتي الجديدة ولا يمسّ القديمة",
+    W17('["zOi","zOo","zNi","zNo"].map(function(z){return zoneConfirmed("2026-09-21",z)?1:0;}).join("")'), "0011");
+  check("والتأشير نفسه صف واحد", W17('JSON.stringify(C().days["2026-09-21"].states)'), '{"c":"misc"}');
+  W17('el("confirmDay").onclick();');
+  check("«اعتماد اليوم» يعتمد كل مناطق العرض", W17('dayConfirmState("2026-09-21")+"/"+zoneConfirmed("2026-09-21","zOo")'), "all/true");
+  W17('curDate="2026-09-15"; refresh();'); const pAll=w17.eval('el("allPresent").onclick()'); await answer(w17,true); await pAll;
+  check("«الكل حاضر» يمسح تأشيرات مناطق العرض", W17('JSON.stringify(C().days["2026-09-15"].states)'), "{}");
+  /* الملاحظات */
+  check("ملاحظتان بمنطقتين: فقرة لكل منطقة باسمها، والفارغة تُحذف",
+    JSON.stringify(J17('dayNoteParts("2026-09-02")')), JSON.stringify([{name:"داخل البناية القديمة",text:"ملاحظة القديمة"},{name:"الأقسام الخارجية — الجديدة",text:"ملاحظة الجديدة"}]));
+  check("نص واحد بمنطقتين: مرة واحدة بلا عنوان", JSON.stringify(J17('dayNoteParts("2026-09-03")')), JSON.stringify([{name:"",text:"نص واحد"}]));
+  W17('curDate="2026-09-02"; refresh();');
+  check("محرّر الملاحظات: مربع لكل منطقة، والمربع الواحد مخفي",
+    W17('document.querySelectorAll("#notesZones textarea").length+"/"+el("notes").classList.contains("hidden")'), "4/true");
+  W17('var t=document.querySelector(\'#notesZones [data-nz="zOo"]\'); t.value="نص الخارجي"; t.dispatchEvent(new Event("input",{bubbles:true}));');
+  check("الكتابة بمربع منطقة تحفظ لها وحدها", W17('zoneNotes("2026-09-02","zOo")+"|"+zoneNotes("2026-09-02","zOi")'), "نص الخارجي|ملاحظة القديمة");
+  check("Word: الملاحظات بأسماء مناطقها", (function(){ const z=unzipStored(new Uint8Array(w17.eval("Array.from(dailyDocx())")));
+    return z["word/document.xml"].indexOf("داخل البناية القديمة: ملاحظة القديمة")>0 && z["word/document.xml"].indexOf("الأقسام الخارجية: نص الخارجي")>0; })(), true);
+  const sh17=W17('(function(){var c=document.createElement("canvas"); drawSheet(c,1); return c.toDataURL();})()');
+  const sh17b=W17('(function(){var n=[zoneNotes(curDate,"zOi"),zoneNotes(curDate,"zOo"),zoneNotes(curDate,"zNo")]; ["zOi","zOo","zNo"].forEach(function(z){setZoneNotes(curDate,z,"");});'+
+    'var c=document.createElement("canvas"); drawSheet(c,1); var u=c.toDataURL(); setZoneNotes(curDate,"zOi",n[0]); setZoneNotes(curDate,"zOo",n[1]); setZoneNotes(curDate,"zNo",n[2]); return u;})()');
+  check("ورقة الجرد ترسم فقرات المناطق داخل مربع الملاحظات", sh17!==sh17b, true);
+  /* جهة فارغة: مناطق بلا أقسام ولا عمال (أول دخول لإداري الجديدة) */
+  const w17e=await boot();
+  w17e.__rows={company:ROWS17.company, buildings:[ROWS17.buildings[0]], zones:ROWS17.zones.filter(z=>z.building_id==="bN"),
+    sections:[], workers:[], dayStates:[], dayZones:[], documents:[], materials:[], holidays:[], locks:[], audit:[]};
+  w17e.__errs.length=0;
+  w17e.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; bootView();');
+  const E17=JSON.parse(w17e.eval('JSON.stringify((function(){var R=buildReport("2026-09-01","2026-09-30"), T=R.tot, P=periodInfo(R);'+
+    'return {rows:R.rows.length, net:T.net, rate:T.rate, fin:[T.net,T.rate,T.salary].every(isFinite), per:!!P, tally:compute(curDate).total};})())'));
+  check("جهة فارغة: كشف بلا صفوف وأرقامه سليمة (بلا قسمة على صفر)", JSON.stringify(E17), JSON.stringify({rows:0,net:0,rate:1,fin:true,per:true,tally:0}));
+  ["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form","settings"].forEach(t=>{
+    try{ w17e.eval('switchView("'+t+'")'); }catch(e){ w17e.__errs.push(t+": "+e.message); } });
+  let eDocs=""; ["dailyDocx","payrollDocx"].forEach(fn=>{ try{ unzipStored(new Uint8Array(w17e.eval("Array.from("+fn+"())"))); }catch(e){ eDocs+=fn+": "+e.message+" "; } });
+  w17e.eval('(function(){var c=document.createElement("canvas"); drawSheet(c,1);})()');
+  check("جهة فارغة: كل التبويبات والورقة وWord بلا خطأ", w17e.__errs.concat(eDocs?[eDocs]:[]).join(" | "), "");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});

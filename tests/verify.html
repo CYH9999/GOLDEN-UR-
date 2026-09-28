@@ -114,7 +114,14 @@ const PRELUDE = `<script>(function(){
 let SRC=null;
 async function source(){
   if(SRC) return SRC;
-  const txt=await (await fetch("../index.html",{cache:"no-store"})).text();
+  let txt=await (await fetch("../index.html",{cache:"no-store"})).text();
+  const dbjs=await (await fetch("../db.js",{cache:"no-store"})).text();
+  /* db.js يُضمَّن مكان وسمه (الإطار المعزول لا يقرأ مساراً نسبياً)، ومكتبة Supabase
+     من الإنترنت تُحذف: الفحص بلا خادم ولا شبكة */
+  const tag='<script src="db.js"><\/script>';
+  if(txt.indexOf(tag)<0) throw new Error("ما لقيت وسم db.js في index.html");
+  txt=txt.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/[^"]*"><\/script>/,"")
+         .replace(tag,()=>"<script>"+dbjs+"<\/script>");
   const at=txt.indexOf("<script>");
   if(at<0) throw new Error("ما لقيت وسم script في index.html");
   SRC=txt.slice(0,at)+PRELUDE+txt.slice(at);
@@ -161,7 +168,8 @@ function fixture(o){
       weekendDays:[5], holidays:[], defNote:"" },
     zones:[{id:"z1",name:"المنطقة",short:"م",color:"#4B2E83"}],
     sections:[{id:"s1",name:"قسم الإنتاج",zoneId:"z1"}],
-    workers:o.workers||[], days:days,
+    /* seq يعطيه الخادم عند إدراج العامل — الفحص يقوم مقامه */
+    workers:(o.workers||[]).map((w,i)=>Object.assign({seq:i+1},w)), days:days,
     leaves:o.leaves||[], leaveSeq:0,
     adjustments:o.adjustments, penalties:o.penalties||[], penSeq:o.penSeq||0,
     achievements:o.achievements||[], achSeq:o.achSeq||0,

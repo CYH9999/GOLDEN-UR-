@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>نظام الجرد اليومي — v4.0</title>
 <!-- الخادم: مكتبة Supabase ثم طبقة الخادم db.js — كل استدعاء للخادم يمرّ من db.js حصراً -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- supabase-js مثبّتة على الإصدار 2.117.2 (صدر 2026-09-25) — لا «@2» المفتوح، حتى لا يتغيّر
+     سلوك الدخول والاستعلامات بإصدار جديد لم يُفحص. الترقية: غيّر الرقم هنا ثم أعد الفحص. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="db.js"></script>
 <style>
 /* =====================================================================
@@ -235,6 +237,18 @@ label.field>span,.field>span:first-child{display:block;font-size:var(--fs-sm);co
 .daystat.no{background:var(--gold-bg);border-color:transparent;color:var(--gold-text)}
 .daystat.hol{background:var(--surface-2);border-color:var(--line);color:var(--ink-2)}
 .daystat.lock{background:var(--surface-2);border-color:var(--line-strong);color:var(--ink)}
+/* حالة كل منطقة معروضة على حدة — الاعتماد صار لكل منطقة */
+.daystat .dzs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.dz{display:inline-flex;align-items:center;gap:6px;padding:1px 10px;border-radius:var(--r-pill);font-size:var(--fs-xs);
+  font-weight:var(--fw-bold);background:var(--panel);border:1px solid var(--line);color:var(--ink-2)}
+.dz::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--zc,var(--brand));flex:none}
+.dz.ok{color:var(--present);border-color:var(--present-line)}
+.dz.no{color:var(--gold-text);border-color:var(--gold-soft)}
+.dz.idle{color:var(--ink-3);font-weight:var(--fw-medium)}
+/* ملاحظات اليوم: مربع لكل منطقة حين يُعرض أكثر من منطقة */
+.nzones{display:grid;gap:var(--sp-3)}
+.nzone{display:block;border-inline-start:3px solid var(--zc,var(--brand));padding-inline-start:10px}
+.nzone>span{display:block;font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink);margin-bottom:4px}
 /* قفل الشهر بكشف الرواتب */
 .lockbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;margin:0 0 var(--sp-3);
   border:1px dashed var(--line-strong);border-radius:var(--r-md);font-size:var(--fs-sm);color:var(--ink-2)}
@@ -631,9 +645,9 @@ tr.rowneg td{background:var(--absent-bg)}
 </aside>
 
 <main class="main" id="main">
-<div class="reminder hidden" id="lockBar" role="status">
-  <span class="rm-txt">البرنامج مفتوح بنافذة ثانية — الحفظ معطّل هنا حتى لا تكتب النافذتان فوق بعض. سكّر هذه النافذة واشتغل بالأولى.</span>
-  <button class="btn sm" id="lockRetry">حاول تفعيل هذه النافذة</button>
+<!-- المرحلة ١: القراءة من الخادم فقط — الشريط يقول ذلك صراحة حتى لا يُظن أن تعديلاً انحفظ -->
+<div class="reminder hidden" id="phaseBar" role="status">
+  <span class="rm-txt">نسخة القراءة من الخادم: البيانات تُعرض وتُحسب من الخادم، لكن أي تعديل هنا لا يُحفظ بعد ويضيع بإعادة تحميل الصفحة.</span>
 </div>
 
 <div class="tally" id="tally"></div>
@@ -666,6 +680,7 @@ tr.rowneg td{background:var(--absent-bg)}
         </div>
         <div class="panel-body">
           <textarea id="notes" rows="5" placeholder="ملاحظات حول العمل، المواد، أو حدث صار اليوم…"></textarea>
+          <div id="notesZones" class="nzones hidden"></div>
         </div>
       </div>
     </div>
@@ -1496,42 +1511,26 @@ tr.rowneg td{background:var(--absent-bg)}
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h2>النسخ الاحتياطي</h2><span class="dbbadge ok" id="dbState2">حفظ تلقائي</span></div>
+        <div class="panel-head"><h2>النسخ الاحتياطي</h2><span class="dbbadge ok" id="dbState2">على الخادم</span></div>
         <div class="panel-body">
-          <p class="hint" style="margin-top:0">بياناتك تُحفظ تلقائياً بهذا الجهاز. للنقل لحاسبة ثانية: نزّل نسخة، وافتحها هناك بزر الاستعادة.</p>
+          <p class="hint" style="margin-top:0">البيانات محفوظة على الخادم ويتشاركها كل المستخدمين. «تنزيل نسخة» يسحب
+            نسخة حديثة كاملة من الخادم لحظة الضغط ويحفظها ملفاً عندك.</p>
           <div class="actions">
             <button class="btn primary" id="backupOut">تنزيل نسخة</button>
-            <button class="btn" id="backupIn">استعادة نسخة</button>
-            <input type="file" id="backupFile" accept="application/json,.json" class="hidden">
-            <button class="btn danger" id="wipeAll">مسح الكل</button>
           </div>
           <p class="hint" id="dbState"></p>
-          <div class="actions">
-            <button class="btn ghost sm" id="linkCreate">ربط ملف داتا</button>
-            <button class="btn ghost sm" id="linkOpen">فتح ملف داتا</button>
-            <button class="btn ghost sm" id="linkSaveNow">حفظ للملف</button>
-          </div>
 
           <div id="bkWarn"></div>
-          <div class="actions hidden" id="corruptBox">
-            <button class="btn danger sm" id="corruptDl">تنزيل النسخة التالفة</button>
-            <span class="saved">نسخة تعذّرت قراءتها عند الإقلاع — محفوظة كما هي للإنقاذ اليدوي.</span>
-          </div>
 
           <h3 class="subhead">مجلد النسخ اليومية</h3>
-          <p class="hint" style="margin-top:0">اختر مجلداً (فلاش أو مجلد على الشبكة) والبرنامج يكتب فيه
-            نسخة مؤرّخة كل يوم تلقائياً — ملف مستقل لكل يوم، فحتى لو انمسحت بيانات المتصفح ترجع لأي يوم.</p>
+          <p class="hint" style="margin-top:0">اختر مجلداً (فلاش أو مجلد على الشبكة) والبرنامج يسحب من الخادم
+            نسخة كاملة ويكتبها فيه مؤرّخة كل يوم تلقائياً — ملف مستقل لكل يوم، نسخة عندك لا تعتمد على الخادم.</p>
           <p class="hint" id="bkFolderState"></p>
           <div class="actions">
             <button class="btn" id="bkPick">اختيار مجلد النسخ</button>
             <button class="btn ghost sm" id="bkNow">نسخة الآن</button>
             <button class="btn ghost sm" id="bkForget">إلغاء الربط</button>
           </div>
-
-          <h3 class="subhead">نسخ سريعة محفوظة داخل البرنامج</h3>
-          <p class="hint" style="margin-top:0">لقطة تلقائية عند أول تشغيل كل يوم — تحفظ آخر
-            <b id="snapKeep">14</b> يوم. تفيد لو انحذف عامل أو انخربطت أرقام وتريد ترجع بسرعة.</p>
-          <div id="snapList"></div>
         </div>
       </div>
     </div>
@@ -1603,7 +1602,7 @@ tr.rowneg td{background:var(--absent-bg)}
    البرنامج لوحدات مستقلة (تطبيق سطح مكتب لاحقاً) بحثاً عن الوسم، لا
    قراءةً لسبعة آلاف سطر:
      [أدوات]   دوال عامة بلا حالة: العناصر، النوافذ، التواريخ، الألوان
-     [تخزين]   IndexedDB و localStorage والملف المرتبط والقفل والنسخ واللقطات
+     [تخزين]   تفضيلات الجهاز، مجلد النسخ اليومية، والنسخ من الخادم (البيانات نفسها بـ db.js)
      [نموذج]   شكل البيانات وقيمه الافتراضية والترحيل (ensureFields)
      [محرّك]   الحساب الخالص: تصنيف اليوم، الخدمة، الإجازات، الرواتب، الجرد التفصيلي
      [واجهة]   الجداول والنماذج والمستمعات
@@ -1804,123 +1803,41 @@ function applyTheme(){
 }
 
 /* ==================== [تخزين] التخزين ====================
-   IndexedDB هو قاعدة البيانات الأساسية داخل الجهاز: تفتح تلقائياً مع البرنامج
-   بدون أي ملف. ملف الداتا اختياري للنقل بين الحواسيب والنسخ الاحتياطي. */
-const KEY="state", HKEY="fileHandle";
-let idb=null, fileHandle=null, saveTimer=null, drawTimer=null;
-const canFS = typeof window!=="undefined" && "showSaveFilePicker" in window;
-
-function openIDB(){ return new Promise(res=>{ try{
-  const rq=indexedDB.open("jard_pro",1);
-  rq.onupgradeneeded=()=>rq.result.createObjectStore("kv");
-  rq.onsuccess=()=>res(rq.result); rq.onerror=()=>res(null);
-}catch(e){ res(null); } }); }
-function idbGet(k){ return new Promise(res=>{ if(!idb)return res(null); try{
-  const t=idb.transaction("kv","readonly").objectStore("kv").get(k);
-  t.onsuccess=()=>res(t.result!=null?t.result:null); t.onerror=()=>res(null);
-}catch(e){ res(null); } }); }
-function idbSet(k,v){ return new Promise(res=>{ if(!idb)return res(false); try{
-  const t=idb.transaction("kv","readwrite").objectStore("kv").put(v,k);
-  t.onsuccess=()=>res(true); t.onerror=()=>res(false);
-}catch(e){ res(false); } }); }
+   البيانات على الخادم (db.js) وتُحمَّل كاملة عند الإقلاع — لا نسخة محلية بالمتصفح
+   ولا ملف مرتبط. ما يبقى بهذا الجهاز:
+     - تفضيلاته بـ localStorage (المظهر، طيّ الشريط، تاريخ آخر نسخة للمجلد)
+     - مقبض «مجلد النسخ اليومية» بـ IndexedDB: المتصفح لا يحفظ مقبض مجلد إلا هناك،
+       وبدونه لا تُكتب النسخة اليومية تلقائياً. هذا وحده ما يُكتب فيه — والنسخة
+       المحلية القديمة (مفتاح state) تبقى مكانها لا تُقرأ ولا تُكتب. */
+let drawTimer=null;
+let handleDB=null;
+function handleStore(){
+  return handleDB || (handleDB=new Promise(res=>{ try{
+    const rq=indexedDB.open("jard_pro",1);
+    rq.onupgradeneeded=()=>rq.result.createObjectStore("kv");
+    rq.onsuccess=()=>res(rq.result); rq.onerror=()=>res(null);
+  }catch(e){ res(null); } }));
+}
+async function handleGet(k){
+  const db=await handleStore();
+  return new Promise(res=>{ if(!db) return res(null); try{
+    const t=db.transaction("kv","readonly").objectStore("kv").get(k);
+    t.onsuccess=()=>res(t.result!=null?t.result:null); t.onerror=()=>res(null);
+  }catch(e){ res(null); } });
+}
+async function handleSet(k,v){
+  const db=await handleStore();
+  return new Promise(res=>{ if(!db) return res(false); try{
+    const t=db.transaction("kv","readwrite").objectStore("kv").put(v,k);
+    t.onsuccess=()=>res(true); t.onerror=()=>res(false);
+  }catch(e){ res(false); } });
+}
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
 function lsSet(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } }
 
-/* قفل أمان: قبل أن تُقرأ البيانات المحفوظة تكون state مجرد حالة افتراضية
-   فارغة. أي حفظ يقع في تلك اللحظة يكتب الفراغ فوق بيانات حقيقية — وبطابع
-   زمني أحدث، فيفوز عند القراءة التالية وتضيع رواتب شهر. لذلك: ممنوع
-   الحفظ حتى تكتمل القراءة. */
+/* اكتمل تحميل البيانات (من الخادم، أو الحالة الافتراضية بالفحص). قبله لا يُرسم
+   شيء ولا يفتح البحث الشامل — والفحوص تنتظر هذه العلامة قبل أن تبدأ. */
 let stateLoaded=false;
-
-/* الطابع الزمني يُكتب فقط إذا نجحت كتابة البيانات نفسها. كان يُكتب دائماً،
-   فعند امتلاء localStorage تبقى فيه نسخة قديمة بطابع أحدث من IndexedDB،
-   وعند الفتح التالي تفوز القديمة وتضيع كل تعديلات ما بعد الامتلاء. */
-async function persistState(){
-  if(!stateLoaded) return false;
-  if(roLocked) return false;          // النافذة الثانية لا تكتب أبداً
-  const t=Date.now(); state.savedAt=t;
-  const s=JSON.stringify(state);
-  const a=await idbSet(KEY,s); if(a) await idbSet(KEY+"_t",t);
-  const b=lsSet("jard_pro_state",s); if(b) lsSet("jard_pro_state_t",String(t));
-  return a||b; }
-/* حفظ متزامن فوري (يُستدعى عند إغلاق الصفحة) — localStorage فقط لأنه متزامن */
-function flushSync(){
-  if(!stateLoaded || roLocked) return;
-  try{ if(lsSet("jard_pro_state",JSON.stringify(state))) lsSet("jard_pro_state_t",String(Date.now())); }catch(e){} }
-
-/* ==================== [تخزين] قفل النافذة الواحدة ====================
-   نافذتان مفتوحتان على نفس البيانات تعني أن كل واحدة تكتب فوق الثانية:
-   آخر من يحفظ يفوز، فتضيع تأشيرات يوم كامل بلا أي إنذار. النافذة الثانية
-   تصير للقراءة فقط: لا تكتب شيئاً، ويظهر فوقها شريط يقول ذلك.
-   القناة BroadcastChannel، وإن لم تتوفّر نستعمل حدث storage. */
-const LOCK_CH="jard_pro_lock", LOCK_LS="jard_pro_lock_msg";
-const TAB_ID=uid();
-let roLocked=false, lockChan=null;
-function lockSend(msg){
-  msg.id=TAB_ID; msg.at=Date.now();
-  try{ if(lockChan) lockChan.postMessage(msg); }catch(e){}
-  /* الاحتياط: حدث storage يصل لبقية النوافذ بنفس الأصل */
-  try{ lsSet(LOCK_LS, JSON.stringify(msg)); }catch(e){}
-}
-function setReadOnly(on){
-  if(roLocked===on) return;
-  roLocked=on;
-  const b=el("lockBar");
-  if(b && b.classList){ if(on) b.classList.remove("hidden"); else b.classList.add("hidden"); }
-  if(on) badge("ro"); else badge("local");
-}
-function lockRecv(msg){
-  if(!msg || msg.id===TAB_ID) return;
-  if(msg.t==="hello"){
-    /* نافذة جديدة تسأل: إذا كنا النسخة الفعّالة نردّ عليها فتقفل نفسها */
-    if(!roLocked) lockSend({t:"here", to:msg.id});
-    return;
-  }
-  if(msg.t==="here" && msg.to===TAB_ID){ setReadOnly(true); return; }
-  if(msg.t==="bye" && roLocked){ setReadOnly(false); }
-}
-function lockInit(){
-  try{ lockChan=new BroadcastChannel(LOCK_CH); lockChan.onmessage=ev=>lockRecv(ev.data); }
-  catch(e){ lockChan=null; }
-  try{
-    window.addEventListener("storage",ev=>{
-      if(!ev || ev.key!==LOCK_LS || !ev.newValue) return;
-      try{ lockRecv(JSON.parse(ev.newValue)); }catch(_){}
-    });
-  }catch(e){}
-  lockSend({t:"hello"});
-  try{ window.addEventListener("beforeunload",()=>{ if(!roLocked) lockSend({t:"bye"}); }); }catch(e){}
-}
-
-/* هل هذه النسخة فارغة فعلياً؟ (بلا عمال وبلا أيام جرد بأي شركة) */
-function looksEmpty(raw){
-  try{
-    const o=JSON.parse(raw);
-    if(!o||!Array.isArray(o.companies)) return true;
-    return !o.companies.some(c=>(c.workers&&c.workers.length)||(c.days&&Object.keys(c.days).length));
-  }catch(e){ return true; }
-}
-/* اقرأ الأحدث بين المخزنين — مع شبكة أمان: نسخة فارغة لا تتفوّق أبداً
-   على نسخة فيها بيانات، مهما كان طابعها الزمني أحدث. */
-async function readState(){
-  const idbV=await idbGet(KEY), idbT=Number(await idbGet(KEY+"_t"))||0;
-  const lsV=lsGet("jard_pro_state"), lsT=Number(lsGet("jard_pro_state_t"))||0;
-  if(idbV!=null && lsV!=null){
-    const idbEmpty=looksEmpty(idbV), lsEmpty=looksEmpty(lsV);
-    if(idbEmpty!==lsEmpty) return idbEmpty ? lsV : idbV;   // الممتلئة تفوز
-    return lsT>idbT ? lsV : idbV;
-  }
-  if(idbV!=null) return idbV;
-  return lsV;
-}
-
-async function writeFile(){ if(!fileHandle)return false; try{
-  state.savedAt=Date.now();
-  const w=await fileHandle.createWritable();
-  await w.write(new Blob([JSON.stringify(state,null,2)],{type:"application/json"}));
-  await w.close(); return true;
-}catch(e){ return false; } }
-/* (أُزيلت verifyPerm — الفحص يتم مباشرة عند الإقلاع) */
 
 /* ==================== [نموذج] نموذج البيانات ==================== */
 /* رقم الوثيقة بصيغة واحدة لكل الوصولات: بادئة ، سنة ، تسلسل من ثلاث خانات.
@@ -2341,8 +2258,8 @@ function ensureFields(st){
     if(!Array.isArray(c.workers)) c.workers=[];
     c.workers=c.workers.filter(w=>w && typeof w==="object");
     c.workers.forEach(normalizeWorker);
-    /* رقم تسلسلي ثابت لكل عامل (أساس رقم الجرد التفصيلي) — يملأ الناقص فقط */
-    ensureWorkerSeq(c);
+    /* الرقم التسلسلي للعامل (أساس رقم الجرد التفصيلي) يعطيه الخادم بعدّاد ذرّي عند
+       الإدراج — لا يُولَّد بالواجهة. */
     /* ترحيل الفورمة (formV1): ورق الشركة الرسمي يُخزَّن داخل البيانات كـ data URL
        (settings.letterhead)، ومسوّدات الكتب بقائمة الشركة نفسها (letters). مرة واحدة لكل
        شركة: ما موجود لا يُلمس، وفورمة حذفها المستخدم ("") لا ترجع بعد الترحيل. */
@@ -2365,6 +2282,8 @@ function ensureFields(st){
   });
   return st;
 }
+/* ملف بيانات محلي (نسخة منزّلة، أو بيانات الفحص) ← الشكل الحالي. لم يعد مسار الإقلاع:
+   البيانات تأتي من الخادم مهيكلة (dbBuildState ثم ensureFields). */
 function migrate(obj){
   if(obj && obj.v===2 && Array.isArray(obj.companies)) return ensureFields(obj);
   if(obj && (obj.workers || obj.settings)){
@@ -2381,30 +2300,25 @@ function migrate(obj){
   return defaultState();
 }
 
-/* ==================== [تخزين] الحفظ التلقائي ==================== */
-function queueSave(){
-  if(roLocked){ badge("ro"); return; }
-  clearTimeout(saveTimer);
-  badge("saving");
-  saveTimer=setTimeout(async()=>{
-    const ok=await persistState();
-    /* فشل الحفظ بالمخزنين معاً (متصفح خاص ممتلئ أو ممنوع) يُعلَن بوضوح،
-       لأن البيانات عندها موجودة بالذاكرة فقط وتضيع بإغلاق الصفحة. */
-    if(!ok && stateLoaded && !roLocked){ badge("fail"); return; }
-    if(fileHandle){ const f=await writeFile(); badge(f?"file":"err"); }
-    else badge("local");
-  },250);
+/* ==================== [تخزين] حالة الحفظ ====================
+   المرحلة ١ (القراءة من الخادم): أي تعديل بالواجهة يبقى بذاكرة هذه الصفحة وحدها،
+   لا يصل الخادم ويضيع بإعادة التحميل. localEdit تُعلن ذلك بالشارة بدل أن يمرّ
+   التعديل بصمت. المرحلة ٢ تستبدل كل نداء لها بكتابة سجل واحد على الخادم. */
+let localEdits=0;
+function localEdit(){
+  localEdits++;
+  if(!window.__JARD_TEST__) badge("unsaved");
 }
 function badge(m){
   const b=el("dbBadge");
-  if(m==="saving"){ b.textContent="يحفظ…"; b.className="dbbadge"; return; }
-  if(m==="file"){ b.textContent="محفوظ تلقائياً + الملف ✓"; b.className="dbbadge ok"; return; }
-  if(m==="err"){ b.textContent="الملف غير متاح — محفوظ محلياً"; b.className="dbbadge warn"; return; }
-  if(m==="fail"){ b.textContent="تعذّر الحفظ — نزّل نسخة الآن"; b.className="dbbadge bad"; return; }
-  if(m==="ro"){ b.textContent="للقراءة فقط — نافذة ثانية مفتوحة"; b.className="dbbadge warn"; return; }
-  b.textContent="محفوظ تلقائياً ✓"; b.className="dbbadge ok";
+  if(m==="unsaved"){ b.textContent="تعديل غير محفوظ — القراءة فقط بهذه المرحلة"; b.className="dbbadge warn";
+    b.title="البيانات تُقرأ من الخادم، والتعديل يبقى بهذه الصفحة ويضيع بإعادة التحميل."; return; }
+  if(m==="local"){ b.textContent="فحص محلي"; b.className="dbbadge ok"; return; }
+  b.textContent="محمّل من الخادم ✓"; b.className="dbbadge ok";
+  b.title="البيانات محمّلة من الخادم"+(dbLoadedAt?" الساعة "+dbLoadedAt:"");
 }
-function updateReminder(){ /* أُزيل الشريط التذكيري — التبسيط */ }
+/* وقت آخر تحميل من الخادم — للعرض */
+let dbLoadedAt="";
 
 /* ==================== [أدوات] أرقام وتواريخ ==================== */
 const AR="٠١٢٣٤٥٦٧٨٩";
@@ -2419,8 +2333,168 @@ function dateSlash(iso){
   return p.length<3 ? "" : fmtNum(p[0])+"/"+fmtNum(p[1])+"/"+fmtNum(p[2]);
 }
 
+/* ==================== [نموذج] اليوم: التأشير، واعتماد كل منطقة وملاحظاتها ====================
+   c.days[iso] = { states:{ workerId:"absent"|"misc" }, zones:{ zoneId:{ notes, confirmed } } }
+   الحاضر لا يُخزَّن. الاعتماد والملاحظات لكل منطقة على حدة: كل إداري يعتمد جهته بلا
+   انتظار الآخر، واليوم يُحتسب لعامل إذا اعتُمدت منطقته هو (dayCountsFor).
+   السجل بالشكل السابق { states, notes, confirmed } (ملفات الفحص والنسخ المحلية
+   القديمة) يُقرأ يوماً واحداً لكل المناطق بنفس الاعتماد والملاحظة، فلا يتغيّر أي حساب
+   قديم؛ ويتحوّل لشكل المناطق عند أول كتابة لا تسري على كل المناطق.
+   «مناطق العرض» (viewZones) ما يراه المستخدم — والخادم أصلاً لا يعيد غيرها. */
+function viewZones(){ return (C().zones||[]).filter(z=>seesZone(z.id)); }
+function viewZoneIds(){ return viewZones().map(z=>z.id); }
+function isLegacyDay(r){ return !!r && !(r.zones && typeof r.zones==="object"); }
+function zoneConfirmed(iso,zid){
+  const r=C().days[iso]; if(!r) return false;
+  if(isLegacyDay(r)) return r.confirmed===true;
+  const z=r.zones[zid]; return !!(z && z.confirmed===true);
+}
+function zoneNotes(iso,zid){
+  const r=C().days[iso]; if(!r) return "";
+  if(isLegacyDay(r)) return String(r.notes||"");
+  const z=r.zones[zid]; return z ? String(z.notes||"") : "";
+}
+/* منطقة العامل من قسمه — "" لعامل بلا قسم */
+function workerZoneId(w){ const s=w?sectionOf(w.sectionId):null; return s?s.zoneId:""; }
+/* مناطق العرض وعمال كل منها — يُبنى مرة لكل مدة لا لكل يوم */
+function dayCtx(){
+  const c=C(), zs=viewZones(), secZone={}, by={};
+  c.sections.forEach(s=>{ secZone[s.id]=s.zoneId; });
+  zs.forEach(z=>{ by[z.id]=[]; });
+  c.workers.forEach(w=>{ const z=secZone[w.sectionId]; if(z && by[z]) by[z].push(w); });
+  return {zones:zs, by:by};
+}
+function zoneHasWorkersOn(ctx,zid,iso){ return (ctx.by[zid]||[]).some(w=>inService(w,iso)); }
+/* المناطق التي يلزم اعتمادها بيوم: المعروضة التي فيها عامل ضمن الخدمة ذلك اليوم.
+   منطقة بلا عمال (جهة لم تُعبّأ بعد) لا تجعل اليوم «غير معتمد» عند غيرها. وإن لم
+   يكن بالعرض عامل واحد فكل المعروضة تلزم — فالجهة الفارغة تُعتمد كغيرها. */
+function zonesToConfirm(iso,ctx){
+  ctx=ctx||dayCtx();
+  const need=ctx.zones.filter(z=>zoneHasWorkersOn(ctx,z.id,iso));
+  return need.length ? need : ctx.zones;
+}
+/* اعتماد اليوم على العرض: "all" كل ما يلزم معتمد · "some" بعضه · "none" لا شيء */
+function dayConfirmState(iso,ctx){
+  const r=C().days[iso]; if(!r) return "none";
+  if(isLegacyDay(r)) return r.confirmed===true ? "all" : "none";
+  const need=zonesToConfirm(iso,ctx); if(!need.length) return "none";
+  const n=need.filter(z=>zoneConfirmed(iso,z.id)).length;
+  return n===0 ? "none" : (n===need.length ? "all" : "some");
+}
+/* يوم يُحتسب لهذا العامل: إذا اعتُمدت منطقته هو ذلك اليوم. عامل بلا قسم يتبع اليوم كله. */
+function dayCountsFor(w,iso){
+  const r=C().days[iso]; if(!r) return false;
+  if(isLegacyDay(r)) return r.confirmed===true;
+  const zid=workerZoneId(w);
+  return zid ? zoneConfirmed(iso,zid) : dayConfirmState(iso)!=="none";
+}
+/* أيام اعتُمدت فيها منطقة وبقيت أخرى فيها عمال: اليوم محسوب لعمال المعتمدة وحدهم،
+   فيُعرض تنبيهاً مستقلاً بالكشف والسجل. days: أيام معتمدة (R.days) */
+function partialDays(days){
+  const ctx=dayCtx(), out=[];
+  (days||[]).forEach(k=>{
+    if(dayConfirmState(k,ctx)!=="some") return;
+    out.push({d:k, zones:zonesToConfirm(k,ctx).filter(z=>!zoneConfirmed(k,z.id))});
+  });
+  return out;
+}
+/* الملاحظات للعرض والطباعة: منطقة واحدة بالعرض ← نصها كما هو بلا عنوان. أكثر ← فقرة
+   لكل منطقة فيها ملاحظة يسبقها اسمها، والفارغة تُحذف. وإن تطابق نص المناطق كلها (يوم
+   مرحَّل من النظام السابق، حيث الملاحظة واحدة لليوم) يُعرض مرة واحدة بلا عنوان —
+   كما طُبع يومها. */
+function dayNoteParts(iso){
+  const zs=viewZones();
+  const list=zs.map(z=>({name:z.name, text:zoneNotes(iso,z.id)})).filter(p=>p.text.trim());
+  if(zs.length<=1 || (list.length>1 && list.every(p=>p.text.trim()===list[0].text.trim())))
+    return list.slice(0,1).map(p=>({name:"", text:p.text}));
+  return list;
+}
+function dayNotesText(parts){ return parts.map(p=>p.name ? p.name+": "+p.text : p.text).join("\n"); }
+/* اليوم كما يُعرض ويُطبع — للقراءة فقط؛ الكتابة بدوال «تعديل اليوم» تحت.
+   confirmed: كل ما يلزم اعتماده بالعرض معتمد · partial: بعضه · zones: حالة كل منطقة */
+function dayRec(iso){
+  const r=C().days[iso], ctx=dayCtx(), st=dayConfirmState(iso,ctx), parts=dayNoteParts(iso);
+  return { states:(r&&r.states)||{}, confirmed:st==="all", partial:st==="some",
+    notes:dayNotesText(parts), noteParts:parts,
+    zones:ctx.zones.map(z=>({zone:z, confirmed:zoneConfirmed(iso,z.id), notes:zoneNotes(iso,z.id),
+      staffed:zoneHasWorkersOn(ctx,z.id,iso)})) };
+}
+/* هل في اليوم شيء يُعرض بالسجل؟ تأشير، أو اعتماد، أو ملاحظة بمناطق العرض */
+function dayHasContent(iso){
+  const r=C().days[iso]; if(!r) return false;
+  if(Object.keys(viewStates(iso)).length) return true;
+  if(isLegacyDay(r)) return r.confirmed===true || !!String(r.notes||"").trim();
+  return viewZoneIds().some(z=>zoneConfirmed(iso,z) || !!zoneNotes(iso,z).trim());
+}
+
+/* ---- تعديل اليوم ----
+   بالذاكرة فقط بهذه المرحلة؛ المرحلة ٢ تضيف لكل دالة هنا كتابة سجلها الواحد على الخادم
+   (تأشير = صف day_states، اعتماد وملاحظة = صف day_zones). */
+function dayRaw(iso){ const c=C(); return c.days[iso]||(c.days[iso]={states:{},zones:{}}); }
+/* السجل السابق يتحوّل لشكل المناطق: كل منطقة تأخذ اعتماده وملاحظته */
+function dayZoneMap(iso){
+  const c=C(), r=dayRaw(iso);
+  if(isLegacyDay(r)){
+    const m={}; c.zones.forEach(z=>{ m[z.id]={notes:String(r.notes||""), confirmed:r.confirmed===true}; });
+    delete r.notes; delete r.confirmed; r.zones=m;
+  }
+  return r.zones;
+}
+function coversAllZones(zids){ return C().zones.every(z=>zids.indexOf(z.id)>=0); }
+function setDayState(iso,wid,v){
+  const r=dayRaw(iso);
+  if(v==="absent"||v==="misc") r.states[wid]=v; else delete r.states[wid];   // الحاضر لا يُخزَّن
+}
+function setZonesConfirmed(iso,zids,on){
+  if(!zids || !zids.length) return;
+  const r=dayRaw(iso);
+  if(isLegacyDay(r) && coversAllZones(zids)){ r.confirmed=!!on; return; }
+  const m=dayZoneMap(iso);
+  zids.forEach(id=>{ (m[id]||(m[id]={notes:"",confirmed:false})).confirmed=!!on; });
+}
+function setZoneNotes(iso,zid,text){
+  const r=dayRaw(iso);
+  if(isLegacyDay(r) && coversAllZones([zid])){ r.notes=text; return; }
+  const m=dayZoneMap(iso);
+  (m[zid]||(m[zid]={notes:"",confirmed:false})).notes=text;
+}
+/* مناطق العرض التي يعتمدها المستخدم — الصلاحية تُفحص على كل منطقة بعينها */
+function confirmableZoneIds(){ return viewZoneIds().filter(z=>canZone("roster.confirm",z)); }
+/* تأشير عامل يعتمد جهته، كما كان التأشير يعتمد اليوم كله: مناطق جهة العامل التي يملك
+   المستخدم اعتمادها. جهة الإداري الآخر لا تُمسّ. عامل بلا قسم ← كل ما يعتمده من العرض. */
+function zonesConfirmedByMark(w){
+  const zid=workerZoneId(w), z=zid?zoneOf(zid):null, ids=confirmableZoneIds();
+  if(!z) return ids;
+  return ids.filter(id=>{ const x=zoneOf(id); return !!x && (x.buildingId||"")===(z.buildingId||""); });
+}
+/* تأشيرات اليوم لعمال العرض فقط (عامل بلا قسم أو غير معروف يُعدّ ضمنه) —
+   «الكل حاضر» وحذف اليوم لا يمسّان جهة غير معروضة */
+function viewStates(iso){
+  const r=C().days[iso], out={}; if(!r) return out;
+  const vz=new Set(viewZoneIds()), byId={};
+  C().workers.forEach(w=>{ byId[w.id]=w; });
+  Object.keys(r.states||{}).forEach(wid=>{
+    const w=byId[wid], z=w?workerZoneId(w):"";
+    if(!z || vz.has(z)) out[wid]=r.states[wid];
+  });
+  return out;
+}
+function clearViewStates(iso){
+  const r=C().days[iso]; if(!r) return;
+  Object.keys(viewStates(iso)).forEach(wid=>{ delete r.states[wid]; });
+}
+/* حذف يوم الجرد من العرض: تأشيراته واعتماده وملاحظاته. إن شمل العرض كل المناطق
+   يُحذف السجل كله كما كان. */
+function clearDayView(iso){
+  const c=C(), vz=viewZoneIds();
+  if(!c.days[iso]) return;
+  if(coversAllZones(vz)){ delete c.days[iso]; return; }
+  clearViewStates(iso);
+  const m=dayZoneMap(iso);
+  vz.forEach(id=>{ m[id]={notes:"",confirmed:false}; });
+}
+
 /* ==================== [محرّك] الحسابات ==================== */
-function dayRec(iso){ const c=C(); if(!c.days[iso]) c.days[iso]={states:{},notes:""}; return c.days[iso]; }
 function stateOf(iso,wid){ const c=C(); const r=c.days[iso]; return (r&&r.states[wid])?r.states[wid]:"present"; }
 function sectionOf(id){ return C().sections.find(s=>s.id===id); }
 function zoneOf(id){ return C().zones.find(z=>z.id===id); }
@@ -2481,12 +2555,14 @@ function renderTally(){
 function renderRoster(){
   const host=el("roster"), c=C();
   if(c.workers.length===0){
-    host.innerHTML='<div class="empty"><h3>ماكو عمال مسجلين بهذه الشركة</h3>'+
-      '<p>سجّل المناطق والأقسام والأسماء مرة وحدة، وبعدها كل يوم بس تعلّم الغياب.</p>'+
-      '<button class="btn primary" id="goPeople">إضافة الأقسام والعمال</button> '+
-      '<button class="btn ghost" id="demo">تجربة ببيانات وهمية</button></div>';
+    /* البيانات الوهمية للتجربة المحلية فقط — على الخادم كانت ستُضاف لبيانات الشركة الحقيقية */
+    const demoOk=!!window.__JARD_TEST__;
+    host.innerHTML='<div class="empty"><h3>'+(demoOk?'ماكو عمال مسجلين بهذه الشركة':'ماكو عمال مسجلين بعد')+'</h3>'+
+      '<p>سجّل الأقسام والأسماء مرة وحدة، وبعدها كل يوم بس تعلّم الغياب.</p>'+
+      '<button class="btn primary" id="goPeople">إضافة الأقسام والعمال</button>'+
+      (demoOk?' <button class="btn ghost" id="demo">تجربة ببيانات وهمية</button>':'')+'</div>';
     el("goPeople").onclick=()=>switchView("people");
-    el("demo").onclick=loadDemo;
+    if(demoOk) el("demo").onclick=loadDemo;
     return;
   }
   const q=el("search").value.trim();
@@ -2534,14 +2610,14 @@ let sheetTimer=null;
 el("roster").addEventListener("click",e=>{
   const b=e.target.closest("button[data-set]"); if(!b)return;
   if(lockBlock(curDate,"تعديل حضور يوم")) return;
-  const rec=dayRec(curDate), prev=stateOf(curDate,b.dataset.w);
+  const w=C().workers.find(x=>x.id===b.dataset.w), prev=stateOf(curDate,b.dataset.w);
   /* تعديل يوم معتمد مضى (لا تأشير اليوم نفسه) يُسجَّل بقيمته قبل وبعد */
-  if(rec.confirmed && curDate<todayISO() && prev!==b.dataset.set){
-    const w=C().workers.find(x=>x.id===b.dataset.w);
-    audit("day", dateSlash(curDate)+" — "+(w?w.name:""), DAY_TXT[prev]||prev, DAY_TXT[b.dataset.set]||b.dataset.set);
+  if(w && dayCountsFor(w,curDate) && curDate<todayISO() && prev!==b.dataset.set){
+    audit("day", dateSlash(curDate)+" — "+w.name, DAY_TXT[prev]||prev, DAY_TXT[b.dataset.set]||b.dataset.set);
   }
-  rec.states[b.dataset.w]=b.dataset.set; rec.confirmed=true;
-  queueSave();
+  setDayState(curDate,b.dataset.w,b.dataset.set);
+  setZonesConfirmed(curDate,zonesConfirmedByMark(w),true);
+  localEdit();
   const card=b.closest(".wcard");
   if(!card){ refresh(); return; }
   card.dataset.s=b.dataset.set;
@@ -2558,52 +2634,94 @@ el("roster").addEventListener("click",e=>{
   clearTimeout(sheetTimer); sheetTimer=setTimeout(drawSheet,350);
 });
 el("search").addEventListener("input",renderRoster);
-/* «الكل حاضر» يمسح كل تأشيرات اليوم — ما ينضغط سهواً على يوم مؤشَّر */
+/* «الكل حاضر» يمسح تأشيرات اليوم لعمال مناطق العرض — ما ينضغط سهواً على يوم مؤشَّر */
 el("allPresent").onclick=()=>{
   if(lockBlock(curDate,"تعديل حضور يوم")) return;
-  const r=dayRec(curDate), st=r.states||{};
+  const st=viewStates(curDate);
   let a=0, m=0;
   Object.keys(st).forEach(k=>{ if(st[k]==="absent") a++; else if(st[k]==="misc") m++; });
   const go=()=>{
-    if(r.confirmed && curDate<todayISO() && (a||m))
+    if(dayConfirmState(curDate)!=="none" && curDate<todayISO() && (a||m))
       audit("day", dateSlash(curDate)+" — الكل حاضر", [a?fmtNum(a)+" غياب":"", m?fmtNum(m)+" متفرقة":""].filter(Boolean).join(" و"), "الكل حاضر");
-    r.states={}; r.confirmed=true; queueSave(); refresh(); };
+    clearViewStates(curDate); setZonesConfirmed(curDate,confirmableZoneIds(),true); localEdit(); refresh(); };
   if(!a && !m){ go(); return; }
   const parts=[]; if(a) parts.push(fmtNum(a)+" غياب"); if(m) parts.push(fmtNum(m)+" متفرقة");
   confirmBox("الكل حاضر","باليوم "+dateTextOf(curDate)+" مؤشّر "+parts.join(" و")+".\n"+
     "«الكل حاضر» يمسحها كلها ويعتبر الجميع حاضرين.",{ok:"امسح واعتبر الكل حاضر",danger:true}).then(ok=>{ if(ok) go(); });
 };
+/* اعتماد اليوم = اعتماد كل منطقة معروضة يملك المستخدم اعتمادها. منطقة الإداري الآخر
+   (إن كانت بالعرض بلا صلاحية عليها) تبقى كما هي. */
 el("confirmDay").onclick=()=>{
   if(lockBlock(curDate,"اعتماد يوم")) return;
-  const r=dayRec(curDate); r.confirmed=true; queueSave(); refresh();
+  const ids=confirmableZoneIds();
+  if(!ids.length){ alertBox("لا تملك صلاحية اعتماد أي منطقة من المناطق المعروضة.","اعتماد اليوم"); return; }
+  setZonesConfirmed(curDate,ids,true); localEdit(); refresh();
   el("savedNote").textContent="تم اعتماد اليوم ✓"; setTimeout(()=>el("savedNote").textContent="",1600);
 };
-/* كتابة الملاحظة تحفظ النص فقط — الاعتماد يصير بزر «اعتماد اليوم» حصراً،
-   لأن اليوم المعتمد يدخل حساب الرواتب ويعتبر كل من لم يُؤشَّر حاضراً. */
-el("notes").addEventListener("input",()=>{ const r=dayRec(curDate); r.notes=el("notes").value; queueSave();
-  clearTimeout(drawTimer); drawTimer=setTimeout(()=>{ drawSheet(); renderDayStatus(); },220); });
+/* ---- الملاحظات ----
+   منطقة واحدة بالعرض ← المربع نفسه كما كان. أكثر ← مربع لكل منطقة باسمها، فلا يُكتب
+   نص منطقة فوق أخرى. كتابة الملاحظة تحفظ النص فقط — الاعتماد بزر «اعتماد اليوم»
+   حصراً، لأن اليوم المعتمد يدخل حساب الرواتب ويعتبر كل من لم يُؤشَّر حاضراً. */
+let notesFocusZone="";
+function renderNotesEditor(){
+  const zs=viewZones(), single=zs.length<=1, box=el("notesZones"), nt=el("notes");
+  const ro=monthLocked(curDate);
+  nt.classList.toggle("hidden",!single); box.classList.toggle("hidden",single);
+  if(single){ nt.value=zs.length?zoneNotes(curDate,zs[0].id):""; nt.readOnly=ro; box.innerHTML=""; return; }
+  box.innerHTML=zs.map((z,i)=>'<label class="nzone" style="--zc:'+esc(z.color||ZONE_COLORS[i%ZONE_COLORS.length])+'">'+
+    '<span>'+esc(z.name)+'</span><textarea rows="3" data-nz="'+esc(z.id)+'"'+(ro?' readonly':'')+
+    ' placeholder="ملاحظات '+esc(z.short||z.name)+'…">'+esc(zoneNotes(curDate,z.id))+'</textarea></label>').join("");
+}
+function notesChanged(){
+  localEdit();
+  clearTimeout(drawTimer); drawTimer=setTimeout(()=>{ drawSheet(); renderDayStatus(); },220);
+}
+el("notes").addEventListener("input",()=>{
+  const z=viewZones()[0]; if(!z) return;
+  setZoneNotes(curDate,z.id,el("notes").value); notesChanged();
+});
+el("notesZones").addEventListener("input",e=>{
+  const t=e.target.closest("[data-nz]"); if(!t) return;
+  setZoneNotes(curDate,t.dataset.nz,t.value); notesChanged();
+});
+el("notesZones").addEventListener("focusin",e=>{ const t=e.target.closest("[data-nz]"); if(t) notesFocusZone=t.dataset.nz; });
+/* الملاحظة الاعتيادية تُضاف لمربع المنطقة الأخير الذي كُتب فيه (أو الأول) */
 el("insertDefaultNote").onclick=()=>{
   if(lockBlock(curDate,"تعديل ملاحظات يوم")) return;
-  const t=S().defNote||""; const cur=el("notes").value.trim();
-  el("notes").value = cur ? cur+"\n"+t : t;
-  const r=dayRec(curDate); r.notes=el("notes").value; queueSave(); drawSheet(); renderDayStatus();
+  const zs=viewZones(); if(!zs.length) return;
+  const zid=(zs.length>1 && zs.some(z=>z.id===notesFocusZone)) ? notesFocusZone : zs[0].id;
+  const t=S().defNote||"", cur=zoneNotes(curDate,zid).trim();
+  setZoneNotes(curDate,zid, cur ? cur+"\n"+t : t);
+  localEdit(); renderNotesEditor(); drawSheet(); renderDayStatus();
 };
-/* شريط حالة اليوم: معتمد أو لا */
+/* شريط حالة اليوم: معتمد أو لا — ومع أكثر من منطقة بالعرض، حالة كل منطقة على حدة */
 function renderDayStatus(){
-  const r=C().days[curDate];
-  const ok=!!(r && r.confirmed);
   const b=el("dayStatus");
   if(!b || !b.classList) return;
-  const nt=document.getElementById("notes"); if(nt) nt.readOnly=monthLocked(curDate);
-  if(monthLocked(curDate)){
-    b.className="daystat lock"; b.textContent="راتب "+monthNameOf(curDate)+" مقفل — هذا اليوم للقراءة فقط"+(ok?" (معتمد)":" (غير معتمد)");
+  const locked=monthLocked(curDate), rec=dayRec(curDate), ok=rec.confirmed;
+  const nt=document.getElementById("notes"); if(nt) nt.readOnly=locked;
+  document.querySelectorAll("#notesZones [data-nz]").forEach(t=>{ t.readOnly=locked; });
+  let cls, msg;
+  if(locked){
+    cls="lock"; msg="راتب "+monthNameOf(curDate)+" مقفل — هذا اليوم للقراءة فقط"+
+      (ok?" (معتمد)":(rec.partial?" (معتمد جزئياً)":" (غير معتمد)"));
   }else if(isHoliday(curDate)){
-    b.className="daystat hol"; b.textContent="عطلة: "+holidayReason(curDate)+" — مدفوعة وبلا استقطاع";
+    cls="hol"; msg="عطلة: "+holidayReason(curDate)+" — مدفوعة وبلا استقطاع";
   }else if(ok){
-    b.className="daystat ok"; b.textContent="اليوم معتمد ✓ — داخل حساب الرواتب";
+    cls="ok"; msg="اليوم معتمد ✓ — داخل حساب الرواتب";
+  }else if(rec.partial){
+    cls="no"; msg="اليوم معتمد جزئياً — عمال المنطقة غير المعتمدة لا يدخل هذا اليوم حساب رواتبهم حتى تُعتمد";
   }else{
-    b.className="daystat no"; b.textContent="اليوم غير معتمد — ما راح يدخل حساب الرواتب حتى تضغط «اعتماد اليوم»";
+    cls="no"; msg="اليوم غير معتمد — ما راح يدخل حساب الرواتب حتى تضغط «اعتماد اليوم»";
   }
+  b.className="daystat "+cls;
+  if(rec.zones.length<=1){ b.textContent=msg; return; }
+  b.innerHTML=esc(msg)+'<span class="dzs">'+rec.zones.map((x,i)=>{
+    const k=x.confirmed?"ok":(x.staffed?"no":"idle");
+    const t=x.confirmed?"معتمد":(x.staffed?"غير معتمد":"بلا عمال");
+    return '<span class="dz '+k+'" style="--zc:'+esc(x.zone.color||ZONE_COLORS[i%ZONE_COLORS.length])+'">'+
+      esc(x.zone.name)+' · '+t+'</span>';
+  }).join("")+'</span>';
 }
 
 /* ==================== [رسم] رسم ورقة A4 ==================== */
@@ -2754,6 +2872,39 @@ function drawWrapFit(c,text,xR,yTop,maxW,boxH,size,weight){
   r.lines.forEach(t=>{ c.fillText(t,xR,yy); yy+=r.lh; });
   return r;
 }
+/* [رسم] مربع ملاحظات ورقة الجرد. فقرة واحدة بلا عنوان (منطقة واحدة بالعرض) ← drawWrapFit
+   نفسها حرفياً كما كانت. أكثر من منطقة ← فقرة لكل منطقة يسبقها اسمها بخط عريض، داخل
+   المربع نفسه وبأبعاده؛ الخط يصغر كله معاً حتى تتسع، وعند الحدّ الأدنى يُختم آخر سطر بـ«…». */
+function drawNoteParts(c,parts,xR,yTop,maxW,boxH){
+  parts=parts||[];
+  if(parts.length<=1 && !(parts[0]&&parts[0].name))
+    return drawWrapFit(c,parts.length?parts[0].text:"",xR,yTop,maxW,boxH,24,400);
+  const ink=c.fillStyle, head=CL().purpleDeep;
+  let s=24, rows, lh, gap, h;
+  for(;;){
+    lh=Math.round(s*1.5); gap=Math.round(lh*.35); rows=[];
+    parts.forEach((p,i)=>{
+      c.font=f(700,s); wrapLines(c,p.name,maxW).forEach((t,j)=>rows.push({t:t,b:true,gap:(i&&!j)?gap:0}));
+      c.font=f(400,s); wrapLines(c,p.text,maxW).forEach(t=>rows.push({t:t,b:false,gap:0}));
+    });
+    h=rows.reduce((a,x)=>a+lh+x.gap,0);
+    if(h<=boxH-8 || s<=11) break;
+    s-=.5;
+  }
+  const cap=boxH-8;
+  let yy=yTop+1, used=0;
+  for(let i=0;i<rows.length;i++){
+    const x=rows[i], need=lh+x.gap;
+    if(used+need>cap) break;
+    /* آخر سطر يسع وبعده ما لا يسع: يُختم بـ«…» ويتوقف */
+    const more=i+1<rows.length, clip=more && used+need+lh+rows[i+1].gap>cap;
+    used+=need; yy+=need;
+    c.font=f(x.b?700:400,s); c.fillStyle=x.b?head:ink;
+    c.fillText(clip ? clipText(c,x.t+" …",maxW) : x.t, xR, yy);
+    if(clip) break;
+  }
+  c.fillStyle=ink;
+}
 
 /* الورقة مرسومة بإحداثيات A4 عند ١٥٠ نقطة/إنش.
    بتكبير المصفوفة نطلع نفس الرسم بأي دقة بلا تغيير أي إحداثي. */
@@ -2893,7 +3044,7 @@ function drawSheet(target,k){
   ctx.fillStyle=CLR.purpleLite; roundRect(ctx,L,bt,W,bb-bt,8); ctx.fill();
   ctx.strokeStyle=CLR.line; ctx.lineWidth=1; roundRect(ctx,L,bt,W,bb-bt,8); ctx.stroke();
   ctx.fillStyle=CLR.ink;
-  drawWrapFit(ctx,rec.notes||"",R-16,bt+2,W-32,bb-bt,24,400);
+  drawNoteParts(ctx,rec.noteParts,R-16,bt+2,W-32,bb-bt);
 
   // التذييل
   ctx.strokeStyle=CLR.gold; ctx.lineWidth=1; line(ctx,L,footTop,R,footTop);
@@ -3000,9 +3151,7 @@ function monthLabel(ym){
 }
 function renderHistory(){
   const c=C();
-  const keys=Object.keys(c.days).filter(k=>{
-    const d=c.days[k]; return d.confirmed||Object.keys(d.states).length>0||(d.notes&&d.notes.trim());
-  }).sort().reverse();
+  const keys=Object.keys(c.days).filter(dayHasContent).sort().reverse();
   if(!keys.length){
     el("historyBody").innerHTML='<div class="empty"><h3>السجل فارغ</h3>'+
       '<p>أول ما تسجّل غياب أو ملاحظة، اليوم ينحفظ هنا لوحده.</p></div>';
@@ -3017,6 +3166,7 @@ function renderHistory(){
   const q=(el("histSearch").value||"").trim();
   /* نتيجة كل يوم تُحسب مرة واحدة بالرسم الواحد (الخلاصة والجدول يقرآن منها) */
   const memo={}; const cmp=k=>memo[k]||(memo[k]=compute(k));
+  const ctx=dayCtx(), cst={}; const cs=k=>cst[k]||(cst[k]=dayConfirmState(k,ctx));
   let html="";
   order.forEach(ym=>{
     let list=groups[ym];
@@ -3024,25 +3174,26 @@ function renderHistory(){
     if(q && !list.length) return;
     const open=q?true:openMonths.has(ym);
     // خلاصة الشهر
-    let conf=0, abs=0, msc=0;
+    let conf=0, part=0, abs=0, msc=0;
     groups[ym].forEach(k=>{ const x=cmp(k); abs+=x.absent; msc+=x.misc;
-      if(c.days[k].confirmed) conf++; });
-    const notConf=groups[ym].length-conf;
+      if(cs(k)==="all") conf++; else if(cs(k)==="some") part++; });
+    const notConf=groups[ym].length-conf-part;
     html+='<div class="mfold'+(open?" open":"")+'">'+
       '<div class="mhead" data-month="'+ym+'" tabindex="0" role="button" aria-expanded="'+(open?"true":"false")+'">'+
       '<span class="mcaret">'+(open?"▾":"▸")+'</span>'+
       '<b>'+esc(monthLabel(ym))+'</b>'+
       '<span class="mmeta">'+fmtNum(groups[ym].length)+' يوم · غياب '+fmtNum(abs)+
         ' · متفرقة '+fmtNum(msc)+
-        (notConf?' · <span class="mwarn">'+fmtNum(notConf)+' غير معتمد</span>':'')+'</span>'+
+        (notConf?' · <span class="mwarn">'+fmtNum(notConf)+' غير معتمد</span>':'')+
+        (part?' · <span class="mwarn">'+fmtNum(part)+' معتمد جزئياً</span>':'')+'</span>'+
       '</div>';
     if(open){
       html+='<div class="mbody"><table><thead><tr><th>التاريخ</th><th>اليوم</th><th>الحضور</th>'+
         '<th>الغياب</th><th>المتفرقة</th><th>الحالة</th><th></th></tr></thead><tbody>';
-      list.forEach(k=>{ const x=cmp(k), ok=!!c.days[k].confirmed;
+      list.forEach(k=>{ const x=cmp(k), ok=cs(k)==="all", pt=cs(k)==="some";
         html+='<tr><td class="dt">'+dateTextOf(k)+'</td><td>'+dayNameOf(k)+'</td><td>'+fmtNum(x.attendance)+
           '</td><td>'+fmtNum(x.absent)+'</td><td>'+fmtNum(x.misc)+'</td>'+
-          '<td>'+(ok?'<span class="stag ok">معتمد</span>':'<span class="stag warn">غير معتمد</span>')+'</td>'+
+          '<td>'+(ok?'<span class="stag ok">معتمد</span>':(pt?'<span class="stag warn">معتمد جزئياً</span>':'<span class="stag warn">غير معتمد</span>'))+'</td>'+
           '<td style="text-align:left;white-space:nowrap"><button class="btn sm" data-open="'+k+'">فتح</button> '+
           '<button class="btn sm danger" data-del="'+k+'">حذف</button></td></tr>'; });
       html+='</tbody></table></div>';
@@ -3070,15 +3221,15 @@ el("historyBody").addEventListener("click",e=>{
   const o=e.target.closest("[data-open]"), d=e.target.closest("[data-del]");
   if(o){ curDate=o.dataset.open; el("dateInput").value=curDate; switchView("daily"); refresh(); }
   if(d){
-    const k=d.dataset.del, rec=C().days[k]||{}, st=rec.states||{};
+    const k=d.dataset.del, st=viewStates(k), was=dayConfirmState(k)!=="none";
     if(lockBlock(k,"حذف يوم جرد")) return;
     const n=Object.keys(st).length;
     confirmBox("حذف يوم جرد","يتحذف جرد يوم "+dateTextOf(k)+"؟"+
       (n?"\nفيه "+fmtNum(n)+" تأشير غياب أو متفرقة.":"")+
-      (rec.confirmed?"\nاليوم معتمد: حذفه يخرجه من حساب الرواتب.":""),{ok:"حذف",danger:true}).then(go=>{
+      (was?"\nاليوم معتمد: حذفه يخرجه من حساب الرواتب.":""),{ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
-      if(rec.confirmed) audit("del","يوم جرد معتمد "+dateSlash(k), n?fmtNum(n)+" تأشير":"معتمد", "محذوف");
-      delete C().days[k]; queueSave(); refresh(); renderHistory();
+      if(was) audit("del","يوم جرد معتمد "+dateSlash(k), n?fmtNum(n)+" تأشير":"معتمد", "محذوف");
+      clearDayView(k); localEdit(); refresh(); renderHistory();
     });
   }
 });
@@ -3114,7 +3265,7 @@ el("zoneList").addEventListener("change",e=>{
   const z=C().zones.find(x=>x.id===p.dataset.zcol);
   if(!z)return;
   z.color=p.value;
-  queueSave();
+  localEdit();
   renderTally(); renderRoster(); drawSheet();   // تحديث الواجهة والورقة
   renderZones();                                 // إعادة رسم القائمة بعد الانتهاء
 });
@@ -3125,7 +3276,7 @@ el("addZone").onclick=()=>{
     color:el("zColor").value||ZONE_COLORS[c.zones.length%ZONE_COLORS.length]});
   el("zName").value=""; el("zShort").value="";
   el("zColor").value=ZONE_COLORS[(c.zones.length)%ZONE_COLORS.length];
-  queueSave(); refresh(); renderPeople();
+  localEdit(); refresh(); renderPeople();
 };
 el("zoneList").addEventListener("click",e=>{
   const c=C();
@@ -3143,7 +3294,7 @@ el("zoneList").addEventListener("click",e=>{
       const n=normName(v.dzName);
       if(!n){ alertBox("اسم المنطقة ما يصير فارغ."); return; }
       z.name=n; z.short=normName(v.dzShort)||n;
-      queueSave(); refresh(); renderPeople();
+      localEdit(); refresh(); renderPeople();
     });
     return;
   }
@@ -3155,13 +3306,13 @@ el("zoneList").addEventListener("click",e=>{
       if(!go) return;
       c.zones=c.zones.filter(x=>x.id!==z.id);
       c.sections.forEach(x=>{ if(x.zoneId===z.id) x.zoneId=""; });
-      queueSave(); refresh(); renderPeople();
+      localEdit(); refresh(); renderPeople();
     });
     return;
   }
   if(up) mv(up.dataset.zup,-1);
   if(dn) mv(dn.dataset.zdn,1);
-  if(up||dn){ queueSave(); refresh(); renderPeople(); }
+  if(up||dn){ localEdit(); refresh(); renderPeople(); }
 });
 
 /* ==================== [واجهة] الأقسام والعمال ==================== */
@@ -3243,7 +3394,7 @@ el("addSec").onclick=()=>{
   const n=el("secName").value.trim(); if(!n){ el("secName").focus(); return; }
   if(!C().zones.length){ alertBox("أضف منطقة أولاً (مثل: داخل البناية القديمة)."); return; }
   C().sections.push({id:uid(),name:n,zoneId:el("secZone").value||C().zones[0].id});
-  el("secName").value=""; queueSave(); refresh(); renderPeople();
+  el("secName").value=""; localEdit(); refresh(); renderPeople();
 };
 let editSecId=null;
 /* تعديل اسم القسم: المعرّف ثابت، فالعمال المرتبطون به يبقون مرتبطين */
@@ -3255,7 +3406,7 @@ function commitSectionRename(id,val){
   const dup=(name!==s.name && c.sections.some(x=>x.id!==id && x.name===name));
   const apply=()=>{
     s.name=name; editSecId=null;
-    queueSave(); refresh(); renderPeople(); if(RP) runReport();
+    localEdit(); refresh(); renderPeople(); if(RP) runReport();
     el("savedNote").textContent="انتعدّل اسم القسم ✓";
     setTimeout(()=>el("savedNote").textContent="",2200);
   };
@@ -3280,7 +3431,7 @@ el("secTable").addEventListener("click",e=>{
     ]}).then(v=>{
       if(!v) return;
       const z=c.zones.find(x=>x.id===v.dsZone); if(!z) return;
-      sec.zoneId=z.id; queueSave(); refresh(); renderPeople();
+      sec.zoneId=z.id; localEdit(); refresh(); renderPeople();
     });
     return; }
   if(dl2){
@@ -3292,7 +3443,7 @@ el("secTable").addEventListener("click",e=>{
       if(!go) return;
       c.sections=c.sections.filter(x=>x.id!==sec.id);
       c.workers.forEach(w=>{ if(w.sectionId===sec.id) w.sectionId=""; });
-      queueSave(); refresh(); renderPeople();
+      localEdit(); refresh(); renderPeople();
     });
   }
 });
@@ -3304,18 +3455,17 @@ el("addW").onclick=()=>{
     motherName:el("wMother").value, dob:el("wDob").value, status:st });
   /* عامل يُسجَّل أصلاً بحالة غير مستمرة: تاريخ التغيير هو تاريخ تسجيله */
   if(st!==WS_ACTIVE) setWorkerStatus(w,st,{date:todayISO()});
-  C().workers.push(w); ensureWorkerSeq(C());
+  C().workers.push(w);
   ["wName","wPhone","wPhone2","wAddr","wMother","wDob"].forEach(id=>{ el(id).value=""; });
   el("wStatus").value=WS_ACTIVE;
-  el("wName").focus(); queueSave(); refresh(); renderPeople(); renderVariables();
+  el("wName").focus(); localEdit(); refresh(); renderPeople(); renderVariables();
 };
 el("addBulk").onclick=()=>{
   const lines=el("bulk").value.split("\n").map(s=>normName(s)).filter(Boolean);
   if(!lines.length)return;
   const sid=el("wSec").value;
   lines.forEach(n=>C().workers.push(newWorker({name:n,sectionId:sid})));
-  ensureWorkerSeq(C());
-  el("bulk").value=""; queueSave(); refresh(); renderPeople(); renderVariables();
+  el("bulk").value=""; localEdit(); refresh(); renderPeople(); renderVariables();
 };
 /* ---- حذف العامل ----
    العامل الذي له سجل ما ينحذف بضغطة: حذفه يمحو أيام جرد ووصولات
@@ -3340,7 +3490,7 @@ function purgeWorker(w){
   c.achievements=(c.achievements||[]).filter(l=>l.workerId!==id);
   c.issues=(c.issues||[]).filter(l=>l.workerId!==id);
   Object.keys(c.days).forEach(k=>{ if(c.days[k]&&c.days[k].states) delete c.days[k].states[id]; });
-  queueSave(); refresh(); renderPeople(); renderVariables(); renderSalTable(); if(RP) runReport();
+  localEdit(); refresh(); renderPeople(); renderVariables(); renderSalTable(); if(RP) runReport();
 }
 el("wTable").addEventListener("click",e=>{
   const d=e.target.closest("[data-wdel]"); if(!d)return;
@@ -3371,7 +3521,7 @@ el("wTable").addEventListener("change",e=>{
   const s=e.target.closest("[data-wsec]");
   if(s){
     const w=C().workers.find(x=>x.id===s.dataset.wsec);
-    if(w){ w.sectionId=s.value; queueSave(); refresh(); renderPeople(); }
+    if(w){ w.sectionId=s.value; localEdit(); refresh(); renderPeople(); }
     return;
   }
   const st=e.target.closest("[data-wstat]");
@@ -3392,7 +3542,7 @@ function applyStatusChange(w,nx,when,note){
   if(lockBlock([when, getWorkerStatus(w)!==WS_ACTIVE?w.statusChangedAt:""],"تغيير حالة عامل بتاريخ داخله")){
     renderPeople(); renderVariables(); renderSalTable(); return false; }
   setWorkerStatus(w,nx,{date:when, note:note});
-  queueSave(); refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable();
+  localEdit(); refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable();
   if(RP) runReport();
   flash("انتغيّرت حالة «"+w.name+"» إلى «"+nx+"» ✓");
 }
@@ -3475,7 +3625,7 @@ Object.keys(setMap).forEach(id=>{
     if(setMap[id]==="printMode"){ sigCache.src=null; redrawSheets(); if(RP) renderReport(); }
     el("tbCompany").textContent=S().company;
     el("tbMark").textContent=S().mark||"ج";
-    queueSave(); refresh();
+    localEdit(); refresh();
   });
 });
 
@@ -3489,15 +3639,15 @@ el("themePresets").addEventListener("click",e=>{
   const b=e.target.closest("[data-theme]"); if(!b)return;
   C().theme=b.dataset.theme; el("setTheme").value=b.dataset.theme;
   el("themeHex").textContent=b.dataset.theme.toUpperCase();
-  applyTheme(); queueSave(); refresh();
+  applyTheme(); localEdit(); refresh();
 });
 el("setTheme").addEventListener("input",()=>{
   C().theme=el("setTheme").value; el("themeHex").textContent=el("setTheme").value.toUpperCase();
-  applyTheme(); queueSave(); refresh();
+  applyTheme(); localEdit(); refresh();
 });
 el("setAccent").addEventListener("input",()=>{
   C().accent=el("setAccent").value; el("accentHex").textContent=el("setAccent").value.toUpperCase();
-  applyTheme(); queueSave(); refresh();
+  applyTheme(); localEdit(); refresh();
 });
 
 /* ---- لوحة التوقيع ---- */
@@ -3535,7 +3685,7 @@ function saveSignature(){
   S().signature=trimmed||"";
   sigCache.src=null;
   el("sigState").textContent=S().signature?"توقيع محفوظ ✓":"";
-  queueSave(); redrawSheets();
+  localEdit(); redrawSheets();
 }
 /* قص الفراغ حول التوقيع حتى يطلع مضبوط بالورقة */
 function trimSig(cv){
@@ -3584,7 +3734,7 @@ el("sigClear").onclick=()=>{
   const cv=el("sigPad"), c=sigCtx(); if(c) c.clearRect(0,0,cv.width,cv.height);
   sigLoadGen++;
   S().signature=""; sigCache.src=null;
-  el("sigState").textContent=""; queueSave(); redrawSheets();
+  el("sigState").textContent=""; localEdit(); redrawSheets();
 };
 
 /* ---- شعار الشركة ---- */
@@ -3609,7 +3759,7 @@ function setLogoFromDataUrl(src, co){
     cx.drawImage(im,0,0,cv.width,cv.height);
     const st=co.settings;
     st.logo=cv.toDataURL("image/png"); st.logoW=cv.width; st.logoH=cv.height;
-    logoCache.src=null; queueSave();
+    logoCache.src=null; localEdit();
     if(co!==C()) return;
     fillLogoPrev(); redrawSheets();
     el("logoState").textContent="\u0627\u0646\u062d\u0641\u0638 \u0627\u0644\u0634\u0639\u0627\u0631 \u2713";
@@ -3628,7 +3778,7 @@ el("setLogoFile").addEventListener("change",e=>{
 });
 el("logoClear").onclick=()=>{
   const st=S(); st.logo=""; st.logoW=0; st.logoH=0;
-  logoCache.src=null; queueSave(); fillLogoPrev();
+  logoCache.src=null; localEdit(); fillLogoPrev();
   redrawSheets();
   el("logoState").textContent="";
 };
@@ -3650,16 +3800,16 @@ function renderCompanies(){
     (state.companies.length>1?'<button class="btn sm danger" data-codel="'+c.id+'">حذف</button>':'')+
     '</td></tr>').join("");
 }
-el("coSelect").addEventListener("change",()=>{ state.active=el("coSelect").value; queueSave(); bootView(); });
+el("coSelect").addEventListener("change",()=>{ state.active=el("coSelect").value; localEdit(); bootView(); });
 el("addCo").onclick=()=>{
   const n=el("newCoName").value.trim(); if(!n){ el("newCoName").focus(); return; }
   const c=blankCompany(n); ensureFields({companies:[c]}); state.companies.push(c); state.active=c.id;
-  el("newCoName").value=""; queueSave(); bootView();
+  el("newCoName").value=""; localEdit(); bootView();
 };
 el("coTable").addEventListener("click",e=>{
   const u=e.target.closest("[data-couse]"), r=e.target.closest("[data-coren]"),
         d=e.target.closest("[data-codup]"), x=e.target.closest("[data-codel]");
-  if(u){ state.active=u.dataset.couse; queueSave(); bootView(); return; }
+  if(u){ state.active=u.dataset.couse; localEdit(); bootView(); return; }
   if(r){
     const co=state.companies.find(x=>x.id===r.dataset.coren); if(!co) return;
     dlgShow({title:"تسمية الشركة", ok:"حفظ",
@@ -3668,7 +3818,7 @@ el("coTable").addEventListener("click",e=>{
       const n=normName(v.dcName);
       if(!n){ alertBox("اسم الشركة ما يصير فارغ."); return; }
       co.name=n; co.settings.company=n;
-      queueSave(); bootView();
+      localEdit(); bootView();
     });
     return; }
   if(d){ const c=state.companies.find(c=>c.id===d.dataset.codup);
@@ -3689,7 +3839,7 @@ el("coTable").addEventListener("click",e=>{
        شركتين. mtSel وأي ربط لاحق بالمعرّف يقدر يخلط بينهما —
        نولّد معرّفات جديدة للنسخة. الأسماء والكميات تبقى كما هي. */
     (copy.materials||[]).forEach(m=>{ if(m) m.id=uid(); });
-    state.companies.push(copy); queueSave(); bootView(); return; }
+    state.companies.push(copy); localEdit(); bootView(); return; }
   if(x){
     const co=state.companies.find(y=>y.id===x.dataset.codel); if(!co) return;
     dlgShow({title:"حذف شركة", danger:true, ok:"حذف نهائي",
@@ -3703,71 +3853,36 @@ el("coTable").addEventListener("click",e=>{
       if(!v) return;
       state.companies=state.companies.filter(y=>y.id!==co.id);
       if(state.active===co.id) state.active=state.companies[0].id;
-      queueSave(); bootView();
+      localEdit(); bootView();
     });
   }
 });
 
-/* ==================== [تخزين] ملف الداتا والنسخ ==================== */
+/* ==================== [تخزين] النسخ من الخادم ====================
+   «تنزيل نسخة» ومجلد النسخ اليومية يسحبان نسخة حديثة كاملة من الخادم لحظة
+   الطلب — لا ما بذاكرة الصفحة، التي قد تحمل تعديلاً لم يُحفظ. الملف بنفس شكل
+   البيانات الذي يقرأ منه البرنامج. ربط ملف داتا وفتحه والاستعادة والمسح أُزيلت:
+   البيانات على الخادم، واستبدالها كلها من ملف ليس عملية تُتاح من الواجهة. */
 function refreshDbState(){
   const st=el("dbState");
-  if(fileHandle) st.innerHTML="محفوظ تلقائياً بالجهاز + مربوط بملف: <b dir='ltr'>"+esc(fileHandle.name)+"</b>";
-  else st.textContent="البيانات محفوظة داخل هذا الجهاز وتُفتح تلقائياً مع البرنامج، بدون فتح أي ملف.";
+  if(window.__JARD_TEST__){ st.textContent="فحص محلي — بلا خادم."; return; }
+  st.innerHTML="البيانات على الخادم وتُحمَّل كاملة مع فتح البرنامج"+
+    (dbLoadedAt?" — آخر تحميل: <b>"+esc(dbLoadedAt)+"</b>":"")+".";
 }
-if(!canFS){ ["linkCreate","linkOpen","linkSaveNow"].forEach(i=>{ el(i).disabled=true; }); }
-el("linkCreate").onclick=async()=>{ try{
-  fileHandle=await window.showSaveFilePicker({ suggestedName:"jard-data.json",
-    types:[{description:"ملف بيانات الجرد",accept:{"application/json":[".json"]}}] });
-  await writeFile(); await idbSet(HKEY,fileHandle);
-  refreshDbState(); updateReminder(); badge("file");
-}catch(e){} };
-el("linkOpen").onclick=async()=>{ try{
-  const [h]=await window.showOpenFilePicker({ types:[{description:"ملف بيانات الجرد",accept:{"application/json":[".json"]}}] });
-  const obj=JSON.parse(await (await h.getFile()).text());
-  const looksValid = (obj && obj.v===2 && Array.isArray(obj.companies) && obj.companies.length) ||
-                     (obj && (Array.isArray(obj.workers) || (obj.settings && typeof obj.settings==="object")));
-  if(!looksValid){ alertBox("هذا الملف لا يبدو نسخة بيانات صادرة من هذا البرنامج. لم يتغيّر أي شيء."); return; }
-  if(!await confirmBox("فتح ملف داتا","فتح هذا الملف يستبدل كل البيانات الحالية بهذا الجهاز.\nتنحفظ لقطة أمان من الحالي قبل الاستبدال. نكمل؟",{ok:"افتح واستبدل",danger:true})) return;
-  await pushSafetySnap("preopen","قبل فتح ملف داتا");
-  state=migrate(obj); fileHandle=h; await idbSet(HKEY,h);
-  await persistState(); bootView(); refreshDbState(); updateReminder();
-}catch(e){ if(e&&e.name!=="AbortError") alertBox("تعذّر فتح الملف. تأكد أنه ملف بيانات صالح وبصيغة JSON."); } };
-el("linkSaveNow").onclick=async()=>{
-  if(!fileHandle){ alertBox("ماكو ملف مرتبط. اضغط «ربط ملف داتا» أولاً."); return; }
-  badge(await writeFile()?"file":"err");
-};
-el("backupOut").onclick=()=>{
-  const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
-  dl(URL.createObjectURL(b),"نسخة-الجرد-"+todayISO()+".json");
-};
-el("backupIn").onclick=()=>el("backupFile").click();
-el("backupFile").onchange=e=>{
-  const f2=e.target.files[0]; if(!f2)return;
-  const rd=new FileReader();
-  rd.onload=()=>{ try{
-    const obj=JSON.parse(rd.result);
-    // تحقق أن الملف نسخة جرد فعلية (v2 بشركات، أو نسخة قديمة فيها عمال/إعدادات)
-    const looksValid = (obj && obj.v===2 && Array.isArray(obj.companies) && obj.companies.length) ||
-                       (obj && (Array.isArray(obj.workers) || (obj.settings && typeof obj.settings==="object")));
-    if(!looksValid){ alertBox("هذا الملف لا يبدو نسخة بيانات صادرة من هذا البرنامج. لم يتغيّر أي شيء."); return; }
-    confirmBox("استعادة نسخة","الاستعادة تستبدل كل البيانات الحالية بكل الشركات.\nتنحفظ لقطة أمان من الحالي قبلها. نكمل؟",
-      {ok:"استعد",danger:true}).then(async go=>{
-      if(!go) return;
-      await pushSafetySnap("prerestore","قبل استعادة نسخة من ملف");
-      state=migrate(obj); await persistState(); bootView(); renderSnaps();
-      alertBox("تمت الاستعادة بنجاح.");
-    });
-  }catch(err){ alertBox("الملف تالف أو ليس بصيغة JSON صالحة. لم يتغيّر أي شيء."); } };
-  rd.readAsText(f2); e.target.value="";
-};
-el("wipeAll").onclick=async()=>{
-  const v=await dlgShow({title:"مسح كل البيانات", danger:true, ok:"مسح نهائي",
-    message:"كل الشركات والعمال والأيام والوصولات تنمسح من هذا الجهاز.\nما تكدر ترجعها إلا من نسخة منزّلة أو من لقطة الأمان التي تنحفظ الآن.",
-    fields:[{id:"dwipe",label:"اكتب كلمة «مسح» للتأكيد",placeholder:"مسح"}], needWord:{field:"dwipe",word:"مسح"}});
-  if(!v) return;
-  await pushSafetySnap("prewipe","قبل مسح كل البيانات");
-  state=defaultState(); fileHandle=null;
-  await idbSet(HKEY,null); await persistState(); bootView();
+/* نسخة حديثة كاملة: من الخادم، أو الحالة الحالية بالفحص المحلي */
+async function backupState(){
+  if(window.__JARD_TEST__) return state;
+  return ensureFields(await dbLoadState());
+}
+function backupJson(st){ return JSON.stringify(st,null,2); }
+el("backupOut").onclick=async()=>{
+  const b=el("backupOut"); b.disabled=true;
+  const was=b.textContent; b.textContent="يسحب من الخادم…";
+  try{
+    const st=await backupState();
+    dl(URL.createObjectURL(new Blob([backupJson(st)],{type:"application/json"})),"نسخة-الجرد-"+todayISO()+".json");
+  }catch(e){ alertBox(e.message||"تعذّر سحب النسخة من الخادم.","تنزيل نسخة"); }
+  finally{ b.disabled=false; b.textContent=was; }
 };
 
 /* ==================== [نموذج] تعديل الوثائق المحفوظة ====================
@@ -3990,7 +4105,7 @@ el("lvSave").onclick=()=>{
     note="انحفظت الإجازة ✓";
   }
   lvSyncSave();
-  queueSave(); renderLeaves(); drawLeave();
+  localEdit(); renderLeaves(); drawLeave();
   if(RP) runReport(); refresh();
   flash(note);
 };
@@ -4027,7 +4142,7 @@ el("leavesList").addEventListener("click",e=>{
       if(!go) return;
       if(lvEditId===l.id){ lvEditId=null; lvSyncSave(); }
       audit("del","وصل إجازة "+l.no+" — "+(l.name||""), (l.type||"")+" · "+dateSlash(l.from)+(l.hours?" · "+hoursText(l.hours):" · "+daysText(l.days||1)), "محذوف");
-      c.leaves=c.leaves.filter(x=>x.id!==l.id); queueSave(); renderLeaves();
+      c.leaves=c.leaves.filter(x=>x.id!==l.id); localEdit(); renderLeaves();
       if(RP) runReport(); refresh();
     }); }
 });
@@ -4426,7 +4541,7 @@ el("pnSave").onclick=async()=>{
      بسجل الحالة ولا يبقى عامل منتهي الخدمة ظاهراً بحالة «مستمر». */
   if(term) setWorkerStatus(w,WS_END,{date:date,note:"قرار إنهاء خدمة رقم "+no,ref:no});
   pnSyncSave();
-  queueSave(); renderPenalties(); drawPenalty(); pnHintRender();
+  localEdit(); renderPenalties(); drawPenalty(); pnHintRender();
   if(term||open){ refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable(); }
   if(RP) runReport();
   flash(note);
@@ -4478,7 +4593,7 @@ el("penaltiesList").addEventListener("click",e=>{
       audit("del","إشعار عقوبة "+l.no+" — "+(l.name||""), (l.type||"")+" · "+dateSlash(l.date)+" · "+fmtMoney(penaltyAmount(l,w))+" "+(S().currency||""), "محذوف");
       c.penalties=c.penalties.filter(x=>x.id!==l.id);
       if(undoTerm) undoTermination(w,l);
-      queueSave(); renderPenalties();
+      localEdit(); renderPenalties();
       if(undoTerm){ refresh(); renderPeople(); renderVariables(); renderDirectory(); renderSalTable(); }
       if(RP) runReport();
     }); }
@@ -4734,7 +4849,7 @@ el("acSave").onclick=async()=>{
     note="انحفظت المكافأة ✓";
   }
   acSyncSave();
-  queueSave(); renderAchievements(); drawAchievement(); acHintRender();
+  localEdit(); renderAchievements(); drawAchievement(); acHintRender();
   if(RP) runReport();
   flash(note);
 };
@@ -4775,7 +4890,7 @@ el("achList").addEventListener("click",e=>{
       if(!go) return;
       if(acEditId===l.id){ acEditId=null; acSyncSave(); }
       audit("del","إشعار مكافأة "+l.no+" — "+(l.name||""), (l.type||"")+" · "+dateSlash(l.date)+" · "+fmtMoney(achAmount(l,c.workers.find(x=>x.id===l.workerId)))+" "+(S().currency||""), "محذوف");
-      c.achievements=c.achievements.filter(x=>x.id!==l.id); queueSave(); renderAchievements();
+      c.achievements=c.achievements.filter(x=>x.id!==l.id); localEdit(); renderAchievements();
       if(RP) runReport();
     }); }
 });
@@ -5009,7 +5124,7 @@ el("catAdd").onclick=()=>{
   c.materials.push({ id:uid(), name:name, unit:el("catUnit").value.trim(),
     qty:Math.max(0,Number(el("catQty").value)||1) });
   el("catName").value=""; el("catUnit").value=""; el("catQty").value=1;
-  queueSave(); renderCatalog(); renderMatItems();
+  localEdit(); renderCatalog(); renderMatItems();
 };
 el("catList").addEventListener("click",e=>{
   const ed=e.target.closest("[data-medit]"), dl=e.target.closest("[data-mdel]"), c=C();
@@ -5025,7 +5140,7 @@ el("catList").addEventListener("click",e=>{
       if(!nm){ alertBox("اسم المادة ما يصير فارغ."); return; }
       if(c.materials.some(x=>x.id!==m.id && x.name===nm)){ alertBox("أكو مادة ثانية بنفس الاسم."); return; }
       m.name=nm; m.unit=String(v.dmUnit||"").trim(); m.qty=Math.max(0,Number(v.dmQty)||0);
-      queueSave(); renderCatalog(); renderMatItems(); drawIssue();
+      localEdit(); renderCatalog(); renderMatItems(); drawIssue();
     });
     return;
   }
@@ -5035,7 +5150,7 @@ el("catList").addEventListener("click",e=>{
       {ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
       c.materials=c.materials.filter(x=>x.id!==m.id); delete mtSel[m.id];
-      queueSave(); renderCatalog(); renderMatItems(); drawIssue();
+      localEdit(); renderCatalog(); renderMatItems(); drawIssue();
     });
   }
 });
@@ -5108,7 +5223,7 @@ el("mtSave").onclick=async()=>{
     note="انحفظ وصل المواد ✓";
   }
   mtSyncSave();
-  queueSave(); renderIssues(); mtStatusRender(); drawIssue();
+  localEdit(); renderIssues(); mtStatusRender(); drawIssue();
   flash(note);
 };
 function renderIssues(){
@@ -5154,7 +5269,7 @@ el("issuesList").addEventListener("click",e=>{
       if(!go) return;
       if(mtEditId===l.id){ mtEditId=null; mtSyncSave(); }
       audit("del","وصل صرف مواد "+l.no+" — "+(l.name||""), dateSlash(l.from)+" · "+fmtNum((l.items||[]).length)+" مادة", "محذوف");
-      c.issues=c.issues.filter(x=>x.id!==l.id); queueSave(); renderIssues(); mtStatusRender();
+      c.issues=c.issues.filter(x=>x.id!==l.id); localEdit(); renderIssues(); mtStatusRender();
     }); }
 });
 
@@ -5467,7 +5582,7 @@ function dirSave(id){
     /* تعديل الاسم يمرّ من نفس الدالة حتى ينزل على الوصولات المحفوظة */
     commitWorkerRename(id,name);
   }else{
-    queueSave(); refresh(); renderPeople(); if(RP) runReport();
+    localEdit(); refresh(); renderPeople(); if(RP) runReport();
   }
   /* الحالة آخر ما يُطبّق: لها تأكيدها الخاص، وبقية الحقول محفوظة قبلها */
   if(stChanged) changeWorkerStatus(id,nextSt);
@@ -6262,13 +6377,15 @@ function holidayDatesBetween(from,to){
 const LOOP_MAX=40000;
 
 /* الأيام المعتمدة فعلاً ضمن المدة — مع استبعاد العطل.
-   الاعتماد شرط: يوم كُتبت فيه ملاحظة ولم يُعتمد لا يُعدّ يوم دوام. */
+   الاعتماد شرط: يوم كُتبت فيه ملاحظة ولم يُعتمد لا يُعدّ يوم دوام.
+   الاعتماد لكل منطقة: اليوم هنا إن اعتُمدت فيه منطقة واحدة على الأقل مما يلزم (dayConfirmState)،
+   ثم يُحتسب لكل عامل بحسب منطقته هو (dayCountsFor) — فلا ينتظر إداريٌّ الآخر. */
 function recordedDays(from,to){
-  const c=C();
+  const c=C(), ctx=dayCtx();
   return Object.keys(c.days).filter(k=>{
     if(k<from||k>to) return false;
     if(isHoliday(k)) return false;          // العطل لا تُعد أيام عمل ولا يُستقطع عليها
-    return c.days[k] && c.days[k].confirmed===true;
+    return dayConfirmState(k,ctx)!=="none";
   }).sort();
 }
 /* كل أيام العمل ضمن المدة (بلا عطل) — سواء جُردت أو لا */
@@ -6279,11 +6396,12 @@ function workdaysBetween(from,to){
   while(d<=to && guard++<LOOP_MAX){ if(!isHoliday(d)) out.push(d); d=addDays(d,1); }
   return out;
 }
-/* أيام العمل التي لم تُعتمد بعد ضمن المدة — لا تتجاوز اليوم الحالي */
+/* أيام العمل التي لم تُعتمد بعد ضمن المدة — لا تتجاوز اليوم الحالي. يوم اعتُمدت فيه
+   منطقة دون أخرى ليس هنا (هو بالمعتمدة) — يُعرض تنبيهاً مستقلاً (partialDays). */
 function missingDays(from,to){
-  const c=C(), today=todayISO();
+  const today=todayISO(), ctx=dayCtx();
   const cap = to<today ? to : today;
-  return workdaysBetween(from,cap).filter(k=>!(c.days[k] && c.days[k].confirmed===true));
+  return workdaysBetween(from,cap).filter(k=>dayConfirmState(k,ctx)==="none");
 }
 /* عدد أيام التقويم التي كان فيها العامل ضمن الخدمة داخل المدة */
 function serviceDaysIn(w,from,to){
@@ -6364,6 +6482,7 @@ function buildReport(from,to){
     const leaveBy={none:0,half:0,full:0};
     days.forEach(d=>{
       if(!inService(w,d)) return;            // خارج فترة خدمته
+      if(!dayCountsFor(w,d)) return;         // منطقته لم تُعتمد ذلك اليوم
       eligible++;
       /* التصنيف من دالة واحدة مشتركة: يوم الأوف مدفوع بلا استقطاع،
          والإجازة الرسمية لها الأولوية على تأشير الجرد */
@@ -6541,17 +6660,9 @@ const LG_KINDS={
   unc:    {t:"غير معتمد",   sym:"؟"}
 };
 const LG_ORDER=["present","absent","misc","leave","off","hol","out","unc"];
-/* رقم تسلسلي ثابت لكل عامل داخل شركته — أساس رقم الجرد التفصيلي.
-   يُعطى مرة واحدة ولا يتغيّر بعدها حتى لو حُذف عامل قبله، فيبقى رقم جرد
-   شهر مطبوع هو نفسه عند إعادة طباعته. يملأ الناقص فقط (متكرر بلا أثر). */
-function ensureWorkerSeq(c){
-  if(!c || !Array.isArray(c.workers)) return false;
-  let mx=Number(c.workerSeq)||0, changed=false;
-  c.workers.forEach(w=>{ if(w && Number(w.seq)>mx) mx=Number(w.seq); });
-  c.workers.forEach(w=>{ if(w && !(Number(w.seq)>0)){ w.seq=++mx; changed=true; } });
-  if(c.workerSeq!==mx){ c.workerSeq=mx; changed=true; }
-  return changed;
-}
+/* رقم تسلسلي ثابت لكل عامل داخل شركته (w.seq) — أساس رقم الجرد التفصيلي. يعطيه
+   الخادم مرة واحدة عند إدراج العامل بعدّاد ذرّي، ولا يتغيّر بعدها حتى لو حُذف عامل
+   قبله، فيبقى رقم جرد شهر مطبوع هو نفسه عند إعادة طباعته. */
 /* رقم الجرد: حتمي من الشهر ورقم العامل — نفس العامل ونفس الشهر = نفس الرقم.
    بنفس صيغة أرقام الوثائق (بادئة-سنة-…) وأرقامها لاتينية مثلها، فلا ينقلب
    ترتيبه داخل سطر عربي. */
@@ -6582,7 +6693,6 @@ function buildWorkerLedger(workerId, from, to, rp){
   if(rp.invalid) return null;
   const row=rp.rows.find(r=>r.id===workerId);
   if(!row) return null;
-  if(ensureWorkerSeq(c)) queueSave();
   /* فهارس الإجازات والوصولات تُبنى مرة واحدة لكل كشف، لا لكل عامل */
   if(!rp._lg) rp._lg={ lv:indexByWorker(c.leaves||[]), is:indexByWorker(c.issues||[]), conf:new Set(rp.days) };
   const X=rp._lg, myLeaves=X.lv.get(w.id)||null, today=todayISO();
@@ -6602,7 +6712,7 @@ function buildWorkerLedger(workerId, from, to, rp){
       else if(rosterStart(w) && d<rosterStart(w)) e.detail="قبل تسجيله بالبرنامج ("+dateSlash(rosterStart(w))+")";
       else e.detail="خارج الخدمة";
       e.ded = (row.proCut>0 && ((svcS && d<svcS) || (svcE && d>svcE))) ? "نسبي" : "لا";
-    }else if(!X.conf.has(d)){
+    }else if(!X.conf.has(d) || !dayCountsFor(w,d)){
       e.k="unc"; e.detail = d>today ? "لم يحن بعد" : "لم يُعتمد — خارج الحساب لحين اعتماده";
     }else{
       const cd=classifyDay(w,d,myLeaves);
@@ -6775,6 +6885,12 @@ function renderReport(){
       '<br><span class="mini">هذه الأيام ما تدخل بحساب الغياب. اعتمدها أو استعمل الزر تحت.</span>'+
       '<div style="margin-top:8px"><button class="btn sm" id="fixGaps">اعتماد كل هذه الأيام «الكل حاضر»</button></div></div>';
   }
+  const pdays=partialDays(RP.days);
+  if(pdays.length){
+    const show=pdays.slice(0,8).map(x=>dateNumeric(x.d)+" ("+x.zones.map(z=>z.short||z.name).join("، ")+")").join(" · ");
+    warn+='<div class="warnbox"><b>'+fmtNum(pdays.length)+' يوم معتمد جزئياً</b> — اعتُمدت فيه منطقة وبقيت أخرى فيها عمال. '+
+      'عمال المنطقة غير المعتمدة لا يدخل ذلك اليوم حساب غيابهم حتى تُعتمد:<br>'+esc(show)+(pdays.length>8?' … وغيرها':'')+'</div>';
+  }
   if(RP.rows.some(r=>r.partial))
     warn+='<div class="warnbox">بعض العمال راتبهم نسبي لأن مباشرتهم أو انتهاء خدمتهم داخل المدة — '+
       'يُحسم أجر الأيام التي كان فيها خارج الخدمة من راتبه الكامل، بأيام التقويم لا بأيام الجرد.</div>';
@@ -6810,8 +6926,9 @@ function renderReport(){
       needWord:{field:"gapOk",word:"اعتماد"}
     }).then(v=>{
       if(!v) return;
-      RP.gaps.forEach(k=>{ if(!c.days[k]) c.days[k]={states:{},notes:""}; c.days[k].confirmed=true; });
-      queueSave(); runReport(); renderHistory(); refresh();
+      const ids=confirmableZoneIds();
+      RP.gaps.forEach(k=>setZonesConfirmed(k,ids,true));
+      localEdit(); runReport(); renderHistory(); refresh();
     });
   };
 
@@ -6900,7 +7017,7 @@ el("setSalary").addEventListener("focus",()=>{ salAuditBefore=S().salary; });
 el("setSalary").addEventListener("change",()=>{
   if(salAuditBefore!=null && Number(salAuditBefore)!==Number(S().salary))
     audit("salary","الراتب الافتراضي للشركة", fmtMoney(salAuditBefore), fmtMoney(S().salary));
-  salAuditBefore=S().salary; queueSave();
+  salAuditBefore=S().salary; localEdit();
 });
 /* الحقول النصية لا تُحوَّل لأرقام */
 const salTextKeys={dedMode:1,miscPaid:1,currency:1,leavePolicy:1,proRate:1};
@@ -6908,7 +7025,7 @@ Object.keys(salMap).forEach(id=>{
   el(id).addEventListener("input",()=>{
     const k=salMap[id], v=el(id).value;
     S()[k]=salTextKeys[k]?v:(Number(v)||0);
-    toggleDedMode(); updatePolicyHint(); queueSave();
+    toggleDedMode(); updatePolicyHint(); localEdit();
     if(RP) runReport(); renderSalTable();
   });
 });
@@ -6963,7 +7080,7 @@ el("salTable").addEventListener("change",e=>{
     if(w && lockBlock([w.startDate, t.value],"تغيير تاريخ مباشرة داخله")){ t.value=w.startDate||""; return; }
     if(w) w.startDate=t.value||""; }
   if(p){ const w=find(p.dataset.lpol); if(w) w.leavePolicy=p.value||null; }
-  if(s||d||t||p){ queueSave(); if(RP) runReport(); }
+  if(s||d||t||p){ localEdit(); if(RP) runReport(); }
 });
 el("salSort").addEventListener("change",renderSalTable);
 el("applyAllSalary").onclick=()=>{
@@ -6973,7 +7090,7 @@ el("applyAllSalary").onclick=()=>{
     const n=C().workers.filter(w=>w.salary!=null&&w.salary!==""||w.deduct!=null&&w.deduct!=="").length;
     if(n) audit("salary","كل العمال ← الراتب الافتراضي", fmtNum(n)+" عامل براتب أو استقطاع خاص", "الافتراضي للجميع");
     C().workers.forEach(w=>{ w.salary=null; w.deduct=null; w.leavePolicy=null; });
-    queueSave(); renderSalTable(); if(RP) runReport();
+    localEdit(); renderSalTable(); if(RP) runReport();
   });
 };
 
@@ -7005,7 +7122,7 @@ function applyWorkerRename(w,name){
   (c.achievements||[]).forEach(l=>{ if(l.workerId===id && l.name!==name){ l.name=name; fixedP++; } });
   (c.issues||[]).forEach(l=>{ if(l.workerId===id && l.name!==name){ l.name=name; fixedP++; } });
   editWorkerId=null;
-  queueSave(); refresh(); renderPeople();
+  localEdit(); refresh(); renderPeople();
   if(RP) runReport();
   flash("انتعدّل الاسم"+(fixed?" و"+fmtNum(fixed)+" وصل إجازة":"")+
     (fixedP?" و"+fmtNum(fixedP)+" إشعار عقوبة أو مكافأة":"")+" ✓");
@@ -7031,7 +7148,7 @@ el("wdBoxes").addEventListener("click",e=>{
   if(!Array.isArray(st.weekendDays)) st.weekendDays=[];
   const k=st.weekendDays.indexOf(i);
   if(k>=0) st.weekendDays.splice(k,1); else st.weekendDays.push(i);
-  queueSave(); renderWeekdays(); if(RP) runReport(); refresh();
+  localEdit(); renderWeekdays(); if(RP) runReport(); refresh();
 });
 function renderHolidays(){
   const hs=(S().holidays||[]).slice().sort((a,b)=>a.date<b.date?-1:1);
@@ -7059,7 +7176,7 @@ el("addHoliday").onclick=()=>{
     cur=addDays(cur,1);
   }
   el("hlDate").value=""; el("hlDate2").value=""; el("hlName").value="";
-  queueSave(); renderHolidays(); if(RP) runReport(); refresh();
+  localEdit(); renderHolidays(); if(RP) runReport(); refresh();
   if(!added && skipped) alertBox("كل هذه التواريخ مضافة مسبقاً.");
   else if(skipped) el("savedNote").textContent="أُضيفت "+fmtNum(added)+" وتُجوهلت "+fmtNum(skipped)+" مكررة";
 };
@@ -7068,7 +7185,7 @@ el("holidayList").addEventListener("click",e=>{
   if(lockBlock([b.dataset.hdel],"حذف عطلة بتاريخها")) return;
   const st=S();
   st.holidays=(st.holidays||[]).filter(h=>h.date!==b.dataset.hdel);
-  queueSave(); renderHolidays(); if(RP) runReport(); refresh();
+  localEdit(); renderHolidays(); if(RP) runReport(); refresh();
 });
 
 /* ---- أيام الاستراحة الخاصة (أوف) ---- */
@@ -7117,7 +7234,7 @@ el("offBoxes").addEventListener("click",e=>{
   if(!Array.isArray(w.offWeekdays)) w.offWeekdays=[];
   const i=Number(b.dataset.off), k=w.offWeekdays.indexOf(i);
   if(k>=0) w.offWeekdays.splice(k,1); else w.offWeekdays.push(i);
-  queueSave(); renderOffBoxes(); renderOffSummary(); renderOffWorkerList();
+  localEdit(); renderOffBoxes(); renderOffSummary(); renderOffWorkerList();
   if(RP) runReport(); refresh();
 });
 el("addOffDate").onclick=()=>{
@@ -7129,7 +7246,7 @@ el("addOffDate").onclick=()=>{
   if(lockBlock([d],"إضافة أوف بتاريخه")) return;
   if(w.offDates.indexOf(d)>=0){ alertBox("هذا التاريخ مضاف مسبقاً لهذا العامل."); return; }
   w.offDates.push(d); el("offDate").value="";
-  queueSave(); renderOffDates(); renderOffSummary(); renderOffWorkerList();
+  localEdit(); renderOffDates(); renderOffSummary(); renderOffWorkerList();
   if(RP) runReport(); refresh();
 };
 el("offDateList").addEventListener("click",e=>{
@@ -7137,7 +7254,7 @@ el("offDateList").addEventListener("click",e=>{
   const w=currentOffWorker(); if(!w) return;
   if(lockBlock([b.dataset.offdel],"حذف أوف بتاريخه")) return;
   w.offDates=offDatesOf(w).filter(d=>d!==b.dataset.offdel);
-  queueSave(); renderOffDates(); renderOffSummary(); renderOffWorkerList();
+  localEdit(); renderOffDates(); renderOffSummary(); renderOffWorkerList();
   if(RP) runReport(); refresh();
 });
 el("offSummary").addEventListener("click",e=>{
@@ -7146,7 +7263,7 @@ el("offSummary").addEventListener("click",e=>{
   confirmBox("إلغاء أيام الأوف","إلغاء كل أيام الأوف لـ «"+w.name+"»؟",{ok:"إلغاء الأوف",danger:true}).then(go=>{
     if(!go) return;
     w.offWeekdays=[]; w.offDates=[];
-    queueSave(); renderOffAll(); if(RP) runReport(); refresh();
+    localEdit(); renderOffAll(); if(RP) runReport(); refresh();
   });
 });
 
@@ -8370,87 +8487,14 @@ function initFolds(){
 }
 
 /* ==================================================================
-   [تخزين] أمان البيانات: لقطات يومية داخل البرنامج + نسخ مؤرّخة بمجلد حقيقي
-   الخطر الذي نغطّيه: مسح بيانات المتصفح، أو خطأ بشري يمسح عاملاً
-   أو يخربط أرقاماً، فنحتاج رجوعاً ليوم سابق لا مجرد ملف واحد مكرّر.
+   [تخزين] مجلد النسخ اليومية: نسخة مؤرّخة من الخادم بمجلد حقيقي على القرص
+   البيانات على الخادم، وهذا المجلد نسخة عندك لا تعتمد عليه: أول فتح كل يوم يسحب
+   نسخة كاملة ويكتبها ملفاً مستقلاً باسم اليوم، فترجع لأي يوم سابق.
+   (اللقطات الداخلية بالمتصفح أُزيلت: كانت نسخاً من البيانات المحلية واستعادتها
+   تستبدل الكل — لا معنى لها والبيانات مشتركة على الخادم.)
 ================================================================== */
-const SNAP_KEEP=14, SNAPK="snaps", BKDIR="backupDir";
+const BKDIR="backupDir";
 let backupDir=null;
-
-/* ---- لقطات داخلية (IndexedDB) ----
-   نوعان: لقطة يومية تلقائية (أول تشغيل باليوم)، ولقطة أمان تُحفظ قبل أي
-   عملية تستبدل البيانات كلها — استعادة لقطة، استعادة نسخة، فتح ملف داتا،
-   مسح الكل، أو اعتماد ملف مرتبط أحدث عند الإقلاع. اللقطة تحمل كل الشركات،
-   فالاستعادة تستبدل الكل؛ لقطة الأمان هي طريق التراجع عنها. */
-const SAFETY_KEEP=6;
-async function getSnaps(){ const v=await idbGet(SNAPK); try{ return v?JSON.parse(v):[]; }catch(e){ return []; } }
-async function putSnaps(a){ return idbSet(SNAPK, JSON.stringify(a)); }
-/* تقليم: آخر ١٤ لقطة يومية + آخر ٦ لقطات أمان، كلٌّ بحصّته */
-function trimSnaps(snaps){
-  const daily=snaps.filter(x=>!x.kind).sort((a,b)=>a.day<b.day?1:-1).slice(0,SNAP_KEEP);
-  const safe=snaps.filter(x=>x.kind).sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,SAFETY_KEEP);
-  return safe.concat(daily);
-}
-/* لقطة يومية واحدة: أول تشغيل باليوم يحفظ حالة ما قبل تعديلات اليوم */
-async function snapshotIfNeeded(){
-  try{
-    const today=todayISO();
-    let snaps=await getSnaps();
-    if(snaps.some(x=>x.day===today && !x.kind)) return false;
-    snaps.push({ day:today, at:Date.now(), data:JSON.stringify(state) });
-    await putSnaps(trimSnaps(snaps));
-    return true;
-  }catch(e){ return false; }
-}
-async function pushSafetySnap(kind,label){
-  try{
-    if(!stateLoaded) return false;
-    let snaps=await getSnaps();
-    snaps.push({ day:todayISO(), at:Date.now(), kind:kind||"safety", label:label||"لقطة أمان", data:JSON.stringify(state) });
-    return await putSnaps(trimSnaps(snaps));
-  }catch(e){ return false; }
-}
-function snapKey(sn){ return String(sn.at||sn.day); }
-async function renderSnaps(){
-  const box=el("snapList"); if(!box||box.innerHTML===undefined) return;
-  const snaps=await getSnaps();
-  if(!snaps.length){ box.innerHTML='<p class="hint">ماكو لقطات بعد. أول لقطة تنحفظ تلقائياً.</p>'; return; }
-  const list=snaps.slice().sort((a,b)=>(b.at||0)-(a.at||0));
-  box.innerHTML=list.map(sn=>{
-    let n=0,w=0,co=0;
-    try{ const o=JSON.parse(sn.data);
-      (o.companies||[]).forEach(c=>{ co++; w+=(c.workers||[]).length; n+=Object.keys(c.days||{}).length; });
-    }catch(e){}
-    const when=sn.at?new Date(sn.at):null;
-    const hm=when?fmtNum(String(when.getHours()).padStart(2,"0")+":"+String(when.getMinutes()).padStart(2,"0")):"";
-    return '<div class="adjrow"><div><b>'+(sn.kind?'<span class="stag warn">'+esc(sn.label||"لقطة أمان")+'</span> ':'')+
-      dateTextOf(sn.day)+(sn.kind&&hm?' · '+hm:'')+'</b>'+
-      '<div class="mini">'+fmtNum(co)+' شركة · '+fmtNum(w)+' عامل · '+fmtNum(n)+' يوم جرد · '+
-      fmtNum(Math.round(sn.data.length/1024))+' ك.ب</div></div>'+
-      '<div style="display:flex;gap:6px"><button class="btn sm" data-snapdl="'+esc(snapKey(sn))+'">تنزيل</button>'+
-      '<button class="btn sm danger" data-snap="'+esc(snapKey(sn))+'">استعادة</button></div></div>';
-  }).join("");
-}
-el("snapList").addEventListener("click",async e=>{
-  const r=e.target.closest("[data-snap]"), d=e.target.closest("[data-snapdl]");
-  if(d){ const snaps=await getSnaps(); const sn=snaps.find(x=>snapKey(x)===d.dataset.snapdl); if(!sn)return;
-    dl(URL.createObjectURL(new Blob([sn.data],{type:"application/json"})),"لقطة-"+sn.day+(sn.kind?"-"+sn.kind:"")+".json"); return; }
-  if(!r)return;
-  const snaps=await getSnaps(), sn=snaps.find(x=>snapKey(x)===r.dataset.snap);
-  if(!sn)return;
-  const go=await confirmBox("استعادة لقطة","استعادة لقطة "+(sn.label?"«"+sn.label+"» ":"")+dateTextOf(sn.day)+"؟\n\n"+
-    "كل البيانات الحالية بكل الشركات راح تنستبدل بحالة تلك اللحظة.\n"+
-    "تنحفظ لقطة أمان من الحالي قبل الاستعادة — منها تقدر ترجع لو غيّرت رأيك.",{ok:"استعد",danger:true});
-  if(!go) return;
-  try{
-    const parsed=JSON.parse(sn.data);
-    await pushSafetySnap("prerestore","قبل استعادة لقطة "+dateTextOf(sn.day));
-    state=migrate(parsed);
-    await persistState(); if(fileHandle) await writeFile();
-    bootView(); refreshDbState(); renderSnaps();
-    alertBox("انستعادت لقطة "+dateTextOf(sn.day)+" ✓\nلقطة الأمان «قبل استعادة لقطة» موجودة بالقائمة لو احتجت ترجع.");
-  }catch(err){ alertBox("تعذّرت الاستعادة: "+err.message); }
-});
 
 /* ---- مجلد نسخ حقيقي على القرص ---- */
 const canDir = typeof window!=="undefined" && "showDirectoryPicker" in window;
@@ -8462,16 +8506,18 @@ async function dirPermOK(h,ask){
   }catch(e){}
   return false;
 }
-async function writeBackupFile(force){
+/* st: نسخة جاهزة (عند الإقلاع هي نفسها ما حُمّل للتو)، وإلا تُسحب حديثة من الخادم */
+async function writeBackupFile(force, st){
   if(!backupDir) return false;
   const day=todayISO();
   if(!force && lsGet("bk_last")===day) return false;    // نسخة واحدة باليوم تكفي
   if(!await dirPermOK(backupDir,false)) return false;
   try{
+    const data=st || await backupState();
     const name="جرد-"+day+".json";
     const fh=await backupDir.getFileHandle(name,{create:true});
     const w=await fh.createWritable();
-    await w.write(new Blob([JSON.stringify(state,null,2)],{type:"application/json"}));
+    await w.write(new Blob([backupJson(data)],{type:"application/json"}));
     await w.close();
     lsSet("bk_last",day); lsSet("bk_last_at",String(Date.now()));
     refreshBackupState();
@@ -8480,11 +8526,9 @@ async function writeBackupFile(force){
 }
 function daysSinceBackup(){
   const d=lsGet("bk_last"); if(!d) return null;
-  const a=parseISO(d), b=parseISO(todayISO());
-  return Math.round((b-a)/86400000);
+  return daysBetween(d, todayISO());
 }
 function refreshBackupState(){
-  const cb=el("corruptBox"); if(cb && cb.classList) cb.classList.toggle("hidden",!lsGet("jard_pro_corrupt_at"));
   const st=el("bkFolderState"), warn=el("bkWarn");
   if(!st||st.textContent===undefined) return;
   if(backupDir) st.innerHTML="المجلد مربوط: <b dir='ltr'>"+esc(backupDir.name)+"</b>"+
@@ -8492,25 +8536,19 @@ function refreshBackupState(){
   else st.textContent = canDir ? "ماكو مجلد مربوط." : "متصفحك ما يدعم اختيار مجلد. استعمل «تنزيل نسخة» يدوياً.";
   if(!warn||warn.innerHTML===undefined) return;
   const n=daysSinceBackup();
-  if(!fileHandle && !backupDir)
-    warn.innerHTML='<div class="errbox"><b>بياناتك موجودة داخل المتصفح فقط.</b><br>'+
-      'إذا انمسحت بيانات التصفح أو انمسح ملف المتصفح، تروح رواتب الشهر كلها. '+
-      'اربط ملف داتا أو مجلد نسخ — ثانية وحدة وتنحمي.</div>';
+  if(!backupDir)
+    warn.innerHTML='<div class="warnbox"><b>ماكو نسخة عندك خارج الخادم.</b><br>'+
+      'اربط مجلد النسخ اليومية (فلاش أو قرص ثاني) حتى تنكتب نسخة مؤرّخة كل يوم تلقائياً.</div>';
   else if(n!==null && n>=3)
-    warn.innerHTML='<div class="warnbox">آخر نسخة خارجية صار لها <b>'+fmtNum(n)+'</b> يوم. اضغط «نسخة الآن».</div>';
+    warn.innerHTML='<div class="warnbox">آخر نسخة بالمجلد صار لها <b>'+fmtNum(n)+'</b> يوم. اضغط «نسخة الآن».</div>';
   else warn.innerHTML="";
 }
-el("corruptDl").onclick=async()=>{
-  const raw=await idbGet("corrupt_last");
-  if(!raw){ alertBox("ما لقيت نسخة تالفة محفوظة."); return; }
-  dl(URL.createObjectURL(new Blob([String(raw)],{type:"application/json"})),"نسخة-تالفة-"+todayISO()+".json");
-};
 el("bkPick").onclick=async()=>{
   if(!canDir){ alertBox("هذا المتصفح ما يدعم اختيار مجلد. استعمل Chrome أو Edge، أو نزّل نسخة يدوياً."); return; }
   try{
     backupDir=await window.showDirectoryPicker({mode:"readwrite"});
     if(!await dirPermOK(backupDir,true)){ backupDir=null; alertBox("ما انعطت صلاحية الكتابة بالمجلد."); return; }
-    await idbSet(BKDIR,backupDir);
+    await handleSet(BKDIR,backupDir);
     const ok=await writeBackupFile(true);
     refreshBackupState();
     alertBox(ok?"انربط المجلد وانكتبت أول نسخة ✓":"انربط المجلد، بس تعذّرت الكتابة. جرّب «نسخة الآن».");
@@ -8519,12 +8557,12 @@ el("bkPick").onclick=async()=>{
 el("bkNow").onclick=async()=>{
   if(!backupDir){ alertBox("اختر مجلد النسخ أولاً."); return; }
   if(!await dirPermOK(backupDir,true)){ alertBox("المتصفح سحب الصلاحية. اضغط «اختيار مجلد النسخ» مرة ثانية."); return; }
-  alertBox(await writeBackupFile(true) ? "انكتبت نسخة اليوم ✓" : "تعذّرت الكتابة بالمجلد.");
+  alertBox(await writeBackupFile(true) ? "انكتبت نسخة اليوم ✓" : "تعذّرت الكتابة بالمجلد أو السحب من الخادم.");
 };
 el("bkForget").onclick=async()=>{
   if(!backupDir){ alertBox("ماكو مجلد مربوط."); return; }
   if(!await confirmBox("إلغاء ربط المجلد","إلغاء ربط المجلد؟ الملفات المكتوبة تبقى مكانها.",{ok:"إلغاء الربط"})) return;
-  backupDir=null; await idbSet(BKDIR,null); refreshBackupState();
+  backupDir=null; await handleSet(BKDIR,null); refreshBackupState();
 };
 
 /* ---------- [تصدير] ٣) وصولات مزدوجة (إجازة / عقوبة) — نسختان بورقة A4 ---------- */
@@ -10237,7 +10275,7 @@ function lfSave(){
   r.title=String(el("lfTitle").value||"").trim() || String(el("lfSubject").value||"").trim() || r.no;
   r.to=String(el("lfTo").value||"").trim(); r.subject=String(el("lfSubject").value||"").trim();
   r.date=d; r.html=lfClean(lfEd().innerHTML);
-  lfDirty=false; queueSave(); renderLetters(); lfNote("انحفظ الكتاب "+r.no+" ✓");
+  lfDirty=false; localEdit(); renderLetters(); lfNote("انحفظ الكتاب "+r.no+" ✓");
   return r;
 }
 function renderLetters(){
@@ -10462,7 +10500,7 @@ el("lfNew").onclick=()=>{
   if(!lfDirty) return go();
   confirmBox("كتاب جديد","تعديلات هذا الكتاب غير محفوظة. تتركها وتبدأ كتاباً جديداً؟",{ok:"كتاب جديد"}).then(y=>{ if(y) go(); });
 };
-el("lfBg").addEventListener("change",()=>{ S().lhBg=el("lfBg").checked?"show":"hide"; queueSave(); lfPaintBg(); });
+el("lfBg").addEventListener("change",()=>{ S().lhBg=el("lfBg").checked?"show":"hide"; localEdit(); lfPaintBg(); });
 el("lfSave").onclick=()=>lfSave();
 el("lfPrint").onclick=()=>{
   const w=window.open("","_blank");
@@ -10491,7 +10529,7 @@ el("lfList").addEventListener("click",e=>{
       audit("del","كتاب "+r.no+" — "+(r.title||""), (r.to||"")+(r.subject?" · "+r.subject:""), "محذوف");
       c.letters=c.letters.filter(x=>x.id!==r.id);
       if(lfEditId===r.id){ lfEditId=null; el("lfNo").value=""; }
-      queueSave(); renderLetters();
+      localEdit(); renderLetters();
     });
   }
 });
@@ -10517,7 +10555,7 @@ function setLetterheadFromDataUrl(src, co, rawJpeg){
       cx.fillStyle="#fff"; cx.fillRect(0,0,cv.width,cv.height); cx.drawImage(im,0,0,cv.width,cv.height);
       out=cv.toDataURL("image/jpeg",0.9);
     }
-    co.settings.letterhead=out; queueSave();
+    co.settings.letterhead=out; localEdit();
     if(co!==C()) return;
     fillLhPrev(); if(lfInited) lfPaintBg();
     lhState(off?"انحفظت ✓ — تنبيه: أبعادها ليست بنسبة A4 فستُمطّ على الصفحة":"انحفظت الفورمة ✓");
@@ -10537,7 +10575,7 @@ el("lhDefault").onclick=()=>{
   const co=C();
   confirmBox("الفورمة الافتراضية","تُستبدل فورمة هذه الشركة بالفورمة الافتراضية المرفقة بالبرنامج؟",{ok:"استبدال"}).then(y=>{
     if(!y) return;
-    co.settings.letterhead=letterheadDefault(); queueSave();
+    co.settings.letterhead=letterheadDefault(); localEdit();
     if(co===C()){ fillLhPrev(); if(lfInited) lfPaintBg(); lhState("رجعت الفورمة الافتراضية ✓"); }
   });
 };
@@ -10546,7 +10584,7 @@ el("lhClear").onclick=()=>{
   if(!co.settings.letterhead){ lhState("ماكو فورمة محفوظة."); return; }
   confirmBox("حذف الفورمة","تُحذف فورمة «"+(co.settings.company||co.name)+"»؟ الكتب تبقى، وتُطبع بلا خلفية حتى ترفع فورمة جديدة.",{ok:"حذف",danger:true}).then(y=>{
     if(!y) return;
-    co.settings.letterhead=""; queueSave();
+    co.settings.letterhead=""; localEdit();
     if(co===C()){ fillLhPrev(); if(lfInited) lfPaintBg(); lhState("انحذفت الفورمة"); }
   });
 };
@@ -10599,7 +10637,7 @@ function lockMonth(iso){
     if(!y) return false;
     C().locks[mk]=Object.assign({at:nowStamp()}, lockSnapshot(R));
     audit("lock","راتب "+mn,"مفتوح","مقفل — الصافي "+fmtMoney(R.tot.net));
-    queueSave(); if(RP) renderReport(); refresh(); scheduleAlerts();
+    localEdit(); if(RP) renderReport(); refresh(); scheduleAlerts();
     return true;
   });
 }
@@ -10613,7 +10651,7 @@ function unlockMonth(iso){
     if(why.length<3){ alertBox("اكتب سبب الفتح — القفل لا يُفتح بلا سبب مسجَّل."); return false; }
     delete C().locks[mk];
     audit("unlock","راتب "+mn,"مقفل","مفتوح",{reason:why});
-    queueSave(); if(RP) renderReport(); refresh(); scheduleAlerts();
+    localEdit(); if(RP) renderReport(); refresh(); scheduleAlerts();
     return true;
   });
 }
@@ -10646,8 +10684,11 @@ function alertItems(){
   const firstDay=Object.keys(c.days).sort()[0];
   /* ١) أيام عمل مرّت بلا اعتماد — الشهر الحالي والسابق إن لم يُقفل، من أول يوم جُرد فعلاً */
   if(firstDay && c.workers.length){
-    const gaps=[].concat(monthLocked(mPrev[0])?[]:missingDays(mPrev[0],mPrev[1]), missingDays(mCur[0],mCur[1]))
-      .filter(d=>d>=firstDay && d<today);
+    /* غير المعتمد + المعتمد جزئياً (منطقة فيها عمال لم تُعتمد) */
+    const part=(a,b)=>partialDays(recordedDays(a,b)).map(x=>x.d);
+    const gaps=[].concat(monthLocked(mPrev[0])?[]:missingDays(mPrev[0],mPrev[1]).concat(part(mPrev[0],mPrev[1])),
+      missingDays(mCur[0],mCur[1]), part(mCur[0],mCur[1]))
+      .filter(d=>d>=firstDay && d<today).sort();
     if(gaps.length) items.push({sev:"bad", t:fmtNum(gaps.length)+" يوم عمل مرّ ولم يُعتمد",
       d:"أولها "+dateSlash(gaps[0])+" — لا يدخل حساب الرواتب حتى يُعتمد.", b:"افتح أول يوم",
       go:()=>{ curDate=gaps[0]; el("dateInput").value=curDate; gotoView("daily"); refresh(); }});
@@ -10671,15 +10712,16 @@ function alertItems(){
         el("lgTarget").value=over[0].id; runLedger(true); }});
   }
   /* ٥) شهر انتهى وفيه أيام معتمدة ولم يُقفل */
-  const months={}; Object.keys(c.days).forEach(k=>{ if(c.days[k] && c.days[k].confirmed && k<mCur[0]) months[monthKey(k)]=1; });
+  const months={}, ctxA=dayCtx();
+  Object.keys(c.days).forEach(k=>{ if(k<mCur[0] && !months[monthKey(k)] && dayConfirmState(k,ctxA)!=="none") months[monthKey(k)]=1; });
   const open=Object.keys(months).filter(m=>!(c.locks||{})[m]).sort();
   if(open.length){ const last=open[open.length-1]+"-01";
     items.push({sev:"warn", t:fmtNum(open.length)+" شهر سابق غير مقفل", d:"آخرها راتب "+monthNameOf(last)+" — القفل يمنع تغيّر أرقام شهر صُرف.",
       b:"افتح كشفه", go:()=>{ const r=monthOf(last); gotoView("report"); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; runReport(true); }}); }
   /* ٦) النسخة الاحتياطية */
   const nb=daysSinceBackup();
-  if(!fileHandle && !backupDir) items.push({sev:"bad", t:"بياناتك داخل المتصفح فقط", d:"بلا ملف داتا ولا مجلد نسخ — مسح بيانات المتصفح يضيّعها.", b:"الإعدادات", go:()=>gotoView("settings")});
-  else if(nb!==null && nb>=3) items.push({sev:"warn", t:"آخر نسخة خارجية قبل "+fmtNum(nb)+" يوم", d:"نسخة اليوم تحمي رواتب هذا الشهر.", b:"نسخة الآن", go:()=>gotoView("settings")});
+  if(!backupDir) items.push({sev:"warn", t:"ماكو نسخة عندك خارج الخادم", d:"اربط مجلد النسخ اليومية حتى تنكتب نسخة مؤرّخة كل يوم تلقائياً.", b:"الإعدادات", go:()=>gotoView("settings")});
+  else if(backupDir && nb!==null && nb>=3) items.push({sev:"warn", t:"آخر نسخة خارجية قبل "+fmtNum(nb)+" يوم", d:"نسخة اليوم تحمي رواتب هذا الشهر.", b:"نسخة الآن", go:()=>gotoView("settings")});
   return items;
 }
 function renderAlerts(){
@@ -10697,7 +10739,7 @@ el("alertsList").addEventListener("click",e=>{
 });
 el("setAbsAlert").addEventListener("change",()=>{
   S().absAlert=Math.max(0,Math.min(31,parseInt(el("setAbsAlert").value,10)||0)); el("setAbsAlert").value=S().absAlert;
-  queueSave(); scheduleAlerts();
+  localEdit(); scheduleAlerts();
 });
 
 /* ==================== [واجهة] البحث الشامل (Ctrl+K) ====================
@@ -10770,7 +10812,7 @@ function switchView(v){
   if(v==="achievements") initAchView();
   if(v==="materials") initMatView();
   if(v==="settings"){ renderCompanies(); renderPresets(); fillSettings();
-    refreshBackupState(); renderSnaps(); }
+    refreshDbState(); refreshBackupState(); }
   if(v==="report"){ initFolds(); fillSalary(); if(!RP){ const r=monthRange(0); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; } runReport(); }
   if(v==="ledger") lgInit();
   if(v==="form") lfInit();
@@ -10825,13 +10867,13 @@ function loadDemo(){
     "مصطفى وليد شاكر","نور الهدى صالح","زيد عماد ياسر","باسم عبد الرزاق","رياض نعيم داود",
     "أمير طالب حمزة","عمار جليل عبود","سجاد فاضل كريم","ياسر خضير عباس","وسام لطيف جودة"];
   c.workers=names.map((n,i)=>newWorker({name:n,sectionId:c.sections[i%c.sections.length].id}));
-  ensureWorkerSeq(c);
   c.settings.company=c.settings.company||"شركة النموذج";
   c.settings.address="البصرة"; c.settings.signer=c.settings.signer||"اسمك هنا";
-  const r=dayRec(curDate);
-  r.states[c.workers[2].id]="absent"; r.states[c.workers[7].id]="absent"; r.states[c.workers[11].id]="misc";
-  r.notes=c.settings.defNote; r.confirmed=true;
-  queueSave(); bootView();
+  setDayState(curDate,c.workers[2].id,"absent"); setDayState(curDate,c.workers[7].id,"absent");
+  setDayState(curDate,c.workers[11].id,"misc");
+  viewZoneIds().forEach(z=>setZoneNotes(curDate,z,c.settings.defNote));
+  setZonesConfirmed(curDate,confirmableZoneIds(),true);
+  localEdit(); bootView();
 }
 
 /* ==================== [واجهة] التحديث والإقلاع ==================== */
@@ -10850,7 +10892,7 @@ function refresh(){
     if(hr){ hb.textContent="عطلة: "+hr; hb.classList.remove("hidden"); }
     else hb.classList.add("hidden");
   }
-  el("notes").value=dayRec(curDate).notes||"";
+  renderNotesEditor();
   syncConfirmBtn();
   renderDayStatus();
   renderTally(); renderRoster(); drawSheet();
@@ -10978,14 +11020,19 @@ async function authLoad(user){
   }
   await authEnter();
 }
-/* فتح البرنامج: يظهر تحت شاشة الدخول ويُقلع، ثم تُرفع الشاشة —
-   فلا تومض حالة فارغة، وتُقاس عناصر الصفحة وهي معروضة فعلاً. */
+/* فتح البرنامج: كل البيانات تُحمَّل من الخادم وشاشة الانتظار ظاهرة، ثم يظهر
+   البرنامج تحتها ويُقلع، ثم تُرفع الشاشة — فلا تومض حالة فارغة، وتُقاس عناصر
+   الصفحة وهي معروضة فعلاً. فشل التحميل يُعرض برسالته مع «إعادة المحاولة»:
+   برنامج فارغ كان سيوحي بأن البيانات ضاعت. */
 async function authEnter(){
   authEntered=true;
-  authView("wait","جارٍ فتح البرنامج…");
   renderUserBox();
+  authView("wait","جارٍ تحميل البيانات من الخادم…");
+  let st;
+  try{ st=await dbLoadState(); }
+  catch(e){ console.warn("dbLoadState:",e&&e.cause||e); authView("blocked",e.message); return; }
   el("app").classList.remove("hidden");
-  try{ await init(); }
+  try{ await init(st); }
   catch(e){ console.error("init:",e); }
   el("authScreen").classList.add("hidden");
 }
@@ -11044,83 +11091,45 @@ el("uName").onclick=()=>{
   dlgShow({title:"حسابي", html:html, ok:"إغلاق", noCancel:true});
 };
 el("uLogout").onclick=async()=>{
-  if(!await confirmBox("تسجيل الخروج","تخرج من حسابك على هذا الجهاز؟ للدخول مرة ثانية تحتاج البريد الإلكتروني وكلمة المرور.",{ok:"خروج"})) return;
-  /* أي حفظ محلي معلّق يكتمل قبل الخروج */
-  if(stateLoaded){ clearTimeout(saveTimer); try{ await persistState(); }catch(e){} }
+  if(!await confirmBox("تسجيل الخروج","تخرج من حسابك على هذا الجهاز؟ للدخول مرة ثانية تحتاج البريد الإلكتروني وكلمة المرور."+
+    (localEdits?"\n\nالتعديلات التي أجريتها بهذه الصفحة لم تُحفظ على الخادم وستضيع.":""),{ok:"خروج"})) return;
   authEntered=false;   // خروج من هذه النافذة: إعادة تحميل واحدة هنا، لا ثانية من authChanged
   await dbSignOut();
   location.reload();
 };
 
-let bootNotice="";
-el("lockRetry").onclick=()=>{
-  /* لو انسكّرت النافذة الأولى بلا إشعار: نسأل من جديد، والفعّالة تردّ فنبقى مقفلين */
-  setReadOnly(false);
-  lockSend({t:"hello"});
-};
-async function init(){
-  idb=await openIDB();
-  // البيانات تُقرأ فوراً من الجهاز — بدون فتح أي ملف
-  const raw=await readState();
-  let corrupt=false;
-  if(raw){ try{ state=migrate(JSON.parse(raw)); }
-    catch(e){
-      /* نسخة تالفة لا تُبلع بصمت: أول حفظ كان يكتب الحالة الفارغة فوقها
-         فتضيع نهائياً. النص الخام يُحفظ بمفتاح مستقل قبل أي كتابة، وقابل
-         للتنزيل من تبويب الإعدادات لإنقاذه يدوياً. */
-      corrupt=true;
-      try{ await idbSet("corrupt_last", raw); lsSet("jard_pro_corrupt_at", String(Date.now())); }catch(_){}
-    } }
-  stateLoaded=true;   // من هنا فقط يُسمح بالحفظ
-  // إعادة ربط ملف الداتا إن كان مسموحاً مسبقاً (بدون إزعاج)
-  try{
-    const h=await idbGet(HKEY);
-    if(h && await h.queryPermission({mode:"readwrite"})==="granted"){
-      fileHandle=h;
-      // إن كان الملف أحدث من نسخة الجهاز (عُدّل على حاسبة أخرى) نعتمد الملف
-      try{
-        const txt=await (await h.getFile()).text();
-        const fobj=JSON.parse(txt);
-        const fT=Number(fobj&&fobj.savedAt)||0, lT=Number(state&&state.savedAt)||0;
-        const fileValid=(fobj&&fobj.v===2&&Array.isArray(fobj.companies)&&fobj.companies.length);
-        if(fileValid && fT>lT){
-          /* الملف أحدث (عُدّل على حاسبة ثانية): يُعتمد، لكن بعد لقطة أمان
-             للنسخة المحلية — كان يُستبدل بصمت فتضيع أي تعديلات لم تصل للملف. */
-          const localTxt=JSON.stringify(Object.assign({},state,{savedAt:0}));
-          const fileTxt=JSON.stringify(Object.assign({},fobj,{savedAt:0}));
-          if(localTxt!==fileTxt && !looksEmpty(JSON.stringify(state))){
-            await pushSafetySnap("presync","نسخة الجهاز قبل اعتماد الملف المرتبط");
-            bootNotice="الملف المرتبط أحدث من نسخة هذا الجهاز فاعتُمد. نسخة الجهاز السابقة محفوظة كلقطة أمان "+
-              "«نسخة الجهاز قبل اعتماد الملف المرتبط» بتبويب الإعدادات ← النسخ الاحتياطي.";
-          }
-          state=migrate(fobj);
-          await persistState();
-        }
-      }catch(e){}
-    }
-  }catch(e){}
+/* الإقلاع: st حالة مبنية من الخادم (db.js). بلا st (الفحوص) تبقى الحالة الافتراضية
+   بذاكرة الإطار كما كانت. ensureFields تطبّع ما جاء من الخادم (قيم افتراضية
+   لحقل ناقص، تطبيع العامل) — الترحيلات القديمة لا تعمل عليه لأن علاماتها مضبوطة. */
+async function init(st){
+  if(st){ state=ensureFields(st); dbLoadedAt=nowStamp(); }
+  stateLoaded=true;
   curDate=todayISO();
   el("dateInput").value=curDate;
   bootView();
-  refreshDbState(); updateReminder(); badge("local");
-  // لقطة اليوم قبل أي تعديل، ثم النسخة اليومية للمجلد إن كان مربوطاً
-  try{
-    await snapshotIfNeeded();
-    const bd=await idbGet(BKDIR);
-    if(bd && await dirPermOK(bd,false)){ backupDir=bd; await writeBackupFile(false); }
-  }catch(e){}
-  refreshBackupState(); renderSnaps();
-  lockInit();
-  if(corrupt) alertBox("تعذّرت قراءة البيانات المحفوظة (الملف تالف)، فانفتح البرنامج فارغاً.\n\n"+
-    "النسخة التالفة محفوظة كما هي ولم تُمسح: من الإعدادات ← النسخ الاحتياطي ← «تنزيل النسخة التالفة» "+
-    "نزّلها وسلّمها للدعم، أو استعد لقطة يومية سابقة.","بيانات تالفة");
-  if(bootNotice) alertBox(bootNotice,"اعتماد الملف المرتبط");
-  window.addEventListener("beforeunload",flushSync);
-  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushSync(); });
+  refreshDbState(); badge(st?"server":"local");
+  el("phaseBar").classList.toggle("hidden",!st);
+  /* شهر بدء إصلاح أشهر الـ٣١ يوماً: غيابه يغيّر رواتب أشهر مضت بصمت — يُعلن */
+  if(st && !C().pay31From)
+    alertBox("إعداد شهر بدء إصلاح أشهر الـ٣١ يوماً (pay31From) غير موجود بإعدادات الشركة على الخادم.\n\n"+
+      "بدونه تُحسب كل الأشهر بالقاعدة القديمة، فيختلف راتب من خدم ٣٠ يوماً من شهر ٣١ يوماً. راجع مالك النظام.","إعداد ناقص");
+  /* النسخة اليومية للمجلد إن كان مربوطاً — من البيانات المحمّلة للتو */
+  if(st){
+    try{
+      const bd=await handleGet(BKDIR);
+      if(bd && await dirPermOK(bd,false)){ backupDir=bd; await writeBackupFile(false, st); }
+    }catch(e){}
+  }
+  refreshBackupState();
 }
 /* الإقلاع: الدخول أولاً ثم init(). الفحوص (tests/) تفتح البرنامج بإطار معزول
    بذاكرة بديلة وبلا خادم، فتضع __JARD_TEST__ وتُقلعه مباشرة كما كان. */
-if(window.__JARD_TEST__){ el("authScreen").classList.add("hidden"); el("app").classList.remove("hidden"); init(); }
+if(window.__JARD_TEST__){
+  /* هوية الفحص: مالك بكل الصلاحيات (db.js) — الفحوص تحمّل db.js مع البرنامج */
+  if(typeof dbLocalOwner!=="function") throw new Error("db.js غير محمّل — الفحص يحتاجه مع index.html");
+  dbLocalOwner();
+  el("authScreen").classList.add("hidden"); el("app").classList.remove("hidden"); init();
+}
 else authStart();
 
 /* ==================== [بيانات] الفورمة الافتراضية ====================
