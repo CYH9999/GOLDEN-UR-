@@ -554,6 +554,79 @@ tr.rowneg td{background:var(--absent-bg)}
 .scopebar .sb-sw button+button{border-inline-start:1px solid var(--line)}
 .scopebar .sb-sw button[aria-pressed="true"]{background:var(--brand);color:var(--on-brand)}
 .scopebar .sb-sw button:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+/* ---- زر العودة إلى لوحة البداية (الشريط العلوي) ---- */
+.homebtn{display:inline-flex;align-items:center;gap:6px;min-height:var(--ctl-h-sm);padding:2px 12px;border:1px solid var(--line);
+  border-radius:var(--r-md);color:var(--ink-2);font-weight:var(--fw-bold);font-size:var(--fs-sm);background:var(--panel)}
+.homebtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round}
+.homebtn:hover{color:var(--ink);border-color:var(--line-strong)}
+.homebtn[aria-current="page"]{color:var(--brand-text);border-color:var(--brand)}
+
+/* ---- لوحة البداية ----
+   الطباعة تحكم التركيب: اسم الشركة واليوم عنوانان، والرقم الكبير في كل بطاقة هو البطل. خطوط رفيعة
+   بدل الظلال، ولون كل جهة من مناطقها يظهر شريطاً رفيعاً لا خلفية. البطاقة الأولى أعرض حتى تعرف العين
+   من أين تبدأ. حركة واحدة هادئة عند أول ظهور فقط. */
+.home{padding-top:var(--sp-2)}
+.hm-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--sp-4) var(--sp-6);flex-wrap:wrap;
+  padding-bottom:var(--sp-5);border-bottom:1px solid var(--line)}
+.hm-id{display:flex;align-items:center;gap:var(--sp-4);min-width:0}
+.hm-id img{display:block;flex:none}
+.hm-id h1{margin:0;font-size:clamp(26px,3vw,36px);font-weight:var(--fw-black);line-height:1.2;color:var(--ink)}
+.hm-id .addr{margin-top:2px;font-size:var(--fs-sm);color:var(--ink-2)}
+.hm-id.nologo h1{padding-bottom:var(--sp-2);box-shadow:inset 0 -2px 0 var(--gold)}
+.hm-date{text-align:end}
+.hm-date .dn{font-size:var(--fs-2xl);font-weight:var(--fw-black);line-height:1.2}
+.hm-date .dd{font-size:var(--fs-md);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.hm-blds{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(var(--n,1),minmax(0,1fr));gap:var(--sp-4);margin-top:var(--sp-5)}
+.hm-blds.one{grid-template-columns:minmax(0,1fr);max-width:720px}
+.hcard{position:relative;display:flex;flex-direction:column;min-width:0;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:var(--sp-5) var(--sp-5) var(--sp-4);transition:border-color .15s var(--ease)}
+.hcard::before{content:"";position:absolute;inset-inline:-1px;top:-1px;height:3px;background:var(--bc);border-radius:var(--r-md) var(--r-md) 0 0}
+.hcard:hover{border-color:var(--line-strong)}
+.hcard.cur{border-color:var(--bc)}
+.hcard .hn{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-3);flex-wrap:wrap}
+.hcard .hgo{font-size:var(--fs-xl);font-weight:var(--fw-bold);color:var(--ink);text-align:start;padding:0}
+.hcard .hgo::after{content:"";position:absolute;inset:0;border-radius:var(--r-md)}
+.hcard .hgo:focus-visible{outline:none}
+.hcard .hgo:focus-visible::after{outline:2px solid var(--brand);outline-offset:2px}
+.hcard .zs{font-size:var(--fs-xs);color:var(--ink-3);font-weight:var(--fw-medium)}
+.hcard .zs .me{color:var(--bc);font-weight:var(--fw-bold)}
+.hcard .big{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--sp-2) var(--sp-3);margin:var(--sp-4) 0 var(--sp-4)}
+.hcard .big .lb{flex-basis:100%;font-size:var(--fs-sm);color:var(--ink-2);font-weight:var(--fw-medium)}
+.hcard .big .v{font-size:clamp(56px,6vw,84px);font-weight:var(--fw-black);line-height:.95;font-variant-numeric:tabular-nums}
+.hcard .big .of{font-size:var(--fs-lg);color:var(--ink-2)}
+.hcard.minor .big .v{font-size:clamp(44px,4.2vw,60px)}
+.hcard .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:auto;border-top:1px solid var(--line);padding-top:var(--sp-3)}
+.hcard .facts>div{min-width:0}
+.hcard .facts>div+div{border-inline-start:1px solid var(--line);padding-inline-start:var(--sp-3)}
+.hcard .facts .k{font-size:var(--fs-xs);color:var(--ink-2);font-weight:var(--fw-medium)}
+.hcard .facts .x{font-size:var(--fs-lg);font-weight:var(--fw-bold);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hcard .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-inline-end:6px;vertical-align:middle;background:var(--ink-3)}
+.hcard .dot.ok{background:var(--present)} .hcard .dot.no{background:var(--misc)} .hcard .dot.hol{background:var(--off)}
+/* جهة لم تُعبّأ: سطر يقول ذلك وزر للخطوة الأولى — لا أصفار */
+.hcard.blank .el{margin:var(--sp-4) 0 var(--sp-3);font-size:var(--fs-lg);color:var(--ink-2);line-height:1.7}
+.hcard.blank .el b{color:var(--ink)}
+.hcard.blank .en{margin:0 0 var(--sp-4);font-size:var(--fs-sm);color:var(--ink-3);max-width:44ch}
+.hcard.blank .act{position:relative;z-index:1;align-self:flex-start;margin-top:auto}
+.hm-all{margin-top:var(--sp-3);text-align:end}
+.hm-all button{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--brand-text);padding:var(--sp-1) 0}
+.hm-all button:hover{text-decoration:underline;text-underline-offset:4px}
+.hm-quick{display:flex;flex-wrap:wrap;align-items:stretch;margin-top:var(--sp-6);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.hm-quick .qon{display:flex;flex-direction:column;justify-content:center;padding:var(--sp-3) 0;padding-inline-end:var(--sp-5);
+  font-size:var(--fs-xs);color:var(--ink-2);font-weight:var(--fw-medium)}
+.hm-quick .qon b{font-size:var(--fs-md);color:var(--ink)}
+.hm-quick button{flex:1 1 160px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:start;
+  padding:var(--sp-3) var(--sp-4);border-inline-start:1px solid var(--line);color:var(--ink)}
+.hm-quick button b{font-size:var(--fs-lg);font-weight:var(--fw-bold)}
+.hm-quick button span{font-size:var(--fs-xs);color:var(--ink-2)}
+.hm-quick button:hover b{color:var(--brand-text)}
+@keyframes hmIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.home.enter .hm-head,.home.enter .hcard,.home.enter .hm-quick{animation:hmIn .5s var(--ease) both}
+.home.enter .hcard:nth-child(2){animation-delay:.06s}
+.home.enter .hcard:nth-child(3){animation-delay:.12s}
+.home.enter .hm-quick{animation-delay:.14s}
+@media (prefers-reduced-motion:reduce){ .home.enter .hm-head,.home.enter .hcard,.home.enter .hm-quick{animation:none} }
+.scopebar.onhome{display:none}
+
 /* ما لا يملك المستخدم صلاحيته — ترتيب عرض فقط؛ الحماية بسياسات الخادم */
 .noperm{display:none!important}
 
@@ -561,7 +634,8 @@ tr.rowneg td{background:var(--absent-bg)}
 @media(max-width:1280px){ :root{--side-w:208px} .wrap,.tally{padding-inline:var(--sp-4)} }
 /* لوحي وهاتف: الشريط الجانبي يصير شريطاً أفقياً قابلاً للتمرير تحت الشريط العلوي */
 @media(max-width:900px){
-  .app,html.side-mini .app{grid-template-columns:minmax(0,1fr);grid-template-areas:"top" "side" "main"}
+  /* الصف الممتدّ للمحتوى لا للشريط: صفحة قصيرة (اللوحة) كانت تمطّ شريط التبويبات فتترك فراغاً */
+  .app,html.side-mini .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto 1fr;grid-template-areas:"top" "side" "main"}
   .topbar{position:relative;padding:var(--sp-2) var(--sp-3);gap:var(--sp-2)}
   :root{--stick:52px}
   .side{position:sticky;top:0;height:auto;border-inline-end:0;border-bottom:1px solid var(--line);box-shadow:var(--sh-1)}
@@ -575,6 +649,12 @@ tr.rowneg td{background:var(--absent-bg)}
   .tally{grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:var(--sp-2);padding:var(--sp-3) var(--sp-3) 0}
   .tally .v{font-size:var(--fs-2xl)}
   .tally .t-bld{grid-column:1/-1}
+  .hm-blds,.hm-blds.one{grid-template-columns:minmax(0,1fr)}
+  .hm-date{text-align:start}
+  .hm-quick .qon{flex-basis:100%}
+  .hm-quick button{border-inline-start:0;border-top:1px solid var(--line);padding-inline:0}
+  .hcard{padding:var(--sp-4)}
+  .hcard .facts .x{white-space:normal;font-size:var(--fs-md)}
   .scopebar{padding:var(--sp-2) var(--sp-3)}
   .scopebar .sb-sw{margin-inline-start:0}
   .wrap{padding:var(--sp-3) var(--sp-3) var(--sp-6)}
@@ -595,7 +675,7 @@ tr.rowneg td{background:var(--absent-bg)}
 /* الطباعة من الصفحة نفسها: الألوان الفاتحة دائماً وبلا عناصر التنقل */
 @media print{
   html[data-ui="dark"]{--ground:#fff;--panel:#fff;--surface-2:#f6f6f6;--ink:#111;--ink-2:#444;--line:#ccc;color-scheme:light}
-  .topbar,.side,.tabs,.tally,.scopebar,.reminder,.actions,.toast{display:none!important}
+  .topbar,.side,.tabs,.tally,.scopebar,.home,.reminder,.actions,.toast{display:none!important}
   .app{display:block}
   body{background:#fff}
 }
@@ -634,6 +714,7 @@ tr.rowneg td{background:var(--absent-bg)}
 <div class="app hidden" id="app">
 <header class="topbar">
   <div class="brand"><span class="mk" id="tbMark" aria-hidden="true">ج</span><span>نظام الجرد اليومي<small id="tbCompany">—</small></span></div>
+  <button class="homebtn" id="homeBtn" type="button" title="لوحة البداية"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="1.5"/><rect x="13" y="3" width="8" height="6" rx="1.5"/><rect x="13" y="11" width="8" height="10" rx="1.5"/><rect x="3" y="15" width="8" height="6" rx="1.5"/></svg><span>اللوحة</span></button>
   <div class="coBox hidden">
     <label class="lbl" for="coSelect">الشركة</label>
     <select id="coSelect"></select>
@@ -690,6 +771,17 @@ tr.rowneg td{background:var(--absent-bg)}
 <div class="tally" id="tally"></div>
 
 <div class="wrap">
+
+<!-- ===== لوحة البداية: الشركة، واليوم، وبطاقة لكل جهة يراها المستخدم، وصف وصول سريع ===== -->
+<section id="view-home" class="home hidden" aria-labelledby="hmTitle" tabindex="-1">
+  <header class="hm-head">
+    <div class="hm-id" id="hmId"></div>
+    <div class="hm-date" id="hmDate"></div>
+  </header>
+  <div class="hm-blds" id="hmBlds"></div>
+  <div class="hm-all" id="hmAll"></div>
+  <nav class="hm-quick" id="hmQuick" aria-label="وصول سريع"></nav>
+</section>
 
 <!-- ===== جرد اليوم ===== -->
 <section id="view-daily" role="tabpanel" aria-labelledby="tab-daily" tabindex="-1">
@@ -11266,12 +11358,18 @@ document.addEventListener("keydown",e=>{
 
 function switchView(v){
   if(!viewAllowed(v)) v="daily";
-  ["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form","settings"].forEach(x=>
+  ["home","daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form","settings"].forEach(x=>
     el("view-"+x).classList.toggle("hidden",x!==v));
-  document.querySelectorAll(".tabs button").forEach(b=>{
+  const tabs=[...document.querySelectorAll(".tabs button")];
+  tabs.forEach(b=>{
     const on=b.dataset.view===v;
     b.setAttribute("aria-selected",on?"true":"false"); b.tabIndex=on?0:-1; });
+  if(tabs.length && !tabs.some(b=>b.tabIndex===0)) tabs[0].tabIndex=0;   // اللوحة ليست تبويباً: يبقى للوحة المفاتيح مدخل
+  const hb=document.getElementById("homeBtn");
+  if(hb && hb.setAttribute){ if(v==="home") hb.setAttribute("aria-current","page"); else hb.removeAttribute("aria-current"); }
+  const sbar=document.getElementById("scopeBar"); if(sbar && sbar.classList) sbar.classList.toggle("onhome",v==="home");
   el("tally").classList.toggle("hidden",v!=="daily");
+  if(v==="home") renderHome();
   if(v==="history"){ renderHistory(); renderAudit(); }
   if(v==="daily") scheduleAlerts();
   if(v==="people") renderPeople();
@@ -11364,6 +11462,7 @@ function refresh(){
   syncConfirmBtn();
   renderDayStatus();
   renderTally(); renderRoster(); drawSheet();
+  if(!el("view-home").classList.contains("hidden")) renderHome();
   if(!el("view-history").classList.contains("hidden")) renderHistory();
   if(!el("view-people").classList.contains("hidden")) renderPeople();
   if(!el("view-variables").classList.contains("hidden")) renderVariables();
@@ -11419,6 +11518,8 @@ function resetCompanyUI(){
   const x=document.getElementById("extBack"); if(x && x.classList) x.classList.add("hidden");
 }
 function bootView(){
+  /* جهة مختارة لم تعد مرئية (حُذفت أو خرجت من النطاق): العرض يرجع لـ«الكل» قبل أي رسم */
+  if(scopeBld && typeof ME!=="undefined" && ME && !scopeBuildings().some(b=>b.id===scopeBld)){ scopeBld=""; scopeDirty(); }
   RP=null;   // إلغاء تقرير الشركة السابقة عند التبديل
   varSel=null;   // اختيار الحالات محفوظ لكل شركة على حدة
   resetCompanyUI();
@@ -11625,7 +11726,6 @@ function renderScopeBar(){
   const bar=document.getElementById("scopeBar"); if(!bar || !bar.classList) return;
   if(!ME){ bar.classList.add("hidden"); return; }
   const bs=scopeBuildings();
-  if(scopeBld && !bs.some(b=>b.id===scopeBld)){ scopeBld=""; scopeDirty(); }   // جهة لم تعد موجودة
   el("uRoles").innerHTML=ME.roles.map(roleBadge).join("");
   el("sbScope").textContent=scopeText();
   const sw=el("sbSw"), show=meAllZones() && bs.length>1;
@@ -11634,15 +11734,149 @@ function renderScopeBar(){
     '<button type="button" data-scope="'+esc(b.id)+'" aria-pressed="'+(b.id===scopeBld?"true":"false")+'">'+esc(b.name)+'</button>').join("") : "";
   bar.classList.remove("hidden");
 }
-function setScope(bid){
+/* اختيار الجهة يُحفظ لكل مستخدم على هذا الجهاز ويُستعاد بفتحه القادم (لوحة البداية) */
+function scopeChoiceKey(){ return "scope_"+((ME&&ME.id)||""); }
+function scopeChoiceGet(){ return lsGet(scopeChoiceKey()); }
+function scopeChoiceSet(bid){ lsSet(scopeChoiceKey(),bid||""); }
+function setScope(bid,view){
   bid=bid||"";
-  if(bid===scopeBld || !meAllZones()) return;
-  flushNotes();                      // ملاحظة تنتظر الإرسال تخصّ جهتها — تُرسل قبل التبديل
-  const view=currentView();
-  scopeBld=bid; scopeDirty();
-  bootView();                        // كالتبديل بين شركتين: الكشف والنماذج والبحث تُبنى من جديد
-  switchView(viewAllowed(view)?view:"daily");
+  if(bid && !scopeBuildings().some(b=>b.id===bid)) return;   // جهة لا يراها
+  scopeChoiceSet(bid);
+  const target=view||currentView();
+  if(bid!==scopeBld){
+    flushNotes();                    // ملاحظة تنتظر الإرسال تخصّ جهتها — تُرسل قبل التبديل
+    scopeBld=bid; scopeDirty();
+    bootView();                      // كالتبديل بين شركتين: الكشف والنماذج والبحث تُبنى من جديد
+  }
+  switchView(viewAllowed(target)?target:"daily");
 }
+/* ==================== [واجهة] لوحة البداية ====================
+   أول ما يُفتح بعد الدخول لمن يرى أكثر من جهة: الشركة، واليوم، وبطاقة لكل جهة يراها بأرقام حيّة
+   (المستمرون، الحاضرون اليوم، الغياب، اعتماد اليوم، آخر يوم معتمد)، وصف وصول سريع على جهته
+   المختارة. من يرى جهة واحدة يدخلها مباشرة، وزر «اللوحة» بالشريط العلوي يعيد إليها دائماً.
+   الأرقام من الدوال نفسها التي يقرأ منها الجرد (compute وdayRec) داخل نطاق كل جهة. */
+function withScope(bid,fn){ const k=scopeBld; scopeBld=bid||""; try{ return fn(); } finally{ scopeBld=k; } }
+/* جهات اللوحة: ما يراه المستخدم — وبيانات بلا جهات (الفحوص والنسخ القديمة) جهة واحدة هي الشركة */
+function homeBuildings(){
+  const bs=scopeBuildings();
+  return bs.length ? bs : [{id:"", name:S().building||"كل المناطق", short:""}];
+}
+/* لون الجهة: لون أول منطقة ملوّنة فيها، من البيانات نفسها */
+function bldColor(b,i){
+  const z=(CF().zones||[]).find(x=>(x.buildingId||"")===b.id && x.color && (meAllZones()||seesZone(x.id)));
+  return z ? z.color : ZONE_COLORS[(i||0)%ZONE_COLORS.length];
+}
+function homeStats(b){
+  const today=todayISO();
+  return withScope(b.id, ()=>{
+    const c=C(), ws=c.workers, ctx=dayCtx(), rec=dayRec(today), x=compute(today);
+    let last="";
+    const keys=Object.keys(c.days).filter(k=>k<=today).sort().reverse();
+    for(let i=0;i<keys.length;i++){ if(dayConfirmState(keys[i],ctx)==="all"){ last=keys[i]; break; } }
+    return { zones:c.zones.map(z=>z.short||z.name), secs:c.sections.length, workers:ws.length,
+      active:ws.filter(w=>isActiveWorker(w) && inService(w,today)).length,
+      present:x.attendance, absent:x.absent, hol:holidayReason(today),
+      conf:rec.confirmed?"all":(rec.partial?"some":"none"), last:last,
+      canSec:c.zones.some(z=>canZone("structure.manage",z.id)), canW:c.zones.some(z=>canZone("workers.manage",z.id)) };
+  });
+}
+function homeDayText(k,today){
+  if(!k) return "لا يوم بعد";
+  if(k===today) return "اليوم";
+  if(k===addDays(today,-1)) return "أمس";
+  const p=k.split("-");
+  return dayNameOf(k)+" "+fmtNum(+p[2])+"/"+fmtNum(+p[1]);
+}
+let homeEntered=false;
+function renderHome(){
+  const box=document.getElementById("hmBlds"); if(!box || box.innerHTML===undefined) return;
+  const st=S(), today=todayISO(), bs=homeBuildings(), multi=bs.length>1;
+  /* الشركة: الشعار بنسبته الحقيقية (logoW/logoH) لا مقصوصاً ولا ممطوطاً؛ بلا شعار عنوان نصي وحده */
+  const name=esc(st.company||CF().name||"");
+  let logo="";
+  if(st.logo){
+    const W=Number(st.logoW)||0, H=Number(st.logoH)||0, k=(W&&H)?Math.min(1,72/H,240/W):0;
+    logo=k ? '<img src="'+esc(st.logo)+'" width="'+Math.round(W*k)+'" height="'+Math.round(H*k)+'" alt="">'
+           : '<img src="'+esc(st.logo)+'" style="height:64px;width:auto" alt="">';
+  }
+  el("hmId").className="hm-id"+(logo?"":" nologo");
+  el("hmId").innerHTML=logo+'<div><h1 id="hmTitle">'+name+'</h1>'+(st.address?'<div class="addr">'+esc(st.address)+'</div>':'')+'</div>';
+  el("hmDate").innerHTML='<div class="dn">'+esc(dayNameOf(today))+'</div><div class="dd">'+esc(dateTextOf(today))+'</div>';
+  const cur=multi ? bs.find(b=>b.id===scopeBld) : bs[0];
+  const chose=multi && scopeChoiceGet()!==null;       // «اختيارك» لا يُكتب قبل أن يختار
+  box.className="hm-blds"+(multi?"":" one");
+  box.style.setProperty("--n",String(Math.max(1,bs.length-1)));
+  box.innerHTML=bs.map((b,i)=>{
+    const x=homeStats(b), col=bldColor(b,i);
+    const head='<div class="hn"><button type="button" class="hgo" data-enter="'+esc(b.id)+'">'+esc(b.name)+'</button>'+
+      '<span class="zs">'+(chose && cur && cur.id===b.id?'<span class="me">اختيارك</span> · ':'')+esc(x.zones.join(" · "))+'</span></div>';
+    const cls="hcard"+(i>0?" minor":"")+(chose && cur && cur.id===b.id?" cur":"");
+    if(!x.workers){
+      /* جهة لم تُعبّأ: تبدو مقصودة — سطر يقول حالها وزر الخطوة الأولى، لا أصفار */
+      const line=x.secs ? 'فيها '+fmtNum(x.secs)+(x.secs===1?' قسم':' أقسام')+' ولا عمال بعد.'
+                         : '<b>لم تُعبّأ بعد.</b> لا أقسام فيها ولا عمال.';
+      const act=!x.secs ? (x.canSec?'<button type="button" class="btn sm act" data-first="sec" data-bld="'+esc(b.id)+'">إضافة أول قسم</button>'
+                                   :'<p class="hint act">تُضاف أقسامها بصلاحية «المناطق والأقسام».</p>')
+                        : (x.canW?'<button type="button" class="btn sm act" data-first="worker" data-bld="'+esc(b.id)+'">إضافة أول عامل</button>'
+                                 :'<p class="hint act">يُضاف عمالها بصلاحية «العمال».</p>');
+      return '<article class="'+cls+' blank" style="--bc:'+esc(col)+'">'+head+'<p class="el">'+line+'</p>'+
+        '<p class="en">حين يُضاف عمالها تظهر هنا أرقامها كل صباح: الحاضرون والغياب واعتماد اليوم.</p>'+act+'</article>';
+    }
+    const cf=x.hol ? '<span class="dot hol"></span>عطلة' :
+      (x.conf==="all" ? '<span class="dot ok"></span>معتمد' : (x.conf==="some" ? '<span class="dot no"></span>معتمد جزئياً' : '<span class="dot no"></span>غير معتمد بعد'));
+    return '<article class="'+cls+'" style="--bc:'+esc(col)+'">'+head+
+      '<div class="big"><span class="lb">حاضر اليوم</span><span class="v">'+fmtNum(x.present)+'</span>'+
+        '<span class="of">من '+fmtNum(x.active)+' مستمر</span></div>'+
+      '<div class="facts"><div><div class="k">الغياب</div><div class="x">'+fmtNum(x.absent)+'</div></div>'+
+        '<div><div class="k">اعتماد اليوم</div><div class="x"'+(x.hol?' title="'+esc(x.hol)+'"':'')+'>'+cf+'</div></div>'+
+        '<div><div class="k">آخر يوم معتمد</div><div class="x">'+esc(homeDayText(x.last,today))+'</div></div></div></article>';
+  }).join("");
+  el("hmAll").innerHTML=(multi && meAllZones())
+    ? '<button type="button" data-enter="" data-all="1">'+(chose && scopeBld===""?'كل الجهات معاً — اختيارك':'أو ادخل كل الجهات معاً')+'</button>' : "";
+  /* الوصول السريع: على الجهة المختارة */
+  const on=multi ? (cur ? cur.name : "كل الجهات") : bs[0].name;
+  const mr=monthRange(0);
+  el("hmQuick").innerHTML='<div class="qon">الوصول السريع<b>'+esc(on)+'</b></div>'+
+    '<button type="button" data-q="daily"><b>جرد اليوم</b><span>تأشير الحضور واعتماده</span></button>'+
+    (can("docs.manage")?'<button type="button" data-q="leave"><b>وصل جديد</b><span>وصل إجازة</span></button>':'')+
+    '<button type="button" data-q="report"><b>كشف الرواتب</b><span>راتب '+esc(monthNameOf(mr[0]))+'</span></button>';
+  const home=el("view-home");
+  if(!homeEntered){ homeEntered=true; home.classList.add("enter"); setTimeout(()=>home.classList.remove("enter"),900); }
+}
+/* دخول جهة من اللوحة: من يرى أكثر من جهة يختارها (ويُحفظ اختياره)، ومن يرى واحدة يدخلها */
+function enterBuilding(bid,view){
+  if(homeBuildings().length>1) setScope(bid,view||"daily");
+  else switchView(view||"daily");
+}
+el("view-home").addEventListener("click",e=>{
+  const en=e.target.closest("[data-enter]"), fs=e.target.closest("[data-first]"), q=e.target.closest("[data-q]");
+  if(fs){
+    const bid=fs.getAttribute("data-bld")||"";
+    enterBuilding(bid,"people");
+    const sec=fs.getAttribute("data-first")==="sec";
+    if(sec){ const z=C().zones[0]; if(z) el("secZone").value=z.id; }
+    const f=el(sec?"secName":"wName");
+    try{ f.scrollIntoView({block:"center"}); f.focus(); }catch(_){}
+    return;
+  }
+  if(en){ enterBuilding(en.getAttribute("data-enter")||"","daily"); return; }
+  if(q){
+    const k=q.getAttribute("data-q"), bid=scopeBld;
+    if(k==="daily"){ curDate=todayISO(); el("dateInput").value=curDate; enterBuilding(bid,"daily"); refresh(); }
+    else if(k==="leave"){ enterBuilding(bid,"leaves"); el("lvNew").onclick(); try{ el("lvWorker").focus(); }catch(_){} }
+    else if(k==="report"){ enterBuilding(bid,"report"); const r=monthRange(0); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; runReport(true); }
+  }
+});
+el("homeBtn").onclick=()=>{ flushNotes(); switchView("home"); try{ window.scrollTo(0,0); }catch(_){} };
+/* بعد التحميل: من يرى جهة واحدة يدخل جرد اليوم مباشرة؛ ومن يرى أكثر تُفتح له اللوحة على اختياره السابق */
+function startView(){
+  const bs=scopeBuildings();
+  if(bs.length<=1){ switchView("daily"); return; }
+  const saved=scopeChoiceGet();
+  if(saved && saved!==scopeBld && bs.some(b=>b.id===saved)){ scopeBld=saved; scopeDirty(); bootView(); }
+  switchView("home");
+}
+
 el("sbSw").addEventListener("click",e=>{
   const b=e.target.closest("[data-scope]"); if(b) setScope(b.getAttribute("data-scope"));
 });
@@ -11677,6 +11911,7 @@ async function init(st){
   curDate=todayISO();
   el("dateInput").value=curDate;
   bootView();
+  if(st) startView();                // الفحوص (بلا خادم) تبقى على جرد اليوم كما كانت
   refreshDbState(); badge(st?"server":"local");
   dbOnWrite(onWriteStatus);
   /* شهر بدء إصلاح أشهر الـ٣١ يوماً: غيابه يغيّر رواتب أشهر مضت بصمت — يُعلن */

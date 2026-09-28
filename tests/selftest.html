@@ -1064,6 +1064,66 @@ try{
     W18('[el("wForm").classList.contains("noperm"), [].every.call(document.querySelectorAll("select[data-wsec],select[data-wstat]"),function(s){return s.disabled;})].join(",")'), "true,true");
   W18('dbLocalOwner(); scopeBld=""; bootView(); switchView("daily");');
   check("الرجوع لهوية الفحص: كل شيء ظاهر، وشروح «بلا صلاحية» مخفية", W18('document.querySelectorAll("[data-perm].noperm").length+","+document.querySelectorAll("[data-perm-else]:not(.noperm)").length'), "0,0");
+
+  /* ---- ١٩) لوحة البداية ---- */
+  group("١٩ · لوحة البداية — بطاقة لكل جهة بأرقامها، والدخول، والاختيار المحفوظ، والجهة الفارغة");
+  const w19=await boot();
+  w19.__rows=Object.assign({},ROWS17,{documents:[]});
+  w19.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; scopeBld=""; try{localStorage.removeItem(scopeChoiceKey());}catch(e){} bootView();');
+  const W19=x=>w19.eval(x), J19=x=>JSON.parse(w19.eval("JSON.stringify("+x+")"));
+  W19('switchView("home");');
+  check("اللوحة: بطاقة لكل جهة بترتيبها، والأولى أعرض", W19('[].map.call(document.querySelectorAll("#hmBlds .hcard"),function(c){return c.querySelector(".hgo").textContent+(c.classList.contains("minor")?"":"*");}).join(",")'),
+    "البناية القديمة*,البناية الجديدة");
+  const st19=J19('homeBuildings().map(function(b){ var x=homeStats(b); return [x.present,x.active,x.absent]; })');
+  const ex19=J19('homeBuildings().map(function(b){ return withScope(b.id,function(){ var t=todayISO(), x=compute(t); return [x.attendance, C().workers.filter(function(w){return isActiveWorker(w)&&inService(w,t);}).length, x.absent]; }); })');
+  check("أرقام كل بطاقة = الجرد نفسه داخل جهتها (الحاضرون، المستمرون، الغياب)", JSON.stringify(st19), JSON.stringify(ex19));
+  /* القديمة معتمدة كل أيلول، والجديدة ١–١٠ فقط (يوم ١٢ مناطقها مختلفة الاعتماد — لا يُعدّ معتمداً) */
+  const t19=W19('todayISO()');
+  check("آخر يوم معتمد لكل جهة (والمعتمد جزئياً لا يُعدّ)", JSON.stringify(J19('homeBuildings().map(function(b){ return homeStats(b).last; })')),
+    JSON.stringify([t19<"2026-09-30"?t19:"2026-09-30","2026-09-10"]));
+  check("الرقم الكبير رقم الحاضرين، وتحته «من N مستمر»", W19('(function(){var c=document.querySelector("#hmBlds .hcard"); return c.querySelector(".big .v").textContent+"|"+c.querySelector(".big .of").textContent;})()'),
+    W19('fmtNum(homeStats(homeBuildings()[0]).present)+"|من "+fmtNum(homeStats(homeBuildings()[0]).active)+" مستمر"'));
+  check("بلا شعار: عنوان نصي وحده بلا صورة ولا مربع", W19('el("hmId").classList.contains("nologo")+","+document.querySelectorAll("#hmId img").length+","+el("hmTitle").textContent'), "true,0,شركة الفحص");
+  check("الشعار بنسبته الحقيقية (logoW/logoH) لا ممطوطاً", W19('(function(){ var st=S(), k=[st.logo,st.logoW,st.logoH]; st.logo="data:image/png;base64,iVBORw0KGgo="; st.logoW=600; st.logoH=150; renderHome();'+
+    ' var im=document.querySelector("#hmId img"), r=(im.width/im.height).toFixed(3); st.logo=k[0]; st.logoW=k[1]; st.logoH=k[2]; renderHome(); return r+","+im.height; })()'), "4.000,60");
+  check("وصول سريع: جرد اليوم · وصل جديد · كشف الرواتب، على «كل الجهات» قبل أي اختيار",
+    W19('[].map.call(document.querySelectorAll("#hmQuick [data-q]"),function(b){return b.dataset.q;}).join(",")+"|"+el("hmQuick").querySelector(".qon b").textContent+"|"+document.querySelectorAll("#hmBlds .me").length'), "daily,leave,report|كل الجهات|0");
+  check("زر «اللوحة» بالشريط العلوي مؤشَّر، وشريط النطاق مخفي على اللوحة، ولوحة المفاتيح لها مدخل للتبويبات",
+    W19('el("homeBtn").getAttribute("aria-current")+","+el("scopeBar").classList.contains("onhome")+","+document.querySelectorAll(".tabs [tabindex=\'0\']").length'), "page,true,1");
+  /* الدخول من بطاقة: يختار الجهة ويحفظها */
+  W19('document.querySelector(\'#hmBlds [data-enter="bN"]\').click();');
+  check("النقر على بطاقة الجديدة: يدخل جردها ويحفظ الاختيار", W19('[currentView(), scopeBld, C().workers.map(function(w){return w.id;}).join("+"), lsGet(scopeChoiceKey())].join(",")'), "daily,bN,c,bN");
+  W19('el("homeBtn").click();');
+  check("العودة للوحة: البطاقة المختارة معلَّمة والوصول السريع عليها", W19('document.querySelector("#hmBlds .hcard.cur .hgo").textContent+"|"+el("hmQuick").querySelector(".qon b").textContent'), "البناية الجديدة|البناية الجديدة");
+  W19('document.querySelector(\'#hmQuick [data-q="report"]\').click();');
+  check("«كشف الرواتب» من الوصول السريع: كشف الشهر الحالي للجهة المختارة", W19('[currentView(), el("rpFrom").value===monthRange(0)[0], RP && RP.rows.map(function(r){return r.id;}).join("+")].join(",")'), "report,true,c");
+  /* الفتح القادم: الاختيار المحفوظ يُستعاد وتُفتح اللوحة */
+  W19('scopeBld=""; scopeDirty(); bootView(); switchView("daily"); startView();');
+  check("الفتح القادم لمن يرى جهتين: اللوحة، على اختياره المحفوظ", W19('currentView()+","+scopeBld'), "home,bN");
+  W19('enterBuilding("","daily");');
+  check("«كل الجهات معاً» يُحفظ اختياراً أيضاً", W19('scopeBld+"|"+lsGet(scopeChoiceKey())+"|"+(C()===CF())'), "|"+"|true");
+  /* من يرى جهة واحدة يدخلها بلا نقرة زائدة */
+  W19('ME={id:"t-new19",email:"",name:"أحمد",active:true,perms:new Set(["roster.mark","structure.manage"]),zones:new Set(["zNi","zNo"]),allZones:false,zoneNames:{},'+
+    'roles:[{id:"r",companyId:"co",name:"إداري البناية الجديدة",color:"#1D6A8C",perms:new Set(["roster.mark","structure.manage"]),allZones:false,zones:new Set(["zNi","zNo"]),isSystem:true,sortOrder:4}]};'+
+    ' scopeBld=""; bootView(); switchView("settings"); startView();');
+  check("من يرى جهة واحدة: يدخل جرد اليوم مباشرة", W19('currentView()'), "daily");
+  W19('el("homeBtn").click();');
+  check("وله طريق العودة للوحة: بطاقة جهته وحدها بعرض كامل", W19('currentView()+","+document.querySelectorAll("#hmBlds .hcard").length+","+el("hmBlds").classList.contains("one")+","+el("hmQuick").querySelector(".qon b").textContent'),
+    "home,1,true,البناية الجديدة");
+  /* جهة فارغة: سطر وزر، لا أصفار */
+  const w19e=await boot();
+  w19e.__rows=Object.assign({},ROWS17,{sections:ROWS17.sections.filter(x=>x.id!=="sNi"),workers:ROWS17.workers.filter(x=>x.id!=="c"),dayStates:[],documents:[]});
+  w19e.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; bootView(); switchView("home");');
+  check("جهة بلا أقسام ولا عمال: «لم تُعبّأ بعد» وزر «إضافة أول قسم» — لا رقم ولا صفر",
+    w19e.eval('(function(){var c=document.querySelectorAll("#hmBlds .hcard")[1]; return [c.classList.contains("blank"), c.textContent.indexOf("لم تُعبّأ بعد")>=0, !!c.querySelector(\'[data-first="sec"]\'), c.querySelectorAll(".big,.facts").length, /[٠0]/.test(c.textContent)].join(",");})()'),
+    "true,true,true,0,false");
+  w19e.eval('document.querySelector(\'#hmBlds [data-first="sec"]\').click();');
+  check("«إضافة أول قسم»: تبويب الأقسام على الجهة الفارغة ومنطقتها مختارة", w19e.eval('[currentView(), scopeBld, el("secZone").value].join(",")'), "people,bN,zNi");
+  /* عامل بلا قسم: تنبيه بعرض «الكل» وحده */
+  W19('dbLocalOwner(); scopeBld=""; CF().workers.push(newWorker({name:"عامل بلا قسم",sectionId:""})); bootView();');
+  check("عامل بلا قسم: تنبيه هادئ بعدده بعرض «الكل»، ولا تنبيه بعرض جهة",
+    W19('(function(){ var a=alertItems().filter(function(x){return x.t.indexOf("بلا قسم")>=0;}).map(function(x){return x.sev+":"+x.t;}).join(""); scopeBld="bO"; scopeDirty(); var b=alertItems().some(function(x){return x.t.indexOf("بلا قسم")>=0;}); scopeBld=""; scopeDirty(); return a+"|"+b; })()'),
+    "info:"+W19('fmtNum(1)')+" عامل بلا قسم|false");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
