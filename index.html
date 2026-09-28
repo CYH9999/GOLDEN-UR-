@@ -158,6 +158,16 @@ html.side-mini .side-toggle svg{transform:scaleX(-1)}
 .tally .t-leave{--zc:var(--leave)} .tally .t-leave .v{color:var(--leave)}
 .tally .t-off{--zc:var(--off)} .tally .t-off .v{color:var(--off)}
 .tally .t-total{background:var(--surface-2)}
+/* خانة الجهة: اسمها ومجموع حضورها، ومناطقها تحتها بخط فاصل رفيع */
+.tally .t-bld{grid-column:span var(--n,2);padding-bottom:var(--sp-2)}
+.tally .t-bld .bh{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-2)}
+.tally .t-bld .bh .k{color:var(--ink);font-weight:var(--fw-bold)}
+.tally .t-bld .bt{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.tally .t-bld .bz{display:flex;gap:0;margin-top:4px;border-top:1px solid var(--line)}
+.tally .t-bld .bz>div{flex:1;min-width:0;padding-top:4px}
+.tally .t-bld .bz>div+div{border-inline-start:1px solid var(--line);padding-inline-start:var(--sp-3)}
+.tally .t-bld .bz .k{border-inline-start:3px solid var(--zc);padding-inline-start:6px}
+.tally .t-bld .bz .v{font-size:var(--fs-2xl)}
 
 /* =================== المحتوى =================== */
 .wrap{padding:var(--sp-4) var(--sp-5) var(--sp-6);max-width:1560px;margin:0 auto}
@@ -300,6 +310,10 @@ label.field>span,.field>span:first-child{display:block;font-size:var(--fs-sm);co
 .states button{width:38px;height:36px;border:1px solid var(--line-strong);border-radius:var(--r-sm);font-size:var(--fs-lg);
   font-weight:var(--fw-black);color:var(--ink-3);background:var(--panel);transition:background .1s,color .1s,border-color .1s}
 .states button:hover{border-color:var(--ink-2);color:var(--ink)}
+/* بطاقة للقراءة (لا صلاحية تأشير على منطقتها): تظهر الحالة وحدها ولا تُنقر */
+.states button:disabled{cursor:default}
+.states button:disabled:not([aria-pressed="true"]){opacity:.35}
+.states button:disabled:hover{border-color:var(--line-strong);color:var(--ink-3)}
 .wcard[data-s="present"]{border-color:var(--present-line)}
 .wcard[data-s="present"] .st-p{background:var(--present);border-color:var(--present);color:#fff}
 .wcard[data-s="absent"]{background:var(--absent-bg);border-color:var(--absent-line)}
@@ -527,6 +541,21 @@ tr.rowneg td{background:var(--absent-bg)}
 .merole .sc{font-size:var(--fs-sm);color:var(--ink-2);margin:6px 0 4px}
 .merole ul{margin:0;padding-inline-start:20px;font-size:var(--fs-sm)}
 
+/* ---- شريط النطاق: من أنت وماذا ترى — سطر رفيع فوق العدّاد، ومبدّل الجهة بطرفه ---- */
+.scopebar{display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-2) var(--sp-5);max-width:1560px;margin:0 auto;
+  padding:var(--sp-2) var(--sp-5);border-bottom:1px solid var(--line);font-size:var(--fs-sm);color:var(--ink-2)}
+.scopebar .sb-item{display:inline-flex;align-items:center;gap:var(--sp-2);min-width:0}
+.scopebar .sb-k{font-size:var(--fs-xs);font-weight:var(--fw-medium);color:var(--ink-3,var(--ink-2))}
+.scopebar b{color:var(--ink);font-weight:var(--fw-bold)}
+.scopebar .sb-sw{display:inline-flex;margin-inline-start:auto;border:1px solid var(--line-strong);border-radius:var(--r-md);overflow:hidden}
+.scopebar .sb-sw button{appearance:none;border:0;background:transparent;color:var(--ink-2);font:inherit;font-weight:var(--fw-medium);
+  padding:4px 14px;min-height:var(--ctl-h-sm);cursor:pointer}
+.scopebar .sb-sw button+button{border-inline-start:1px solid var(--line)}
+.scopebar .sb-sw button[aria-pressed="true"]{background:var(--brand);color:var(--on-brand)}
+.scopebar .sb-sw button:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+/* ما لا يملك المستخدم صلاحيته — ترتيب عرض فقط؛ الحماية بسياسات الخادم */
+.noperm{display:none!important}
+
 /* =================== الشاشات الأضيق =================== */
 @media(max-width:1280px){ :root{--side-w:208px} .wrap,.tally{padding-inline:var(--sp-4)} }
 /* لوحي وهاتف: الشريط الجانبي يصير شريطاً أفقياً قابلاً للتمرير تحت الشريط العلوي */
@@ -544,6 +573,9 @@ tr.rowneg td{background:var(--absent-bg)}
   .side-foot{display:none}
   .tally{grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:var(--sp-2);padding:var(--sp-3) var(--sp-3) 0}
   .tally .v{font-size:var(--fs-2xl)}
+  .tally .t-bld{grid-column:1/-1}
+  .scopebar{padding:var(--sp-2) var(--sp-3)}
+  .scopebar .sb-sw{margin-inline-start:0}
   .wrap{padding:var(--sp-3) var(--sp-3) var(--sp-6)}
   .sheetwrap{position:static}
 }
@@ -562,7 +594,7 @@ tr.rowneg td{background:var(--absent-bg)}
 /* الطباعة من الصفحة نفسها: الألوان الفاتحة دائماً وبلا عناصر التنقل */
 @media print{
   html[data-ui="dark"]{--ground:#fff;--panel:#fff;--surface-2:#f6f6f6;--ink:#111;--ink-2:#444;--line:#ccc;color-scheme:light}
-  .topbar,.side,.tabs,.tally,.reminder,.actions,.toast{display:none!important}
+  .topbar,.side,.tabs,.tally,.scopebar,.reminder,.actions,.toast{display:none!important}
   .app{display:block}
   body{background:#fff}
 }
@@ -610,7 +642,6 @@ tr.rowneg td{background:var(--absent-bg)}
   <span class="dbbadge ok" id="dbBadge" role="status" aria-live="polite">جاهز</span>
   <div class="ubox hidden" id="uBox">
     <button class="uname" id="uName" type="button" title="حسابي: الرولات والصلاحيات"></button>
-    <span class="uroles" id="uRoles"></span>
     <button class="btn sm ghost" id="uLogout" type="button">خروج</button>
   </div>
   <div class="datebox">
@@ -638,7 +669,7 @@ tr.rowneg td{background:var(--absent-bg)}
     <button role="tab" id="tab-ledger" aria-controls="view-ledger" aria-selected="false" tabindex="-1" data-view="ledger" title="الجرد التفصيلي"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span class="tl">الجرد التفصيلي</span></button>
     <button role="tab" id="tab-form" aria-controls="view-form" aria-selected="false" tabindex="-1" data-view="form" title="الفورمة — كتاب رسمي"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5M9 12h8M9 16h8M9 8h3"/></svg><span class="tl">الفورمة</span></button>
     <div class="tsep" role="presentation"></div>
-    <button role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1" data-view="settings" title="الإعدادات"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="tl">الإعدادات</span></button>
+    <button role="tab" id="tab-settings" data-perm="company.settings" aria-controls="view-settings" aria-selected="false" tabindex="-1" data-view="settings" title="الإعدادات"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="tl">الإعدادات</span></button>
   </nav>
   <div class="side-foot">
     <button class="side-toggle" id="sideToggle" aria-expanded="true" title="طيّ الشريط الجانبي">
@@ -647,6 +678,13 @@ tr.rowneg td{background:var(--absent-bg)}
 </aside>
 
 <main class="main" id="main">
+
+<!-- شريط النطاق: رول المستخدم ونطاقه، ومبدّل الجهة لمن نطاقه كل المناطق -->
+<div class="scopebar hidden" id="scopeBar">
+  <span class="sb-item"><span class="sb-k">الرول</span><span class="uroles" id="uRoles"></span></span>
+  <span class="sb-item"><span class="sb-k">النطاق</span><b id="sbScope"></b></span>
+  <span class="sb-sw hidden" id="sbSw" role="group" aria-label="الجهة المعروضة"></span>
+</div>
 
 <div class="tally" id="tally"></div>
 
@@ -938,12 +976,12 @@ tr.rowneg td{background:var(--absent-bg)}
       <div class="panel">
         <div class="panel-head"><h2>تعريف المواد</h2></div>
         <div class="panel-body">
-          <div class="row3">
+          <div class="row3" data-perm="docs.manage">
             <label class="field"><span>اسم المادة</span><input type="text" id="catName" placeholder="مثال: منظّف أرضيات"></label>
             <label class="field"><span>الوحدة</span><input type="text" id="catUnit" placeholder="لتر / قطعة / كيس"></label>
             <label class="field"><span>الكمية الاعتيادية</span><input type="number" id="catQty" min="0" step="0.25" value="1"></label>
           </div>
-          <div class="actions"><button class="btn" id="catAdd">إضافة مادة</button></div>
+          <div class="actions" data-perm="docs.manage"><button class="btn" id="catAdd">إضافة مادة</button></div>
           <div id="catList"></div>
         </div>
       </div>
@@ -973,7 +1011,7 @@ tr.rowneg td{background:var(--absent-bg)}
       <div id="historyBody"></div>
     </div>
   </div>
-  <div class="panel">
+  <div class="panel" id="pnAudit" data-perm="audit.read">
     <div class="panel-head">
       <h2>سجل التدقيق</h2>
       <input type="text" id="auditSearch" placeholder="بحث: اسم، نوع التعديل، تاريخ، رقم وثيقة…" style="flex:1;min-width:160px;width:auto">
@@ -994,6 +1032,7 @@ tr.rowneg td{background:var(--absent-bg)}
       <div class="panel">
         <div class="panel-head"><h2>المناطق (التصنيف الأعلى)</h2></div>
         <div class="panel-body">
+          <div data-perm="structure.manage">
           <p class="hint" style="margin-top:0">المناطق هي التقسيم الكبير الذي يظهر بالورقة، مثل «داخل البناية القديمة» و«الأقسام الخارجية». سمّها كما تشاء، والترتيب هنا هو ترتيب ظهورها بالكشف والورقة (داخل جهتها).</p>
           <label class="field hidden" id="zBldBox"><span>الجهة</span><select id="zBld"></select></label>
           <div class="row3">
@@ -1002,17 +1041,20 @@ tr.rowneg td{background:var(--absent-bg)}
             <label class="field"><span>اللون</span><span class="ci"><input type="color" id="zColor" value="#4B2E83"></span></label>
           </div>
           <button class="btn primary" id="addZone">إضافة منطقة</button>
+          </div>
           <div id="zoneList" style="margin-top:14px"></div>
         </div>
       </div>
       <div class="panel">
         <div class="panel-head"><h2>الأقسام</h2></div>
         <div class="panel-body">
+          <div data-perm="structure.manage">
           <div class="row2">
             <label class="field"><span>اسم القسم</span><input type="text" id="secName" placeholder="مثال: قسم التعبئة"></label>
             <label class="field"><span>المنطقة</span><select id="secZone"></select></label>
           </div>
           <button class="btn primary" id="addSec">إضافة قسم</button>
+          </div>
           <table style="margin-top:14px"><tbody id="secTable"></tbody></table>
         </div>
       </div>
@@ -1020,6 +1062,7 @@ tr.rowneg td{background:var(--absent-bg)}
     <div class="panel">
       <div class="panel-head"><h2>العمال</h2></div>
       <div class="panel-body">
+        <div data-perm="workers.manage" id="wForm">
         <div class="row2">
           <label class="field"><span>اسم العامل</span><input type="text" id="wName" placeholder="الاسم الثلاثي"></label>
           <label class="field"><span>القسم</span><select id="wSec"></select></label>
@@ -1044,6 +1087,7 @@ tr.rowneg td{background:var(--absent-bg)}
         </label>
         <button class="btn" id="addBulk">إضافة الأسماء للقسم المختار</button>
         <span class="hint">بتاريخ المباشرة المكتوب أعلاه.</span>
+        </div>
         <label class="field" style="margin-top:16px;margin-bottom:0"><span>ترتيب الجدول</span>
           <select id="wSort" class="wsel" style="width:auto"></select></label>
         <div class="tblwrap tight" style="margin-top:10px">
@@ -1150,9 +1194,10 @@ tr.rowneg td{background:var(--absent-bg)}
     </div>
   </div>
 
-  <div class="panel" id="pnSalary">
+  <div class="panel" id="pnSalary" data-perm="workers.manage">
     <div class="panel-head"><h2>إعداد الرواتب</h2></div>
     <div class="panel-body">
+      <div data-perm="company.settings" id="salDefaults">
       <div class="row3">
         <label class="field"><span>الراتب الافتراضي (شهري)</span><input type="number" id="setSalary" min="0" step="1000"></label>
         <label class="field"><span>طريقة الاستقطاع</span>
@@ -1180,6 +1225,7 @@ tr.rowneg td{background:var(--absent-bg)}
       </div>
       <p class="hint">المتفرقة والإجازات الرسمية تُجمع سوا ثم تُطبّق عليها السياسة. أما الغياب بلا حجة (غ) فيُستقطع يوماً كاملاً دائماً.</p>
       <p class="hint">هذه القيم افتراضية لكل العمال. تقدر تعدّل راتب أي عامل بمفرده من الجدول تحت.</p>
+      </div>
       <div class="actions"><button class="btn" id="applyAllSalary">تطبيق الراتب الافتراضي على كل العمال</button>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);font-weight:600">
           الترتيب <select id="salSort" class="wsel" style="width:auto"></select></label></div>
@@ -1189,7 +1235,7 @@ tr.rowneg td{background:var(--absent-bg)}
     </div>
   </div>
 
-  <div class="panel" id="pnHol">
+  <div class="panel" id="pnHol" data-perm="company.settings">
     <div class="panel-head"><h2>العطل وأيام الراحة</h2></div>
     <div class="panel-body">
       <p class="hint" style="margin-top:0">هذه الأيام لا تُعدّ أيام عمل، ولا يُستقطع عنها أي مبلغ من أي عامل.</p>
@@ -1219,7 +1265,7 @@ tr.rowneg td{background:var(--absent-bg)}
     </div>
   </div>
 
-  <div class="panel" id="pnOff">
+  <div class="panel" id="pnOff" data-perm="workers.manage">
     <div class="panel-head"><h2>أيام الاستراحة الخاصة (أوف)</h2></div>
     <div class="panel-body">
       <p class="hint" style="margin-top:0">يوم الأوف خاص بعامل معيّن: لا يُستقطع عنه شيء، ولا يدخل ضمن المتفرقة أو الغياب — حتى لو سُجّل متفرقة في الجرد اليومي.</p>
@@ -2069,12 +2115,13 @@ function monthsOf(from,to){
     m=mm===12 ? (y+1)+"-01" : y+"-"+String(mm+1).padStart(2,"0"); }
   return out;
 }
-/* حارس كل كتابة: يرجّع true إذا منعها (مع رسالة تشرح طريق الفتح) */
-function lockBlock(dates, what){
+/* حارس كل كتابة: يرجّع true إذا منعها. طريق الفتح يُذكر لمن يملك قفل الشهر وفتحه فقط،
+   ولا يُذكر أصلاً مع noHint (العطل: الرفض يُعرض كما هو بلا اقتراح فتح) */
+function lockBlock(dates, what, noHint){
   const hit=[].concat(dates).filter(Boolean).find(monthLocked);
   if(!hit) return false;
-  alertBox("راتب "+monthNameOf(hit)+" مقفل — "+what+" ممنوع حتى لا تتغيّر أرقام شهر صُرف.\n\n"+
-    "للتعديل: التقارير والرواتب ← اختر الشهر ← «فتح القفل» مع كتابة السبب (يُسجَّل بسجل التدقيق).","الشهر مقفل");
+  alertBox("راتب "+monthNameOf(hit)+" مقفل — "+what+" ممنوع حتى لا تتغيّر أرقام شهر صُرف."+
+    (!noHint && can("month.lock")?"\n\nللتعديل: التقارير والرواتب ← اختر الشهر ← «فتح القفل» مع كتابة السبب (يُسجَّل بسجل التدقيق).":""),"الشهر مقفل");
   return true;
 }
 /* عامل خدم يوماً داخل شهر مقفل؟ (يمنع حذفه نهائياً) */
@@ -2090,7 +2137,7 @@ function nowStamp(){ const d=new Date(), p=n=>String(n).padStart(2,"0");
 /* قيد واحد: متى، النوع، على ماذا، القيمة قبل وبعد (+ سبب أو مرجع). يُحفظ بقائمة الشركة
    نفسها، والأقدم يُحذف بعد ٢٠٠٠ قيد حتى لا يثقل ملف البيانات. */
 function audit(kind, what, before, after, extra, serverWrote){
-  const c=C(); if(!Array.isArray(c.audit)) c.audit=[];
+  const c=CF(); if(!Array.isArray(c.audit)) c.audit=[];
   const a=Object.assign({at:nowStamp(), kind:kind, what:String(what==null?"":what),
     before:String(before==null?"":before), after:String(after==null?"":after)}, extra||{});
   c.audit.push(a);
@@ -2124,7 +2171,59 @@ function defaultState(){ const c=blankCompany("شركتي"); return { v:2, compa
 let state=defaultState();
 let curDate=todayISO();
 
-function C(){ return state.companies.find(c=>c.id===state.active) || state.companies[0]; }
+/* ==================== [نطاق] ما يراه المستخدم ====================
+   CF() الشركة كاملة كما حُمّلت. C() الشركة كما يراها المستخدم الآن: من ليس نطاقه كل
+   المناطق يرى مناطق رولاته وحدها، ومن نطاقه كل المناطق يختار بالمبدّل جهة واحدة أو
+   «الكل». في «الكل» ترجع C() الشركة نفسها فلا يتغيّر شيء. وإلا ترجع عرضاً مفلتراً:
+     المناطق ← أقسامها ← عمالها ← وثائق أولئك العمال (إجازات، عقوبات، مكافآت، مواد)
+   وما سواها مشترك بالمرجع نفسه (الإعدادات، الأيام، الأقفال، المواد، الكتب، السجل).
+   فكل قراءة — الجرد والعمال والكشوف والتصدير والبحث — ترى النطاق وحده بلا تعديل عليها.
+   قاعدة الكتابة: تعديل حقل بسجل موجود يمرّ عبر C() (السجل نفسه بالمرجع)، أما الإضافة
+   لقائمة أو حذفها منها أو تبديل ترتيبها فعلى CF()، ثم scopeDirty() إن لم يتغيّر طول
+   القائمة (العرض يُعاد بناؤه تلقائياً إن تغيّر طول قائمة أو استُبدلت).
+   الفلترة هنا عرض فقط — الخادم أصلاً لا يعيد لغير صاحب النطاق ما خارج نطاقه. */
+let scopeBld="";          // الجهة المختارة بالمبدّل — "" = الكل
+let scopeGen=0, scopeMemo=null, scopeWide=0;
+const SCOPE_LISTS=["zones","sections","workers","leaves","penalties","achievements","issues","passes","buildings"];
+function CF(){ return state.companies.find(c=>c.id===state.active) || state.companies[0]; }
+function scopeDirty(){ scopeGen++; }
+/* نطاق المستخدم كل المناطق؟ (قبل الدخول لا بيانات أصلاً) */
+function meAllZones(){ return typeof ME==="undefined" || !ME || ME.allZones===true; }
+function scopeIsFull(){ return scopeWide>0 || (meAllZones() && !scopeBld); }
+function C(){
+  const f=CF();
+  if(!f || scopeIsFull()) return f;
+  const m=scopeMemo;
+  if(m && m.f===f && m.bld===scopeBld && m.me===ME && m.gen===scopeGen && m.src.every((a,i)=>{
+    const b=f[SCOPE_LISTS[i]]; return a===b && m.len[i]===(b?b.length:0); })) return m.v;
+  const v=scopeView(f);
+  scopeMemo={f:f, bld:scopeBld, me:ME, gen:scopeGen, v:v,
+    src:SCOPE_LISTS.map(k=>f[k]), len:SCOPE_LISTS.map(k=>f[k]?f[k].length:0)};
+  return v;
+}
+/* مناطق النطاق من الشركة كاملة */
+function scopeZoneIds(f){
+  f=f||CF();
+  return (f.zones||[]).filter(z=>(meAllZones() || seesZone(z.id)) && (!scopeBld || (z.buildingId||"")===scopeBld)).map(z=>z.id);
+}
+function scopeView(f){
+  const zs=new Set(scopeZoneIds(f)), v=Object.create(f);
+  v.zones=(f.zones||[]).filter(z=>zs.has(z.id));
+  const bs=new Set(v.zones.map(z=>z.buildingId||""));
+  v.buildings=(f.buildings||[]).filter(b=>bs.has(b.id));
+  v.sections=(f.sections||[]).filter(s=>zs.has(s.zoneId));
+  const secs=new Set(v.sections.map(s=>s.id));
+  /* عامل بلا قسم لا تُعرف منطقته، فلا يظهر إلا بعرض «الكل» */
+  v.workers=(f.workers||[]).filter(w=>secs.has(w.sectionId));
+  const ws=new Set(v.workers.map(w=>w.id));
+  ["leaves","penalties","achievements","issues","passes"].forEach(k=>{
+    if(Array.isArray(f[k])) v[k]=f[k].filter(d=>d && ws.has(d.workerId)); });
+  return v;
+}
+/* حساب على الشركة كاملة مهما كان العرض (صورة قفل الشهر مثلاً) */
+function withFullScope(fn){ scopeWide++; try{ return fn(); } finally{ scopeWide--; } }
+/* عرض مفلتر الآن؟ */
+function scoped(){ return C()!==CF(); }
 function S(){ return C().settings; }
 
 /* ترحيل من النسخة القديمة (شركة واحدة بدون مناطق) */
@@ -2372,9 +2471,9 @@ function saveWorker(w,what){ dbUpdateWorker(w,what||("تعديل بيانات «
 let companyTimer=null;
 function saveCompany(what){
   clearTimeout(companyTimer);
-  companyTimer=setTimeout(()=>{ companyTimer=null; dbSaveCompany(C(),what||"إعدادات الشركة"); },600);
+  companyTimer=setTimeout(()=>{ companyTimer=null; dbSaveCompany(CF(),what||"إعدادات الشركة"); },600);
 }
-function flushCompany(){ if(companyTimer){ clearTimeout(companyTimer); companyTimer=null; dbSaveCompany(C(),"إعدادات الشركة"); } }
+function flushCompany(){ if(companyTimer){ clearTimeout(companyTimer); companyTimer=null; dbSaveCompany(CF(),"إعدادات الشركة"); } }
 /* إغلاق الصفحة وتعديل لم يصل الخادم بعد: المتصفح يسأل قبل الإغلاق */
 window.addEventListener("beforeunload",e=>{
   flushNotes(); flushCompany();
@@ -2525,6 +2624,11 @@ function dayNoteParts(iso){
 function dayNotesText(parts){ return parts.map(p=>p.name ? p.name+": "+p.text : p.text).join("\n"); }
 /* يعتمد المستخدم الجهة إذا ملك الاعتماد على كل مناطقها — الكتابة تسري عليها كلها */
 function canConfirmBld(b){ return !!b && b.zones.length>0 && b.zones.every(z=>canZone("roster.confirm",z.id)); }
+/* التأشير بصلاحية منطقة العامل (عامل بلا قسم: الصلاحية بأي منطقة) */
+function canMarkW(w){ const z=workerZoneId(w); return z ? canZone("roster.mark",z) : can("roster.mark"); }
+function canMarkBld(b){ return !!b && b.zones.length>0 && b.zones.every(z=>canZone("roster.mark",z.id)); }
+/* ملاحظة الجهة: لمن يؤشّر أو يعتمد على كل مناطقها */
+function canNoteBld(b){ return !!b && b.zones.length>0 && b.zones.every(z=>canZone("roster.mark",z.id)||canZone("roster.confirm",z.id)); }
 /* اليوم كما يُعرض ويُطبع — للقراءة فقط؛ الكتابة بدوال «تعديل اليوم» تحت.
    confirmed: كل ما يلزم اعتماده بالعرض معتمد · partial: بعضه · blds: حالة كل جهة */
 function dayRec(iso){
@@ -2546,14 +2650,14 @@ function dayHasContent(iso){
 function dayRaw(iso){ const c=C(); return c.days[iso]||(c.days[iso]={states:{},zones:{}}); }
 /* السجل السابق يتحوّل لشكل المناطق: كل منطقة تأخذ اعتماده وملاحظته */
 function dayZoneMap(iso){
-  const c=C(), r=dayRaw(iso);
+  const c=CF(), r=dayRaw(iso);
   if(isLegacyDay(r)){
     const m={}; c.zones.forEach(z=>{ m[z.id]={notes:String(r.notes||""), confirmed:r.confirmed===true}; });
     delete r.notes; delete r.confirmed; r.zones=m;
   }
   return r.zones;
 }
-function coversAllZones(zids){ return C().zones.every(z=>zids.indexOf(z.id)>=0); }
+function coversAllZones(zids){ return CF().zones.every(z=>zids.indexOf(z.id)>=0); }
 function setDayState(iso,wid,v){
   const r=dayRaw(iso);
   if(v==="absent"||v==="misc") r.states[wid]=v; else delete r.states[wid];   // الحاضر لا يُخزَّن
@@ -2585,9 +2689,11 @@ function viewStates(iso,b){
   const r=C().days[iso], out={}; if(!r) return out;
   const vz=new Set(b ? bldZoneIds(b) : viewZoneIds()), byId={};
   C().workers.forEach(w=>{ byId[w.id]=w; });
+  /* بعرض مفلتر (نطاق أو جهة) لا يتبعه إلا عماله: تأشير عامل خارج العرض أو غير معروف لا يُعدّ ولا يُمسح */
+  const loose=!scoped() && (!b || viewBuildings().length===1);
   Object.keys(r.states||{}).forEach(wid=>{
     const w=byId[wid], z=w?workerZoneId(w):"";
-    if(z ? vz.has(z) : (!b || viewBuildings().length===1)) out[wid]=r.states[wid];
+    if(z ? vz.has(z) : loose) out[wid]=r.states[wid];
   });
   return out;
 }
@@ -2652,15 +2758,27 @@ function compute(iso){
 }
 
 /* ==================== [واجهة] العدّاد ==================== */
+/* العدّاد: حضور كل منطقة مجمّعاً تحت جهتها — خانة لكل جهة باسمها ومجموعها ومناطقها تحتها.
+   جهة لا عامل فيها ضمن الخدمة ذلك اليوم لا تظهر أصلاً (لا خانة أصفار). مناطق بلا جهة
+   (بيانات الفحص والنسخ القديمة) خانات مفردة كما كانت. */
 function renderTally(){
-  const c=compute(curDate), zs=C().zones;
-  let items=[["الحضور الكلي",c.attendance,"t-hero"],["عدد الأقسام",c.sections,""]];
-  zs.forEach((z,i)=>items.push([z.short||z.name,c.byZone[z.id],"t-zone",z.color||ZONE_COLORS[i%ZONE_COLORS.length]]));
-  if(c.none) items.push(["بدون قسم",c.none,""]);
+  const c=compute(curDate), ctx=dayCtx(), zcol=z=>z.color||ZONE_COLORS[zoneIndex(z.id)%ZONE_COLORS.length];
+  const cell=i=>'<div class="'+i[2]+'"'+(i[3]?' style="--zc:'+esc(i[3])+'"':'')+'><div class="k">'+esc(i[0])+'</div><div class="v">'+fmtNum(i[1])+'</div></div>';
+  let html=cell(["الحضور الكلي",c.attendance,"t-hero"])+cell(["عدد الأقسام",c.sections,""]);
+  ctx.blds.forEach(b=>{
+    if(!b.id){ b.zones.forEach(z=>{ html+=cell([z.short||z.name,c.byZone[z.id],"t-zone",zcol(z)]); }); return; }
+    if(!bldHasWorkersOn(ctx,b,curDate)) return;
+    const tot=b.zones.reduce((t,z)=>t+(c.byZone[z.id]||0),0);
+    html+='<div class="t-bld" style="--zc:'+esc(zcol(b.zones[0]))+';--n:'+Math.min(b.zones.length,3)+'">'+
+      '<div class="bh"><span class="k">'+esc(b.name)+'</span><span class="bt">'+fmtNum(tot)+'</span></div>'+
+      '<div class="bz">'+b.zones.map(z=>'<div style="--zc:'+esc(zcol(z))+'"><div class="k">'+esc(z.short||z.name)+'</div>'+
+        '<div class="v">'+fmtNum(c.byZone[z.id]||0)+'</div></div>').join("")+'</div></div>';
+  });
+  if(c.none) html+=cell(["بدون قسم",c.none,""]);
   /* الإجازة والأوف خانتان مستقلتان: بدونهما لا يساوي مجموع الخانات «المجموع الكلي» */
-  items.push(["الغياب",c.absent,"t-absent"],["المتفرقة",c.misc,"t-misc"],
-    ["إجازة",c.leave,"t-leave"],["أوف",c.off,"t-off"],["المجموع الكلي",c.total,"t-total"]);
-  el("tally").innerHTML=items.map(i=>'<div class="'+i[2]+'"'+(i[3]?' style="--zc:'+esc(i[3])+'"':'')+'><div class="k">'+esc(i[0])+'</div><div class="v">'+fmtNum(i[1])+'</div></div>').join("");
+  [["الغياب",c.absent,"t-absent"],["المتفرقة",c.misc,"t-misc"],
+    ["إجازة",c.leave,"t-leave"],["أوف",c.off,"t-off"],["المجموع الكلي",c.total,"t-total"]].forEach(i=>{ html+=cell(i); });
+  el("tally").innerHTML=html;
 }
 
 /* ==================== [واجهة] كشف العمال ==================== */
@@ -2707,7 +2825,8 @@ function renderRoster(){
 function wcard(w){
   const st=stateOf(curDate,w.id);
   const off=isOffDay(w,curDate);
-  const pr=v=>' aria-pressed="'+(st===v?"true":"false")+'"';
+  const ro=canMarkW(w)?"":" disabled";
+  const pr=v=>' aria-pressed="'+(st===v?"true":"false")+'"'+ro;
   return '<div class="wcard" data-s="'+st+'" data-wid="'+w.id+'"><span class="nm" title="'+esc(w.name)+'">'+esc(w.name)+
     (off?' <span class="offtag">أوف</span>':'')+'</span>'+
     '<span class="states" role="group" aria-label="تأشير '+esc(w.name)+'">'+
@@ -2748,7 +2867,7 @@ function flushNotes(only){
 }
 /* «الكل حاضر» لجهة: يمسح تأشيرات عمالها باليوم ويعتمدها — لا يمسّ جهة أخرى */
 function allPresentFor(b){
-  if(!b || lockBlock(curDate,"تعديل حضور يوم")) return;
+  if(!b || !canMarkBld(b) || lockBlock(curDate,"تعديل حضور يوم")) return;
   const st=viewStates(curDate,b), ids=Object.keys(st);
   let a=0, m=0;
   ids.forEach(k=>{ if(st[k]==="absent") a++; else if(st[k]==="misc") m++; });
@@ -2777,7 +2896,7 @@ let sheetTimer=null;
 el("roster").addEventListener("click",e=>{
   const b=e.target.closest("button[data-set]"); if(!b)return;
   if(lockBlock(curDate,"تعديل حضور يوم")) return;
-  const w=C().workers.find(x=>x.id===b.dataset.w); if(!w) return;
+  const w=C().workers.find(x=>x.id===b.dataset.w); if(!w || !canMarkW(w)) return;
   const prev=stateOf(curDate,w.id);
   if(prev===b.dataset.set) return;
   /* تعديل يوم معتمد مضى (لا تأشير اليوم نفسه) يُسجَّل بقيمته قبل وبعد */
@@ -2819,11 +2938,13 @@ function renderNotesEditor(){
   const bs=viewBuildings(), single=bs.length<=1, box=el("notesZones"), nt=el("notes");
   const ro=monthLocked(curDate);
   nt.classList.toggle("hidden",!single); box.classList.toggle("hidden",single);
-  if(single){ nt.value=bs.length?bldNotes(bs[0],curDate):""; nt.readOnly=ro; box.innerHTML=""; return; }
+  const dn=document.getElementById("insertDefaultNote");
+  if(dn && dn.classList) dn.classList.toggle("hidden",!bs.some(canNoteBld));
+  if(single){ nt.value=bs.length?bldNotes(bs[0],curDate):""; nt.readOnly=ro||!canNoteBld(bs[0]); box.innerHTML=""; return; }
   box.innerHTML=bs.map(b=>{
     const z=b.zones[0], col=(z&&z.color)||ZONE_COLORS[0];
     return '<label class="nzone" style="--zc:'+esc(col)+'"><span>'+esc(b.name)+'</span>'+
-      '<textarea rows="3" data-nb="'+esc(b.id)+'"'+(ro?' readonly':'')+' placeholder="ملاحظات '+esc(b.short||b.name)+'…">'+
+      '<textarea rows="3" data-nb="'+esc(b.id)+'"'+(ro||!canNoteBld(b)?' readonly':'')+' placeholder="ملاحظات '+esc(b.short||b.name)+'…">'+
       esc(bldNotes(b,curDate))+'</textarea></label>';
   }).join("");
 }
@@ -2831,19 +2952,19 @@ function notesChanged(){
   clearTimeout(drawTimer); drawTimer=setTimeout(()=>{ drawSheet(); renderDayStatus(); },220);
 }
 el("notes").addEventListener("input",()=>{
-  const bs=viewBuildings(); if(bs.length!==1) return;
+  const bs=viewBuildings(); if(bs.length!==1 || !canNoteBld(bs[0])) return;
   saveBldNotes(curDate,bs[0],el("notes").value); notesChanged();
 });
 el("notesZones").addEventListener("input",e=>{
   const t=e.target.closest("[data-nb]"); if(!t) return;
-  const b=viewBuildings().find(x=>x.id===t.dataset.nb); if(!b) return;
+  const b=viewBuildings().find(x=>x.id===t.dataset.nb); if(!b || !canNoteBld(b)) return;
   saveBldNotes(curDate,b,t.value); notesChanged();
 });
 el("notesZones").addEventListener("focusin",e=>{ const t=e.target.closest("[data-nb]"); if(t) notesFocusBld=t.dataset.nb; });
 /* الملاحظة الاعتيادية تُضاف لمربع الجهة الأخير الذي كُتب فيه (أو الأول) */
 el("insertDefaultNote").onclick=()=>{
   if(lockBlock(curDate,"تعديل ملاحظات يوم")) return;
-  const bs=viewBuildings(); if(!bs.length) return;
+  const bs=viewBuildings().filter(canNoteBld); if(!bs.length) return;
   const b=(bs.length>1 && bs.find(x=>x.id===notesFocusBld)) || bs[0];
   const t=S().defNote||"", cur=bldNotes(b,curDate).trim();
   saveBldNotes(curDate,b, cur ? cur+"\n"+t : t);
@@ -2854,12 +2975,14 @@ function renderDayStatus(){
   const box=el("dayStatus");
   if(!box || !box.classList) return;
   const locked=monthLocked(curDate), rec=dayRec(curDate), ok=rec.confirmed;
-  const nt=document.getElementById("notes"); if(nt) nt.readOnly=locked;
-  document.querySelectorAll("#notesZones [data-nb]").forEach(t=>{ t.readOnly=locked; });
+  const bs=viewBuildings(), one=bs.length===1?bs[0]:null;
+  const nt=document.getElementById("notes"); if(nt) nt.readOnly=locked||!(one&&canNoteBld(one));
+  document.querySelectorAll("#notesZones [data-nb]").forEach(t=>{
+    const b=bs.find(x=>x.id===t.dataset.nb); t.readOnly=locked||!canNoteBld(b); });
   const multi=rec.blds.length>1;
   const ad=document.getElementById("allPresent"), cd=document.getElementById("confirmDay");
-  if(ad && ad.classList) ad.classList.toggle("hidden",multi);
-  if(cd && cd.classList) cd.classList.toggle("hidden",multi);
+  if(ad && ad.classList) ad.classList.toggle("hidden",multi||!(one&&canMarkBld(one)));
+  if(cd && cd.classList) cd.classList.toggle("hidden",multi||!(one&&canConfirmBld(one)));
   let cls, msg;
   if(locked){
     cls="lock"; msg="راتب "+monthNameOf(curDate)+" مقفل — هذا اليوم للقراءة فقط"+
@@ -2884,7 +3007,7 @@ function renderDayStatus(){
     const z=x.b.zones[0], col=(z&&z.color)||ZONE_COLORS[0];
     const hasMarks=Object.keys(viewStates(curDate,x.b)).length>0;
     const acts=(locked||!x.canConfirm)?"":
-      ((hasMarks?'<button class="btn sm ghost" data-bpres="'+esc(x.b.id)+'">الكل حاضر</button>':'')+
+      ((hasMarks && canMarkBld(x.b)?'<button class="btn sm ghost" data-bpres="'+esc(x.b.id)+'">الكل حاضر</button>':'')+
        (x.state!=="all" && (x.staffed || x.state==="some" || !anyStaffed)
          ?'<button class="btn sm gold" data-bconf="'+esc(x.b.id)+'">اعتماد '+esc(x.b.short||x.b.name)+'</button>':''));
     return '<div class="dbld '+k+'" style="--zc:'+esc(col)+'"><span class="dz '+k+'">'+esc(x.b.name)+' · '+t+'</span>'+
@@ -3417,7 +3540,7 @@ el("historyBody").addEventListener("click",e=>{
 /* ==================== [واجهة] المناطق ==================== */
 /* المناطق تُرتَّب داخل جهتها: ▲▼ تبدّل المنطقة مع جارتها بنفس الجهة فقط، وsort_order
    يُعاد ترقيمه لمناطق تلك الجهة وحدها */
-function zoneSiblings(z){ return C().zones.filter(x=>(x.buildingId||"")===(z.buildingId||"")); }
+function zoneSiblings(z){ return CF().zones.filter(x=>(x.buildingId||"")===(z.buildingId||"")); }
 function bldName(id){ const b=(C().buildings||[]).find(x=>x.id===id); return b?(b.short||b.name):""; }
 function renderZones(){
   const c=C(), multi=(c.buildings||[]).length>1;
@@ -3467,8 +3590,8 @@ el("addZone").onclick=()=>{
   const z={id:newId(),name:n,short:el("zShort").value.trim()||n,
     color:el("zColor").value||ZONE_COLORS[c.zones.length%ZONE_COLORS.length], buildingId:bid};
   /* تُضاف بآخر مناطق جهتها، فتبقى الجهة الواحدة متتالية بالقائمة */
-  const sib=c.zones.filter(x=>(x.buildingId||"")===bid), last=sib.length?c.zones.indexOf(sib[sib.length-1]):c.zones.length-1;
-  c.zones.splice(last+1,0,z);
+  const f=CF(), sib=f.zones.filter(x=>(x.buildingId||"")===bid), last=sib.length?f.zones.indexOf(sib[sib.length-1]):f.zones.length-1;
+  f.zones.splice(last+1,0,z);
   dbInsertZone(z,sib.length+1,zoneWhat(z,"إضافة المنطقة"));
   el("zName").value=""; el("zShort").value="";
   el("zColor").value=ZONE_COLORS[(c.zones.length)%ZONE_COLORS.length];
@@ -3485,8 +3608,8 @@ el("zoneList").addEventListener("click",e=>{
   const mv=(id,d)=>{
     const z=c.zones.find(x=>x.id===id); if(!z) return;
     const sib=zoneSiblings(z), k=sib.indexOf(z), o=sib[k+d]; if(!o) return;
-    const i=c.zones.indexOf(z), j=c.zones.indexOf(o);
-    c.zones[i]=o; c.zones[j]=z;
+    const f=CF(), i=f.zones.indexOf(z), j=f.zones.indexOf(o);
+    f.zones[i]=o; f.zones[j]=z; scopeDirty();
     zoneSiblings(z).forEach((x,n)=>dbUpdateZone(x,n+1,zoneWhat(x,"ترتيب المنطقة")));
   };
   if(ed){
@@ -3512,7 +3635,7 @@ el("zoneList").addEventListener("click",e=>{
     if(cnt){ alertBox("المنطقة «"+z.name+"» فيها "+fmtNum(cnt)+" قسم. انقل أقسامها لمنطقة أخرى (زر «المنطقة» بجدول الأقسام) ثم احذفها.","حذف منطقة"); return; }
     confirmBox("حذف منطقة","يتحذف «"+z.name+"»؟\nيبقى بالمحذوفات ويمكن استعادته.",{ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
-      c.zones=c.zones.filter(x=>x.id!==z.id);
+      CF().zones=CF().zones.filter(x=>x.id!==z.id);
       dbDeleteZone(z.id,zoneWhat(z,"حذف المنطقة"));
       refresh(); renderPeople();
     });
@@ -3605,13 +3728,13 @@ function renderPeople(){
 function secSiblings(sec){ return sortedSections().filter(x=>x.zoneId===sec.zoneId); }
 function secWhat(sec,t){ return t+" «"+sec.name+"»"; }
 /* القسم الجديد آخر منطقته: أكبر ترتيب فيها + ١ */
-function nextSecOrder(zid){ return C().sections.filter(x=>x.zoneId===zid).reduce((m,x)=>Math.max(m,Number(x.sortOrder)||0),0)+1; }
+function nextSecOrder(zid){ return CF().sections.filter(x=>x.zoneId===zid).reduce((m,x)=>Math.max(m,Number(x.sortOrder)||0),0)+1; }
 el("addSec").onclick=()=>{
   const n=el("secName").value.trim(); if(!n){ el("secName").focus(); return; }
   if(!C().zones.length){ alertBox("أضف منطقة أولاً (مثل: داخل البناية القديمة)."); return; }
   const zid=el("secZone").value||C().zones[0].id;
   const sec={id:newId(),name:n,zoneId:zid,sortOrder:nextSecOrder(zid)};
-  C().sections.push(sec);
+  CF().sections.push(sec);
   dbInsertSection(sec,secWhat(sec,"إضافة القسم"));
   el("secName").value=""; refresh(); renderPeople();
 };
@@ -3661,7 +3784,7 @@ el("secTable").addEventListener("click",e=>{
     ]}).then(v=>{
       if(!v) return;
       const z=c.zones.find(x=>x.id===v.dsZone); if(!z || z.id===sec.zoneId) return;
-      sec.zoneId=z.id; sec.sortOrder=nextSecOrder(z.id);
+      sec.zoneId=z.id; sec.sortOrder=nextSecOrder(z.id); scopeDirty();
       dbUpdateSection(sec,secWhat(sec,"نقل القسم لمنطقة «"+z.name+"»"));
       refresh(); renderPeople();
     });
@@ -3675,7 +3798,7 @@ el("secTable").addEventListener("click",e=>{
     confirmBox("حذف قسم","يتحذف قسم «"+sec.name+"»؟\nيبقى بالمحذوفات ويمكن استعادته.",
       {ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
-      c.sections=c.sections.filter(x=>x.id!==sec.id);
+      CF().sections=CF().sections.filter(x=>x.id!==sec.id);
       dbDeleteSection(sec.id,secWhat(sec,"حذف القسم"));
       refresh(); renderPeople();
     });
@@ -3702,7 +3825,7 @@ el("addW").onclick=()=>{
   w.startDate=sd;
   /* عامل يُسجَّل أصلاً بحالة غير مستمرة: تاريخ التغيير هو تاريخ تسجيله */
   if(st!==WS_ACTIVE) setWorkerStatus(w,st,{date:todayISO()});
-  C().workers.push(w);
+  CF().workers.push(w);
   insertWorkers([w],"إضافة العامل «"+w.name+"»");
   ["wName","wPhone","wPhone2","wAddr","wMother","wDob"].forEach(id=>{ el(id).value=""; });
   el("wStatus").value=WS_ACTIVE;
@@ -3714,7 +3837,7 @@ el("addBulk").onclick=()=>{
   const sd=newWorkerStart(); if(!sd) return;
   const sid=el("wSec").value;
   const ws=lines.map(n=>{ const w=newWorker({name:n,sectionId:sid}); w.startDate=sd; return w; });
-  ws.forEach(w=>C().workers.push(w));
+  ws.forEach(w=>CF().workers.push(w));
   insertWorkers(ws,"إضافة "+fmtNum(ws.length)+" عامل");
   el("bulk").value=""; refresh(); renderPeople(); renderVariables();
 };
@@ -3733,7 +3856,7 @@ function workerRecordCounts(w){
     iss:(c.issues||[]).filter(l=>l.workerId===id).length };
 }
 function purgeWorker(w){
-  const c=C(), id=w.id;
+  const c=CF(), id=w.id;
   c.workers=c.workers.filter(x=>x.id!==id);
   // لا نترك وصلاً يشير لعامل ما عاد موجوداً
   c.leaves=(c.leaves||[]).filter(l=>l.workerId!==id);
@@ -3774,7 +3897,7 @@ el("wTable").addEventListener("change",e=>{
   const s=e.target.closest("[data-wsec]");
   if(s){
     const w=C().workers.find(x=>x.id===s.dataset.wsec);
-    if(w){ w.sectionId=s.value; saveWorker(w,"نقل «"+w.name+"» لقسم آخر"); refresh(); renderPeople(); }
+    if(w){ w.sectionId=s.value; scopeDirty(); saveWorker(w,"نقل «"+w.name+"» لقسم آخر"); refresh(); renderPeople(); }
     return;
   }
   const st=e.target.closest("[data-wstat]");
@@ -3874,7 +3997,7 @@ function fillSettings(){
 Object.keys(setMap).forEach(id=>{
   el(id).addEventListener("input",()=>{
     S()[setMap[id]]=el(id).value;
-    if(setMap[id]==="company"){ C().name=el(id).value; renderCompanies(); }
+    if(setMap[id]==="company"){ CF().name=el(id).value; renderCompanies(); }
     if(setMap[id]==="printMode"){ sigCache.src=null; redrawSheets(); if(RP) renderReport(); }
     el("tbCompany").textContent=S().company;
     el("tbMark").textContent=S().mark||"ج";
@@ -3890,16 +4013,16 @@ function renderPresets(){
 }
 el("themePresets").addEventListener("click",e=>{
   const b=e.target.closest("[data-theme]"); if(!b)return;
-  C().theme=b.dataset.theme; el("setTheme").value=b.dataset.theme;
+  CF().theme=b.dataset.theme; el("setTheme").value=b.dataset.theme;
   el("themeHex").textContent=b.dataset.theme.toUpperCase();
   applyTheme(); saveCompany("لون الشركة"); refresh();
 });
 el("setTheme").addEventListener("input",()=>{
-  C().theme=el("setTheme").value; el("themeHex").textContent=el("setTheme").value.toUpperCase();
+  CF().theme=el("setTheme").value; el("themeHex").textContent=el("setTheme").value.toUpperCase();
   applyTheme(); saveCompany("لون الشركة"); refresh();
 });
 el("setAccent").addEventListener("input",()=>{
-  C().accent=el("setAccent").value; el("accentHex").textContent=el("setAccent").value.toUpperCase();
+  CF().accent=el("setAccent").value; el("accentHex").textContent=el("setAccent").value.toUpperCase();
   applyTheme(); saveCompany("لون الشركة"); refresh();
 });
 
@@ -4070,7 +4193,36 @@ function refreshDbState(){
 /* نسخة حديثة كاملة: من الخادم، أو الحالة الحالية بالفحص المحلي */
 async function backupState(){
   if(window.__JARD_TEST__) return state;
-  return ensureFields(await dbLoadState());
+  return backupScope(ensureFields(await dbLoadState()));
+}
+/* من ليس نطاقه كل المناطق: النسخة بنطاقه وحده كالعرض — المناطق وأقسامها وعمالها
+   ووثائقهم، وتأشيرات أولئك العمال واعتماد مناطقه، وصافي عماله من صور القفل، والسجل لمن
+   يملك قراءته. الخادم أصلاً لا يعيد غيره؛ هذا حاجز ثانٍ لا الحماية. */
+function backupScope(st){
+  if(!st || meAllZones()) return st;
+  return Object.assign({},st,{companies:(st.companies||[]).map(f=>{
+    const v=scopeView(f), o=Object.assign({},f);
+    SCOPE_LISTS.forEach(k=>{ if(Object.prototype.hasOwnProperty.call(v,k)) o[k]=v[k]; });
+    const ws=new Set(v.workers.map(w=>w.id)), zs=new Set(v.zones.map(z=>z.id)), days={};
+    Object.keys(f.days||{}).forEach(k=>{
+      const r=f.days[k]||{}, d={states:{}, zones:{}};
+      Object.keys(r.states||{}).forEach(w=>{ if(ws.has(w)) d.states[w]=r.states[w]; });
+      Object.keys(r.zones||{}).forEach(z=>{ if(zs.has(z)) d.zones[z]=r.zones[z]; });
+      if(Object.keys(d.states).length || Object.keys(d.zones).length) days[k]=d;
+    });
+    o.days=days;
+    const locks={};
+    Object.keys(f.locks||{}).forEach(m=>{
+      const L=Object.assign({},f.locks[m]), rows={};
+      Object.keys(L.rows||{}).forEach(id=>{ if(ws.has(id)) rows[id]=L.rows[id]; });
+      L.rows=rows; L.n=Object.keys(rows).length;
+      L.net=money(Object.keys(rows).reduce((t,id)=>t+(Number(rows[id])||0),0));
+      locks[m]=L;
+    });
+    o.locks=locks;
+    if(!can("audit.read")) o.audit=[];
+    return o;
+  })});
 }
 function backupJson(st){ return JSON.stringify(st,null,2); }
 el("backupOut").onclick=async()=>{
@@ -4109,7 +4261,7 @@ const DOC_LABEL={leave:"وصل إجازة",penalty:"إشعار عقوبة",achie
 /* رقم وثيقة جديدة: سنة تاريخ الوثيقة نفسها */
 async function docNumber(listKey,dateIso){
   const kind=DOC_KIND[listKey];
-  try{ return await dbNextDocNo(kind,DOC_PREFIX[kind],String(dateIso||todayISO()).slice(0,4),C()[listKey]); }
+  try{ return await dbNextDocNo(kind,DOC_PREFIX[kind],String(dateIso||todayISO()).slice(0,4),CF()[listKey]); }
   catch(e){ await alertBox(e.message,"لم تُحفظ "+DOC_LABEL[kind]); return null; }
 }
 /* المنطقة وقت الإصدار: منطقة العامل (لتوزيع المواد بين البنايتين) */
@@ -4118,7 +4270,7 @@ async function docInsert(listKey,rec,atEnd){
   const kind=DOC_KIND[listKey];
   try{ await dbInsertDoc(kind,rec,docZone(rec.workerId),"حفظ "+DOC_LABEL[kind]+" "+rec.no); }
   catch(e){ await alertBox(e.message,"لم تُحفظ "+DOC_LABEL[kind]); return false; }
-  const list=C()[listKey]; if(atEnd) list.push(rec); else list.unshift(rec);
+  const list=CF()[listKey]; if(atEnd) list.push(rec); else list.unshift(rec);
   return true;
 }
 /* تعديل وثيقة: نسخة معدّلة تُكتب أولاً، وبعد القبول تحلّ محلها بالذاكرة */
@@ -4130,13 +4282,14 @@ async function docRevise(listKey,open,data,plain){
   catch(e){ await alertBox(e.message,"لم يُحفظ التعديل"); return false; }
   Object.keys(open).forEach(k=>{ delete open[k]; });
   Object.assign(open,next);
+  if(moved) scopeDirty();               // وثيقة نُقلت لعامل آخر قد تخرج من العرض أو تدخله
   return true;
 }
 async function docDelete(listKey,rec){
   const kind=DOC_KIND[listKey];
   try{ await dbDeleteDoc(rec.id,"حذف "+DOC_LABEL[kind]+" "+rec.no); }
   catch(e){ await alertBox(e.message,"لم يُحذف"); return false; }
-  C()[listKey]=(C()[listKey]||[]).filter(x=>x.id!==rec.id);
+  CF()[listKey]=(CF()[listKey]||[]).filter(x=>x.id!==rec.id);
   return true;
 }
 /* نص زر الحفظ يقول بالضبط شنو راح يصير */
@@ -5390,7 +5543,7 @@ el("catList").addEventListener("click",e=>{
     confirmBox("حذف مادة","يتحذف «"+m.name+"» من قائمة المواد؟\nالوصولات المحفوظة ما تتأثر.",
       {ok:"حذف",danger:true}).then(go=>{
       if(!go) return;
-      c.materials=c.materials.filter(x=>x.id!==m.id); delete mtSel[m.id];
+      CF().materials=CF().materials.filter(x=>x.id!==m.id); delete mtSel[m.id];
       dbDeleteMaterial(m.id,"حذف المادة «"+m.name+"»"); renderCatalog(); renderMatItems(); drawIssue();
     });
   }
@@ -5817,7 +5970,7 @@ function dirSave(id){
   w.address=g("dirAddr");
   w.motherName=normName(g("dirMother"));
   w.dob=normDob(g("dirDob"));
-  if(secNode) w.sectionId=secNode.value;
+  if(secNode){ w.sectionId=secNode.value; scopeDirty(); }
   editDirId=null;
   if(name!==w.name){
     /* تعديل الاسم يمرّ من نفس الدالة حتى ينزل على الوصولات المحفوظة */
@@ -7427,7 +7580,7 @@ el("addHoliday").onclick=()=>{
   if(d2 && d2<d){ alertBox("تاريخ النهاية قبل تاريخ البداية."); return; }
   const st=S();
   if(!Array.isArray(st.holidays)) st.holidays=[];
-  if(lockBlock(monthsOf(d,d2||d),"إضافة عطلة بتاريخه")) return;
+  if(lockBlock(monthsOf(d,d2||d),"إضافة عطلة بتاريخه",true)) return;
   const name=el("hlName").value.trim()||"عطلة رسمية";
   let cur=d, added=0, skipped=0, guard=0;
   const last=d2||d, rows=[];
@@ -7444,7 +7597,7 @@ el("addHoliday").onclick=()=>{
 };
 el("holidayList").addEventListener("click",e=>{
   const b=e.target.closest("[data-hdel]"); if(!b)return;
-  if(lockBlock([b.dataset.hdel],"حذف عطلة بتاريخها")) return;
+  if(lockBlock([b.dataset.hdel],"حذف عطلة بتاريخها",true)) return;
   const st=S();
   st.holidays=(st.holidays||[]).filter(h=>h.date!==b.dataset.hdel);
   dbDeleteHoliday(b.dataset.hdel,"حذف عطلة "+dateSlash(b.dataset.hdel));
@@ -8776,7 +8929,7 @@ async function writeBackupFile(force, st){
   if(!force && lsGet("bk_last")===day) return false;    // نسخة واحدة باليوم تكفي
   if(!await dirPermOK(backupDir,false)) return false;
   try{
-    const data=st || await backupState();
+    const data=backupScope(st || await backupState());
     const name="جرد-"+day+".json";
     const fh=await backupDir.getFileHandle(name,{create:true});
     const w=await fh.createWritable();
@@ -10875,8 +11028,15 @@ function lockDrift(L,R){
     if(a===undefined){ if(Math.abs(r.net)>0.5) out.push({name:r.name,a:null,b:r.net}); }
     else if(Math.abs(a-r.net)>0.5) out.push({name:r.name,a:a,b:r.net});
   });
-  Object.keys(snap).forEach(id=>{ if(!R.rows.some(r=>r.id===id)) out.push({name:"عامل محذوف",a:snap[id],b:null}); });
+  /* الصورة تشمل الشركة كلها: بعرض مفلتر لا يُقارن إلا عماله — عامل خارجه ليس «محذوفاً» */
+  if(!scoped()) Object.keys(snap).forEach(id=>{ if(!R.rows.some(r=>r.id===id)) out.push({name:"عامل محذوف",a:snap[id],b:null}); });
   return out;
+}
+/* صافي القفل لما بالعرض: الصورة كلها بعرض «الكل»، ومجموع عمال العرض من صورتها بعرض مفلتر */
+function lockNetShown(L){
+  if(!scoped()) return L.net;
+  const snap=L.rows||{};
+  return money(C().workers.reduce((t,w)=>t+(snap[w.id]!==undefined?Number(snap[w.id])||0:0),0));
 }
 function renderLockBar(){
   const box=el("rpLock"); if(!box||box.innerHTML===undefined) return;
@@ -10891,20 +11051,24 @@ function renderLockBar(){
       (dr.length?'<div class="errbox"><b>تغيّر صافي '+fmtNum(dr.length)+' عامل منذ القفل</b> — تغيير من خارج الشهر '+
         '(راتب عامل، سياسة استقطاع، أيام الراحة…):<br>'+
         dr.slice(0,8).map(x=>esc(x.name)+': '+(x.a==null?'—':fmtMoney(x.a))+' ← '+(x.b==null?'—':fmtMoney(x.b))).join(' · ')+
-        (dr.length>8?' …':'')+'<br><span class="mini">الصافي عند القفل '+fmtMoney(L.net)+' — الآن '+fmtMoney(RP.tot.net)+
+        (dr.length>8?' …':'')+'<br><span class="mini">الصافي عند القفل '+fmtMoney(lockNetShown(L))+' — الآن '+fmtMoney(RP.tot.net)+
         '. السبب بسجل التدقيق (تبويب السجل).</span></div>':'');
   }else if(RP.to<todayISO()){
-    box.innerHTML='<div class="lockbar"><span>راتب '+mn+' غير مقفل — بعد الصرف أقفله حتى لا تتغيّر أرقامه.</span>'+
-      '<button class="btn sm gold" id="rpLockBtn">قفل الشهر</button></div>';
+    box.innerHTML=can("month.lock")
+      ? '<div class="lockbar"><span>راتب '+mn+' غير مقفل — بعد الصرف أقفله حتى لا تتغيّر أرقامه.</span>'+
+        '<button class="btn sm gold" id="rpLockBtn">قفل الشهر</button></div>'
+      : '<div class="lockbar"><span>راتب '+mn+' غير مقفل.</span></div>';
   }else box.innerHTML='<div class="lockbar"><span>يُقفل راتب '+mn+' بعد انتهاء الشهر ('+dateSlash(mr[1])+').</span></div>';
   const lb=document.getElementById("rpLockBtn"); if(lb) lb.onclick=()=>lockMonth(RP.from);
   const ub=document.getElementById("rpUnlock"); if(ub) ub.onclick=()=>unlockMonth(RP.from);
 }
 function lockMonth(iso){
-  const r=monthOf(iso), R=buildReport(r[0],r[1]), mk=monthKey(iso), mn=monthNameOf(iso);
+  /* القفل للشركة كلها: صورته من كشف كل العمال مهما كانت الجهة المعروضة */
+  const r=monthOf(iso), R=withFullScope(()=>buildReport(r[0],r[1])), mk=monthKey(iso), mn=monthNameOf(iso);
   return confirmBox("قفل راتب "+mn,
     "بعد القفل يصير للقراءة فقط كل ما يمسّ رواتب "+mn+": تأشير الحضور واعتماد الأيام، والإجازات والعقوبات والمكافآت "+
-    "بتواريخه، وتغيير الحالة بتاريخ داخله، والعطل والأوف فيه.\nالصافي الحالي: "+fmtMoney(R.tot.net)+" "+(S().currency||"")+
+    "بتواريخه، وتغيير الحالة بتاريخ داخله، والعطل والأوف فيه."+(scoped()?"\nالقفل يشمل الشركة كلها لا الجهة المعروضة وحدها.":"")+
+    "\nالصافي الحالي"+(scoped()?" (كل الجهات)":"")+": "+fmtMoney(R.tot.net)+" "+(S().currency||"")+
     (R.gaps.length?"\n\nتنبيه: "+fmtNum(R.gaps.length)+" يوم عمل غير معتمد — يبقى خارج الحساب بعد القفل.":""),
     {ok:"اقفل الشهر"}).then(y=>{
     if(!y) return false;
@@ -10944,6 +11108,7 @@ function unlockMonth(iso){
 /* ==================== [واجهة] سجل التدقيق (تبويب السجل) ==================== */
 function renderAudit(){
   const box=el("auditList"); if(!box||box.innerHTML===undefined) return;
+  if(!can("audit.read")){ box.innerHTML=""; return; }   // لوحته مخفية أصلاً — ولا يُبنى محتواها
   const all=(C().audit||[]), q=String(el("auditSearch").value||"").trim();
   let list=all.slice().reverse();
   if(q) list=list.filter(a=>[a.at,AUDIT_KIND[a.kind]||a.kind,a.what,a.before,a.after,a.reason,a.ref].some(x=>String(x||"").indexOf(q)!==-1));
@@ -11000,11 +11165,12 @@ function alertItems(){
   const months={}, ctxA=dayCtx();
   Object.keys(c.days).forEach(k=>{ if(k<mCur[0] && !months[monthKey(k)] && dayConfirmState(k,ctxA)!=="none") months[monthKey(k)]=1; });
   const open=Object.keys(months).filter(m=>!(c.locks||{})[m]).sort();
-  if(open.length){ const last=open[open.length-1]+"-01";
+  if(open.length && can("month.lock")){ const last=open[open.length-1]+"-01";
     items.push({sev:"warn", t:fmtNum(open.length)+" شهر سابق غير مقفل", d:"آخرها راتب "+monthNameOf(last)+" — القفل يمنع تغيّر أرقام شهر صُرف.",
       b:"افتح كشفه", go:()=>{ const r=monthOf(last); gotoView("report"); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; runReport(true); }}); }
   /* ٦) النسخة الاحتياطية */
   const nb=daysSinceBackup();
+  if(!viewAllowed("settings")) return items;     // النسخ من الإعدادات — لمن يفتحها
   if(!backupDir) items.push({sev:"warn", t:"ماكو نسخة عندك خارج الخادم", d:"اربط مجلد النسخ اليومية حتى تنكتب نسخة مؤرّخة كل يوم تلقائياً.", b:"الإعدادات", go:()=>gotoView("settings")});
   else if(backupDir && nb!==null && nb>=3) items.push({sev:"warn", t:"آخر نسخة خارجية قبل "+fmtNum(nb)+" يوم", d:"نسخة اليوم تحمي رواتب هذا الشهر.", b:"نسخة الآن", go:()=>gotoView("settings")});
   return items;
@@ -11082,6 +11248,7 @@ document.addEventListener("keydown",e=>{
 
 
 function switchView(v){
+  if(!viewAllowed(v)) v="daily";
   ["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form","settings"].forEach(x=>
     el("view-"+x).classList.toggle("hidden",x!==v));
   document.querySelectorAll(".tabs button").forEach(b=>{
@@ -11141,7 +11308,7 @@ el("dateInput").addEventListener("change",()=>{ curDate=el("dateInput").value||t
 
 /* ==================== [واجهة] بيانات تجريبية ==================== */
 function loadDemo(){
-  const c=C();
+  const c=CF();
   const zIn=c.zones[0]||{id:uid(),name:"داخل البناية القديمة",short:"داخلي"};
   const zOut=c.zones[1]||{id:uid(),name:"الأقسام الخارجية",short:"خارجي"};
   if(!c.zones.length) c.zones=[zIn,zOut];
@@ -11245,6 +11412,7 @@ function bootView(){
   el("coSelect").value=state.active;
   renderCompanies(); fillSettings(); refresh();
   const fv=document.getElementById("view-form"); if(fv && !fv.classList.contains("hidden")) lfInit();
+  applyPerms(); renderScopeBar();
 }
 
 /* ==================== [واجهة] الدخول والهوية ====================
@@ -11359,9 +11527,104 @@ function renderUserBox(){
   if(!ME){ box.classList.add("hidden"); return; }
   el("uName").innerHTML='<span class="av" aria-hidden="true">'+esc((ME.name||"؟").trim().charAt(0))+'</span>'+
     '<span class="nm">'+esc(ME.name)+'</span>';
-  el("uRoles").innerHTML=ME.roles.map(roleBadge).join("");
   box.classList.remove("hidden");
+  renderScopeBar();
 }
+
+/* ==================== [واجهة] الصلاحيات والنطاق ====================
+   ما لا يملك المستخدم صلاحيته لا يُعرض: عنصر ثابت عليه data-perm يُخفى، وأزرار الجداول
+   (تُرسم لاحقاً) تُخفى بقاعدة CSS مولّدة على body، وحقول التعديل داخل الجداول تبقى
+   ظاهرة للقراءة معطَّلة. التأشير والاعتماد والملاحظة بصلاحية المنطقة نفسها (canMarkW،
+   canConfirmBld، canNoteBld). هذا ترتيب للعرض فقط — الخادم يرفض ما لا يملكه المستخدم
+   مهما ظهر، ورفضه يظهر بنصّه. */
+const PERM_HIDE={
+  "roster.mark":["[data-del]"],
+  "roster.confirm":["[data-fixgaps]"],
+  "structure.manage":["[data-zup]","[data-zdn]","[data-zed]","[data-zdel]",
+    "[data-secup]","[data-secdn]","[data-secedit]","[data-seczone]","[data-secdel]"],
+  "workers.manage":["[data-wedit]","[data-wdel]","[data-dedit]","[data-vedit]","[data-vrestore]",
+    "#applyAllSalary","[data-offclr]","[data-offdel]","#addOffDate"],
+  "docs.manage":["#lvSave","#pnSave","#acSave","#mtSave","#lfSave",
+    "[data-ldel]","[data-pdel]","[data-adel]","[data-idel]","[data-lfdel]","[data-medit]","[data-mdel]"],
+  "month.lock":["#rpLockBtn","#rpUnlock"]
+};
+const PERM_LOCK={
+  "structure.manage":["[data-zcol]"],
+  "workers.manage":["[data-wsec]","[data-wstat]","[data-sal]","[data-ded]","[data-start]","[data-lpol]","[data-off]","#offDate"]
+};
+function permClass(p){ return "np-"+p.replace(/\./g,"-"); }
+let permCss=null, permObs=null;
+function applyPerms(){
+  if(!permCss){
+    permCss=document.createElement("style");
+    permCss.textContent=Object.keys(PERM_HIDE).map(p=>
+      "body."+permClass(p)+" :is("+PERM_HIDE[p].join(",")+"){display:none!important}").join("\n");
+    document.head.appendChild(permCss);
+  }
+  Object.keys(PERM_LABELS).forEach(p=>document.body.classList.toggle(permClass(p),!can(p)));
+  document.querySelectorAll("[data-perm]").forEach(n=>n.classList.toggle("noperm",!can(n.dataset.perm)));
+  permSweep(document);
+  if(!permObs && Object.keys(PERM_LOCK).some(p=>!can(p)) && typeof MutationObserver==="function"){
+    permObs=new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{ if(n.nodeType===1) permSweep(n); })));
+    permObs.observe(el("main"),{childList:true,subtree:true});
+  }
+}
+/* حقول التعديل داخل الجداول: تُعطَّل لمن لا يملك صلاحيتها */
+function permSweep(root){
+  Object.keys(PERM_LOCK).forEach(p=>{
+    if(can(p)) return;
+    const sel=PERM_LOCK[p].join(",");
+    if(root.matches && root.matches(sel)) root.disabled=true;
+    if(root.querySelectorAll) root.querySelectorAll(sel).forEach(n=>{ n.disabled=true; });
+  });
+}
+/* التبويب المحجوب لا يُفتح من رابط أو تنبيه أو بحث */
+function viewAllowed(v){
+  const t=document.getElementById("tab-"+v);
+  return !(t && t.dataset && t.dataset.perm && !can(t.dataset.perm));
+}
+
+/* ---- شريط النطاق ومبدّل الجهة ----
+   من نطاقه كل المناطق يختار: «الكل» (الافتراضي) أو جهة واحدة — فتُعرض مناطق تلك الجهة
+   وحدها في كل التبويبات، كما يرى إداريّها. من ليس نطاقه كل المناطق لا يرى المبدّل. */
+function scopeBuildings(){
+  const f=CF(), zs=(f.zones||[]).filter(z=>meAllZones()||seesZone(z.id));
+  return (f.buildings||[]).filter(b=>zs.some(z=>(z.buildingId||"")===b.id));
+}
+function scopeText(){
+  if(meAllZones()) return "كل المناطق";
+  const zs=(CF().zones||[]).filter(z=>seesZone(z.id));
+  if(!zs.length) return "بلا مناطق";
+  const bs=(CF().buildings||[]);
+  const parts=[], by={};
+  zs.forEach(z=>{ const k=z.buildingId||""; if(!by[k]){ by[k]=[]; parts.push(k); } by[k].push(z.short||z.name); });
+  return parts.map(k=>{ const b=bs.find(x=>x.id===k); return (b?b.name:"")+(b?" ("+by[k].join("، ")+")":by[k].join("، ")); }).join(" · ");
+}
+function renderScopeBar(){
+  const bar=document.getElementById("scopeBar"); if(!bar || !bar.classList) return;
+  if(!ME){ bar.classList.add("hidden"); return; }
+  const bs=scopeBuildings();
+  if(scopeBld && !bs.some(b=>b.id===scopeBld)){ scopeBld=""; scopeDirty(); }   // جهة لم تعد موجودة
+  el("uRoles").innerHTML=ME.roles.map(roleBadge).join("");
+  el("sbScope").textContent=scopeText();
+  const sw=el("sbSw"), show=meAllZones() && bs.length>1;
+  sw.classList.toggle("hidden",!show);
+  sw.innerHTML=show ? [{id:"",name:"الكل"}].concat(bs).map(b=>
+    '<button type="button" data-scope="'+esc(b.id)+'" aria-pressed="'+(b.id===scopeBld?"true":"false")+'">'+esc(b.name)+'</button>').join("") : "";
+  bar.classList.remove("hidden");
+}
+function setScope(bid){
+  bid=bid||"";
+  if(bid===scopeBld || !meAllZones()) return;
+  flushNotes();                      // ملاحظة تنتظر الإرسال تخصّ جهتها — تُرسل قبل التبديل
+  const view=currentView();
+  scopeBld=bid; scopeDirty();
+  bootView();                        // كالتبديل بين شركتين: الكشف والنماذج والبحث تُبنى من جديد
+  switchView(viewAllowed(view)?view:"daily");
+}
+el("sbSw").addEventListener("click",e=>{
+  const b=e.target.closest("[data-scope]"); if(b) setScope(b.getAttribute("data-scope"));
+});
 /* «حسابي»: كل رول بنطاقه وصلاحياته — حتى يعرف المستخدم ما يُسمح له به ولماذا */
 el("uName").onclick=()=>{
   if(!ME) return;

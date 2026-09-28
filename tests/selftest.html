@@ -978,6 +978,85 @@ try{
   let eDocs=""; ["dailyDocx","payrollDocx"].forEach(fn=>{ try{ unzipStored(new Uint8Array(w17e.eval("Array.from("+fn+"())"))); }catch(e){ eDocs+=fn+": "+e.message+" "; } });
   w17e.eval('(function(){var c=document.createElement("canvas"); drawSheet(c,1);})()');
   check("جهة فارغة: كل التبويبات والورقة وWord بلا خطأ", w17e.__errs.concat(eDocs?[eDocs]:[]).join(" | "), "");
+
+  /* ---- ١٨) النطاق: مبدّل الجهة، وفلترة المناطق لمن ليس نطاقه كل المناطق، والصلاحيات ---- */
+  group("١٨ · النطاق والجهات والصلاحيات — المبدّل، والعرض المفلتر، والكتابة للشركة كاملة");
+  const w18=await boot();
+  const lv18=(id,wid,no,d,nm)=>({id:id,kind:"leave",no:no,worker_id:wid,zone_id:null,date:d,date_to:d,revisions:[],
+    data:{name:nm,section:"",type:"اعتيادية",days:1,hours:null,policy:"half",reason:"سبب",admin:"",issued:d}});
+  w18.__rows=Object.assign({},ROWS17,{documents:[lv18("la","a","إ-2026-001","2026-09-08","عامل a"),lv18("lc","c","إ-2026-002","2026-09-09","عامل c")]});
+  w18.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; scopeBld=""; bootView();');
+  const W18=x=>w18.eval(x), J18=x=>JSON.parse(w18.eval("JSON.stringify("+x+")"));
+  const ids18='(function(){var c=C(); return [c.zones,c.sections,c.workers,c.leaves].map(function(a){return a.map(function(x){return x.id;}).join(",");}).join(" | ");})()';
+  check("«الكل» (الافتراضي): العرض هو الشركة نفسها", W18('C()===CF()'), true);
+  check("المبدّل: «الكل» ثم الجهتان بترتيبهما، و«الكل» مختار",
+    W18('[].map.call(document.querySelectorAll("#sbSw button"),function(b){return b.textContent+(b.getAttribute("aria-pressed")==="true"?"*":"");}).join(",")'), "الكل*,البناية القديمة,البناية الجديدة");
+  check("العدّاد بـ«الكل»: خانة لكل جهة فيها عمال، ومناطقها تحتها",
+    W18('[].map.call(document.querySelectorAll("#tally .t-bld"),function(b){return b.querySelector(".bh .k").textContent+":"+[].map.call(b.querySelectorAll(".bz .k"),function(k){return k.textContent;}).join("+");}).join(",")'),
+    "البناية القديمة:داخلي+خارجي,البناية الجديدة:داخلي+خارجي");
+  W18('document.querySelector(\'#sbSw [data-scope="bN"]\').click();');
+  check("«البناية الجديدة»: مناطقها وأقسامها وعاملها ووثيقته وحدها", W18(ids18), "zNi,zNo | sNi | c | lc");
+  check("والمبدّل يُظهر اختيارها", W18('document.querySelector(\'#sbSw [aria-pressed="true"]\').textContent'), "البناية الجديدة");
+  check("الكشف والعدّاد والبحث وWord بلا عامل من القديمة",
+    W18('switchView("daily"); refresh(); [el("roster").innerText.indexOf("عامل a"), el("tally").innerText.indexOf("البناية القديمة"), gsResults("عامل a").length, gsResults("إ-2026-001").length].join(",")'), "-1,-1,0,0");
+  check("كشف الرواتب (Word) فيه عامل الجديدة وحده", (function(){ W18('switchView("report"); el("rpFrom").value="2026-09-01"; el("rpTo").value="2026-09-30"; runReport(true);');
+    const x=unzipStored(new Uint8Array(w18.eval("Array.from(payrollDocx())")))["word/document.xml"]; return [x.indexOf("عامل c")>0, x.indexOf("عامل a"), x.indexOf("عامل b")].join(","); })(), "true,-1,-1");
+  /* الكتابة وأنت على جهة: الإضافة للشركة كاملة، والعرض يُعاد بناؤه */
+  W18('switchView("people"); el("secName").value="قسم جديد"; el("secZone").value="zNo"; el("addSec").click();');
+  check("إضافة قسم بعرض الجهة: بالشركة وبالعرض", W18('[CF().sections.length, C().sections.length, CF().sections.some(function(s){return s.name==="قسم جديد" && s.zoneId==="zNo";})].join(",")'), "5,2,true");
+  W18('el("wName").value="عامل جديد"; el("wSec").value="sNi"; el("wStart").value="2026-09-10"; el("addW").click();');
+  check("إضافة عامل بعرض الجهة: بالشركة وبالعرض", W18('[CF().workers.length, C().workers.length].join(",")'), "4,2");
+  W18('var w=CF().workers.find(function(x){return x.name==="عامل جديد";}); w.sectionId="sOi"; scopeDirty();');
+  check("نقل عامل لقسم بالقديمة يخرجه من عرض الجديدة فوراً", W18('C().workers.map(function(w){return w.id;}).join(",")'), "c");
+  W18('CF().workers=CF().workers.filter(function(x){return x.name!=="عامل جديد";}); CF().sections=CF().sections.filter(function(x){return x.name!=="قسم جديد";});');
+  /* قفل الشهر من عرض جهة: الصورة للشركة كلها، والفرق يُقرأ بعمال العرض */
+  const full18=J18('withFullScope(function(){ var R=buildReport("2026-09-01","2026-09-30"); return {n:R.rows.length, net:money(R.tot.net)}; })');
+  const pL18=w18.eval('lockMonth("2026-09-15")'); await answer(w18,true); await pL18;
+  check("قفل من عرض الجديدة: الصورة بكل عمال الشركة وصافيها", JSON.stringify(J18('(function(){var L=CF().locks["2026-09"]; return {n:L.n, net:L.net};})()')), JSON.stringify(full18));
+  check("وكشف الجهة المقفل بلا «فرق» ولا «عامل محذوف»",
+    W18('switchView("report"); el("rpFrom").value="2026-09-01"; el("rpTo").value="2026-09-30"; runReport(true); [el("rpLock").textContent.indexOf("مقفل")>=0, el("rpLock").textContent.indexOf("تغيّر صافي"), lockDrift(monthLock("2026-09-15"),RP).length].join(",")'), "true,-1,0");
+  check("وصافي القفل المعروض = صافي عمال الجهة من الصورة", W18('lockNetShown(monthLock("2026-09-15"))===money(RP.tot.net)'), true);
+  W18('delete CF().locks["2026-09"];');
+  W18('document.querySelector(\'#sbSw [data-scope="bO"]\').click();');
+  check("«البناية القديمة»: عاملاها ووثيقة عاملها", W18(ids18), "zOi,zOo | sOi2,sOi,sOo | a,b | la");
+  W18('document.querySelector(\'#sbSw [data-scope=""]\').click();');
+  check("الرجوع لـ«الكل»", W18('C()===CF() && C().workers.length===3'), true);
+  /* جهة بلا عمال لا تظهر بالعدّاد (لا خانة أصفار) */
+  const w18e=await boot();
+  w18e.__rows=Object.assign({},ROWS17,{sections:ROWS17.sections.filter(x=>x.id!=="sNi"),workers:ROWS17.workers.filter(x=>x.id!=="c"),dayStates:[]});
+  w18e.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; bootView();');
+  check("جهة بلا عمال: لا خانة لها بالعدّاد", w18e.eval('[].map.call(document.querySelectorAll("#tally .t-bld"),function(b){return b.querySelector(".bh .k").textContent;}).join(",")'), "البناية القديمة");
+  /* من ليس نطاقه كل المناطق (إداري الجديدة): لا يرى القديمة في شيء، ولا المبدّل، ولا ما لا يملكه */
+  const ADM18='["roster.mark","roster.confirm","workers.manage","docs.manage","structure.manage","requests.decide"]';
+  W18('ME={id:"t-new",email:"",name:"أحمد",active:true,perms:new Set('+ADM18+'),zones:new Set(["zNi","zNo"]),allZones:false,'+
+    'zoneNames:{zNi:"داخل البناية الجديدة",zNo:"الأقسام الخارجية — الجديدة"},roles:[{id:"r-new",companyId:"co",name:"إداري البناية الجديدة",color:"#1D6A8C",'+
+    'perms:new Set('+ADM18+'),allZones:false,zones:new Set(["zNi","zNo"]),isSystem:true,sortOrder:4}]}; scopeBld=""; bootView();');
+  check("إداري الجديدة: العرض مناطقه وعامله ووثيقته وحدها", W18(ids18), "zNi,zNo | sNi | c | lc");
+  check("شريط النطاق: رولُه ونطاقه، بلا مبدّل", W18('[el("uRoles").textContent, el("sbScope").textContent, el("sbSw").classList.contains("hidden")].join("|")'),
+    "إداري البناية الجديدة|البناية الجديدة (داخلي، خارجي)|true");
+  const txt18=W18('(function(){ var out=[]; ["daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form"].forEach(function(t){'+
+    ' switchView(t); if(t==="report"){ el("rpFrom").value="2026-09-01"; el("rpTo").value="2026-09-30"; runReport(true); } out.push(el("main").innerText); });'+
+    ' switchView("daily"); return out.join("\\n"); })()');
+  const docs18=["dailyDocx","payrollDocx"].map(fn=>unzipStored(new Uint8Array(w18.eval("Array.from("+fn+"())")))["word/document.xml"]).join("");
+  check("ولا «عامل a» ولا «عامل b» في أي تبويب أو Word", [txt18.indexOf("عامل a"), txt18.indexOf("عامل b"), docs18.indexOf("عامل a"), docs18.indexOf("عامل b"), txt18.indexOf("عامل c")>=0].join(","), "-1,-1,-1,-1,true");
+  check("ولا في البحث الشامل", W18('gsResults("عامل").map(function(x){return x.t;}).join(",").indexOf("عامل a")'), -1);
+  check("نسخة البيانات بنطاقه: عامله وحده", W18('(function(){var c=backupScope(state).companies[0]; return c.workers.map(function(w){return w.id;}).join(",")+"|"+Object.keys(c.days["2026-09-15"].states).join(",");})()'), "c|c");
+  check("المخفي عنه: الإعدادات، السجل، افتراضيات الرواتب؛ والظاهر: إضافة عامل والرواتب",
+    W18('["tab-settings","pnAudit","salDefaults","wForm","pnSalary"].map(function(id){return el(id).classList.contains("noperm")?1:0;}).join("")'), "11100");
+  check("الإعدادات بالرابط تعيده لجرد اليوم", W18('switchView("settings"); currentView()'), "daily");
+  check("حارس القفل لا يقترح الفتح لمن لا يملكه", W18('(function(){ var m=""; var ab=alertBox; alertBox=function(t){ m=t; return Promise.resolve(true); };'+
+    ' CF().locks["2026-09"]={at:"x",net:0,n:0,rows:{}}; lockBlock("2026-09-10","تجربة"); delete CF().locks["2026-09"]; alertBox=ab; return m.indexOf("فتح القفل"); })()'), -1);
+  /* المراقب: كل المناطق بلا صلاحيات — قراءة وطباعة فقط */
+  W18('ME={id:"t-obs",email:"",name:"مراقب",active:true,perms:new Set(),zones:new Set(),allZones:true,zoneNames:{},'+
+    'roles:[{id:"r-obs",companyId:"co",name:"مراقب",color:"#5F5873",perms:new Set(),allZones:true,zones:new Set(),isSystem:true,sortOrder:5}]}; scopeBld=""; bootView(); switchView("daily"); refresh();');
+  check("المراقب: يرى الجهتين وله المبدّل", W18('C()===CF() && !el("sbSw").classList.contains("hidden")'), true);
+  check("المراقب: أزرار التأشير معطّلة، والملاحظات للقراءة، ولا زر اعتماد",
+    W18('[[].every.call(document.querySelectorAll("#roster button[data-set]"),function(b){return b.disabled;}), [].every.call(document.querySelectorAll("#notesZones [data-nb]"),function(t){return t.readOnly;}), document.querySelectorAll("#dayStatus [data-bconf]").length].join(",")'), "true,true,0");
+  W18('switchView("people");'); await tick(5);
+  check("المراقب: نماذج الإضافة مخفية، وحقول جدول العمال معطّلة",
+    W18('[el("wForm").classList.contains("noperm"), [].every.call(document.querySelectorAll("select[data-wsec],select[data-wstat]"),function(s){return s.disabled;})].join(",")'), "true,true");
+  W18('dbLocalOwner(); scopeBld=""; bootView(); switchView("daily");');
+  check("الرجوع لهوية الفحص: كل شيء ظاهر", W18('document.querySelectorAll(".noperm").length'), 0);
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
