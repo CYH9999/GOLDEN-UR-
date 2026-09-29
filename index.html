@@ -2263,7 +2263,14 @@ function audit(kind, what, before, after, extra, serverWrote){
     before:String(before==null?"":before), after:String(after==null?"":after)}, extra||{});
   c.audit.push(a);
   if(c.audit.length>AUDIT_MAX) c.audit.splice(0, c.audit.length-AUDIT_MAX);
-  if(!serverWrote) dbAudit(a);   // على الخادم: إضافة فقط (إلا قيداً كتبته دالة الخادم نفسها)
+  /* على الخادم: إضافة فقط (إلا قيداً كتبته دالة الخادم نفسها)، وبعد نجاح التعديل الذي يصفه.
+     قيد لم يُكتب يخرج من الذاكرة حتى تطابق الشاشة الخادم؛ وإن رُفض القيد وحده قيل ذلك بنصّه —
+     التعديل نفسه محفوظ فلا يُقال «لم يُحفظ» */
+  if(!serverWrote) dbAudit(a,e=>{
+    const L=CF().audit, i=L?L.indexOf(a):-1; if(i>=0) L.splice(i,1);
+    if(e) alertBox("حُفظ التعديل على الخادم، لكن قيده في سجل التدقيق لم يُكتب:\n"+e.message+
+      "\n\nالتعديل نفسه لا يحتاج إعادة.","سجل التدقيق");
+  });
 }
 
 function blankCompany(name){
@@ -3666,7 +3673,7 @@ el("historyBody").addEventListener("click",e=>{
       const wids=Object.keys(st), zids=viewZoneIds();
       clearDayView(k);
       dbClearDayStates(k,wids,"حذف جرد يوم "+dateSlash(k));
-      dbSaveDayZones(k,zids,{confirmed:false,notes:""},"حذف جرد يوم "+dateSlash(k));
+      dbSaveDayZones(k,zids,{confirmed:false,notes:""},"إلغاء اعتماد يوم "+dateSlash(k)+" وملاحظته");
       refresh(); renderHistory();
     });
   }

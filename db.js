@@ -281,7 +281,9 @@ async function dbFetchAll() {
   DB_CO_LAST = dbCanon({ name: co.data.name, theme: co.data.theme, accent: co.data.accent,
     settings: (co.data.settings && typeof co.data.settings === "object") ? co.data.settings : {} });
 
+  /* سجل التدقيق لمن يملك قراءته وحده: قيوده تحمل أسماء عمال كل الجهات، فلا يُطلب لغيره أصلاً */
   const auditQ = (async () => {
+    if (!can("audit.read")) return [];
     let r;
     try {
       r = await sb.from("audit_log").select("id,user_id,kind,what,before_val,after_val,reason,at")
@@ -504,7 +506,24 @@ function dbBuildState(raw) {
 
 /* التحميل الكامل: الصفوف من الخادم ثم البناء */
 async function dbLoadState() {
-  return dbBuildState(await dbFetchAll());
+  return dbScopeLocks(dbBuildState(await dbFetchAll()));
+}
+/* صورة قفل الشهر تحمل صافي كل عامل بالشركة (month_locks يقرؤه كل منتسب). من ليس نطاقه كل
+   المناطق لا يُبقى في ذاكرته إلا صافي عماله هو: الصفوف تُقصّ للعمال المحمّلين، والمجموع والعدد
+   يُعادان منها. من نطاقه كل المناطق تبقى صورته كاملة (ومنها صافي عامل حُذف بعد القفل). */
+function dbScopeLocks(st) {
+  if (!ME || ME.allZones) return st;
+  (st.companies || []).forEach(c => {
+    const ids = new Set((c.workers || []).map(w => w.id));
+    Object.keys(c.locks || {}).forEach(m => {
+      const L = c.locks[m], rows = {};
+      Object.keys(L.rows || {}).forEach(id => { if (ids.has(id)) rows[id] = L.rows[id]; });
+      L.rows = rows; L.n = Object.keys(rows).length;
+      L.net = Math.round(Object.keys(rows).reduce((t, id) => t + (Number(rows[id]) || 0), 0) * 1e4) / 1e4;
+      L.scoped = true;
+    });
+  });
+  return st;
 }
 
 /* ==================== الكتابة ====================
@@ -563,9 +582,17 @@ function dbWriteErr(e, what) {
    opts.quiet: المستدعي يعرض الخطأ بنفسه (الوثائق: لا تتغيّر الذاكرة إلا بعد القبول).
    opts.expect: تعديل سجل موجود — الحالة ٣ تُعلن ولا تمرّ صامتة.
    يُحلّ بالصفوف العائدة إن وُجدت، وإلا { count } — وبـ null لطلب بلا عدد ولا صفوف. */
+/* «الدورة»: ما يجري قبل أن يعود المتصفح لحلقته (نقرة وما تكتبه). كل كتابة تُوسَم بدورتها، وقيد
+   سجل التدقيق يُكتب بعد أن تنجح كتابات دورته كلها (dbAudit) */
+let dbTurnNo = 0, dbTurnArmed = false, dbTurnRuns = [];
+function dbTurn() {
+  if (!dbTurnArmed) { dbTurnArmed = true; setTimeout(() => { dbTurnNo++; dbTurnArmed = false; }, 0); }
+  return dbTurnNo;
+}
 function dbWrite(what, fn, opts) {
   opts = opts || {};
   if (dbLocal()) return Promise.resolve(opts.local === undefined ? null : opts.local);
+  const turn = dbTurn();
   dbBusy++; dbEmit("saving");
   const run = dbQ.then(async () => {
     let r;
@@ -578,6 +605,7 @@ function dbWrite(what, fn, opts) {
     return typeof n === "number" ? { count: n } : null;
   });
   dbQ = run.catch(() => {});
+  dbTurnRuns = dbTurnRuns.filter(x => x.turn >= turn - 1).concat([{ turn: turn, run: run }]);
   return run.then(
     d => { if (!--dbBusy) dbEmit("saved"); return d; },
     e => { dbBusy--; dbEmit(e.network ? "offline" : "rejected", e, opts.quiet); throw e; });
@@ -808,11 +836,25 @@ function dbUnlockMonth(month, why, what) {
   return dbWrite(what, () => sb.rpc("unlock_month", { cid: DB_CID, m: month, why: String(why) }), { quiet: true });
 }
 
-/* ---- سجل التدقيق: إضافة فقط ---- */
-function dbAudit(a) {
-  return dbFire("قيد سجل التدقيق", () => sb.from("audit_log").insert({ company_id: DB_CID, user_id: dbMe(),
-    kind: String(a.kind || ""), what: String(a.what || ""), before_val: String(a.before || ""),
-    after_val: String(a.after || ""), reason: (a.reason || a.ref) ? String(a.reason || a.ref) : null }));
+/* ---- سجل التدقيق: إضافة فقط ----
+   القيد طلب مستقل عن التعديل الذي يصفه، فلا يُخلط مصيرهما:
+   - يُكتب بعد أن تنجح كتابات دورته كلها (قبله أو بعده في النقرة نفسها)؛ وإن رُفضت إحداها لا يُكتب،
+     فلا يُسجَّل تغيير لم يحدث.
+   - وإن رُفض القيد نفسه بعد أن حُفظ التعديل فذلك لا يُعلَن «رفضاً للتعديل»: onFail(خطأ) يقول ما جرى
+     بالضبط، بلا إعادة قراءة. onFail(null): لم يُكتب لأن التعديل نفسه رُفض (ورفضه يُعرض مركزياً). */
+function dbAudit(a, onFail) {
+  if (dbLocal()) return Promise.resolve(null);
+  const turn = dbTurn();
+  return new Promise(res => setTimeout(res, 0))
+    .then(() => Promise.all(dbTurnRuns.filter(x => x.turn === turn).map(x => x.run.then(() => true, () => false))))
+    .then(oks => {
+      if (!oks.every(Boolean)) { if (onFail) onFail(null); return null; }
+      return dbWrite("قيد سجل التدقيق", () => sb.from("audit_log").insert({ company_id: DB_CID, user_id: dbMe(),
+        kind: String(a.kind || ""), what: String(a.what || ""), before_val: String(a.before || ""),
+        after_val: String(a.after || ""), reason: (a.reason || a.ref) ? String(a.reason || a.ref) : null }, { count: "exact" }),
+        { quiet: true })
+        .then(d => d, e => { if (onFail) onFail(e); return null; });
+    });
 }
 /* يُحلّ حين يفرغ طابور الكتابة */
 function dbIdle() { return dbQ.then(() => {}); }
