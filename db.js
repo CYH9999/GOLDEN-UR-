@@ -594,6 +594,7 @@ function dbPendingWrites() { return dbBusy; }
 
 /* ---- اليوم: day_states (صف لكل غائب أو متفرقة؛ الحاضر بلا صف) و day_zones ---- */
 function dbSaveDayState(iso, wid, st, what) {
+  dbRtMine("ds|" + iso + "|" + wid);
   return dbFire(what, () => (st === "absent" || st === "misc")
     ? sb.from("day_states").upsert({ company_id: DB_CID, date: iso, worker_id: wid, state: st },
         { onConflict: "company_id,date,worker_id" })
@@ -602,6 +603,7 @@ function dbSaveDayState(iso, wid, st, what) {
 /* «الكل حاضر»: حذف تأشيرات عمال جهة بيوم — الحذف الفعلي الوحيد المسموح */
 function dbClearDayStates(iso, wids, what) {
   if (!wids.length) return Promise.resolve(null);
+  wids.forEach(w => dbRtMine("ds|" + iso + "|" + w));
   return dbFire(what, () => sb.from("day_states").delete()
     .eq("company_id", DB_CID).eq("date", iso).in("worker_id", wids));
 }
@@ -609,6 +611,7 @@ function dbClearDayStates(iso, wids, what) {
    patch: { confirmed?: bool, notes?: string } */
 function dbSaveDayZones(isos, zids, patch, what) {
   const rows = [];
+  [].concat(isos).forEach(d => zids.forEach(z => dbRtMine("dz|" + d + "|" + z)));
   [].concat(isos).forEach(d => zids.forEach(z => {
     const r = { company_id: DB_CID, date: d, zone_id: z };
     if (patch.notes !== undefined) r.notes = String(patch.notes || "");
@@ -640,6 +643,7 @@ function dbWorkerRow(w) {
    ثم تُقرأ الصفوف بمعرّفاتها: ما عاد منها هو ما يراه المستخدم (ومعه seq)، وما لم يعد حُفظ
    لكنه خارج نطاقه. الوعد يُحلّ بـ { seq: {id: seq}, hidden: [ids] }، وبـ null إن رُفض. */
 function dbInsertWorkers(ws, what) {
+  ws.forEach(w => dbRtMine("w|" + w.id));
   const rows = ws.map(w => Object.assign({ id: w.id, company_id: DB_CID, created_by: dbMe() }, dbWorkerRow(w)));
   const ids = ws.map(w => w.id);
   return dbWrite(what, () => sb.from("workers").insert(rows, { count: "exact" }), { local: { count: rows.length } })
@@ -656,10 +660,12 @@ function dbInsertWorkers(ws, what) {
     .catch(() => null);
 }
 function dbUpdateWorker(w, what) {
+  dbRtMine("w|" + w.id);
   return dbFire(what, () => sb.from("workers").update(dbWorkerRow(w), { count: "exact" }).eq("company_id", DB_CID).eq("id", w.id).select("id"),
     { expect: true });
 }
 function dbDeleteWorker(id, what) {
+  dbRtMine("w|" + id);
   return dbFire(what, () => sb.from("workers").update({ deleted_at: dbNow(), deleted_by: dbMe() }, { count: "exact" })
     .eq("company_id", DB_CID).eq("id", id).select("id"), { expect: true });
 }
@@ -689,6 +695,7 @@ function dbDocRow(kind, rec) {
     revisions: Array.isArray(rec.revisions) ? rec.revisions : [] };
 }
 function dbInsertDoc(kind, rec, zoneId, what) {
+  dbRtMine("d|" + rec.id);
   const row = Object.assign({ id: rec.id, company_id: DB_CID, kind: kind, zone_id: zoneId || null, created_by: dbMe() },
     dbDocRow(kind, rec));
   return dbWrite(what, () => sb.from("documents").insert(row, { count: "exact" }), { quiet: true });
@@ -696,6 +703,7 @@ function dbInsertDoc(kind, rec, zoneId, what) {
 /* تعديل وثيقة: الصف كله مع revisions (النسخة السابقة مدفوعة فيها). zoneId يُرسل فقط إذا
    تغيّر العامل — المنطقة تُثبَّت وقت الإصدار. */
 function dbUpdateDoc(kind, rec, zoneId, what) {
+  dbRtMine("d|" + rec.id);
   const row = dbDocRow(kind, rec);
   if (zoneId !== undefined) row.zone_id = zoneId || null;
   return dbWrite(what, () => sb.from("documents").update(row, { count: "exact" }).eq("company_id", DB_CID).eq("id", rec.id).select("id"),
@@ -703,10 +711,12 @@ function dbUpdateDoc(kind, rec, zoneId, what) {
 }
 /* تعديل وثيقة بالخلفية (تصحيح اسم عامل بنسختها مثلاً): الرفض يُعالج مركزياً */
 function dbUpdateDocBg(kind, rec, what) {
+  dbRtMine("d|" + rec.id);
   return dbFire(what, () => sb.from("documents").update(dbDocRow(kind, rec), { count: "exact" }).eq("company_id", DB_CID).eq("id", rec.id)
     .select("id"), { expect: true });
 }
 function dbDeleteDoc(id, what) {
+  dbRtMine("d|" + id);
   return dbWrite(what, () => sb.from("documents").update({ deleted_at: dbNow(), deleted_by: dbMe() }, { count: "exact" })
     .eq("company_id", DB_CID).eq("id", id).select("id"), { quiet: true, expect: true });
 }
@@ -806,3 +816,81 @@ function dbAudit(a) {
 }
 /* يُحلّ حين يفرغ طابور الكتابة */
 function dbIdle() { return dbQ.then(() => {}); }
+
+/* ==================== التحديث اللحظي (Realtime) ====================
+   قناة واحدة للشركة على أربعة جداول: day_states و day_zones و workers و documents.
+   الخادم لا يرسل صفَّ إدراج أو تعديل إلا لمن تجيزه سياسة القراءة، لكن الحذف الفعلي
+   (day_states وحده — «حاضر») لا تمرّ عليه السياسات ولا يُفلتر بالشركة، فيصل الجميع بمفتاحه:
+   الواجهة تتجاهل كل حدث عن صف لا تراه، ولا تُعلن عنه شيئاً.
+   الحدث يُحوَّل هنا لشكل الحالة نفسه (dbWorker، dbDoc…) قبل أن يصل الواجهة. */
+const DB_RT_TABLES = ["day_states", "day_zones", "workers", "documents"];
+let dbRtCh = null;
+function dbSubscribe(onChange, onStatus) {
+  if (dbLocal() || !DB_CID || dbRtCh) return dbRtCh;
+  const ch = sb.channel("jard-" + DB_CID);
+  const fire = t => p => { const c = dbRtChange(t, p); if (c) { try { onChange(c); } catch (e) { console.error(e); } } };
+  DB_RT_TABLES.forEach(t => ch.on("postgres_changes",
+    { event: "*", schema: "public", table: t, filter: "company_id=eq." + DB_CID }, fire(t)));
+  /* الحذف لا يُفلتر على الخادم: اشتراك بلا فلتر، والشركة تُفحص هنا */
+  ch.on("postgres_changes", { event: "DELETE", schema: "public", table: "day_states" }, fire("day_states"));
+  ch.subscribe((st, err) => { if (onStatus) { try { onStatus(st, err); } catch (e) {} } });
+  dbRtCh = ch;
+  return ch;
+}
+function dbUnsubscribe() {
+  if (!dbRtCh) return;
+  try { sb.removeChannel(dbRtCh); } catch (e) {}
+  dbRtCh = null;
+}
+/* صدى كتابات هذا الجهاز: كل كتابة تسجّل مفتاح سجلّها ووقته. حدثٌ كتبه المستخدم نفسه، أو حذفٌ
+   (لا يحمل كاتبه) لسجل كُتب هنا للتوّ، صدى لا يُطبَّق — الذاكرة سبقته، وتطبيقه متأخراً
+   يُرجع قيمة قديمة لحظةً إن تتابعت النقرات على السجل نفسه. */
+const dbRtLocal = {};
+function dbRtMine(k) { dbRtLocal[k] = Date.now(); }
+function dbRtRecent(k) { const t = dbRtLocal[k]; return !!t && Date.now() - t < 5000; }
+/* حدث ← تغيير بشكل الحالة: { table, ev, by, mine, … }. by: من كتبه (updated_by) إن عُرف */
+function dbRtChange(table, p) {
+  const c = dbRtShape(table, p);
+  if (!c) return null;
+  const k = table === "day_states" ? "ds|" + c.date + "|" + c.wid : table === "day_zones" ? "dz|" + c.date + "|" + c.zid
+    : (table === "workers" ? "w|" : "d|") + c.id;
+  c.mine = c.by ? (!!ME && c.by === ME.id) : dbRtRecent(k);
+  return c;
+}
+function dbRtShape(table, p) {
+  const ev = p && p.eventType, row = (ev === "DELETE" ? p.old : p.new) || {};
+  if (row.company_id && row.company_id !== DB_CID) return null;
+  const by = row.updated_by || row.created_by || null;
+  if (table === "day_states") {
+    if (!row.worker_id || !row.date) return null;      // حذف بلا مفتاح كامل: لا يُعرف ما يخصّ
+    return { table, ev, by, date: dbDay(row.date), wid: row.worker_id,
+      state: ev !== "DELETE" && (row.state === "absent" || row.state === "misc") ? row.state : null };
+  }
+  if (table === "day_zones") {
+    if (!row.zone_id || !row.date) return null;
+    return { table, ev, by, date: dbDay(row.date), zid: row.zone_id, notes: dbStr(row.notes), confirmed: row.confirmed === true };
+  }
+  if (table === "workers") {
+    if (!row.id) return null;
+    return { table, ev, by, id: row.id, deleted: ev === "DELETE" || !!row.deleted_at, worker: ev === "DELETE" ? null : dbWorker(row) };
+  }
+  if (table === "documents") {
+    const k = row.kind && DB_DOC_LISTS[row.kind];
+    if (!row.id || (!k && ev !== "DELETE")) return null;
+    return { table, ev, by, id: row.id, list: k || "", deleted: ev === "DELETE" || !!row.deleted_at,
+      doc: ev === "DELETE" ? null : dbDoc(row) };
+  }
+  return null;
+}
+/* اسم من كتب التغيير — للتنبيه وحده. الملفات الشخصية قد لا تُقرأ لغير صاحبها، فالبديل «مستخدم آخر» */
+const dbNames = {};
+async function dbUserName(id) {
+  if (!id) return "مستخدم آخر";
+  if (ME && id === ME.id) return ME.name;
+  if (dbNames[id]) return dbNames[id];
+  try {
+    const r = await sb.from("profiles").select("full_name").eq("id", id).maybeSingle();
+    if (r && r.data && r.data.full_name) return (dbNames[id] = String(r.data.full_name));
+  } catch (e) {}
+  return "مستخدم آخر";
+}

@@ -554,6 +554,14 @@ tr.rowneg td{background:var(--absent-bg)}
 .scopebar .sb-sw button+button{border-inline-start:1px solid var(--line)}
 .scopebar .sb-sw button[aria-pressed="true"]{background:var(--brand);color:var(--on-brand)}
 .scopebar .sb-sw button:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+/* ---- تنبيه التغيير اللحظي: هادئ، بطرف الشاشة، لا يحجب العمل ---- */
+.rtnote{position:fixed;bottom:var(--sp-5);inset-inline-start:var(--sp-5);z-index:60;max-width:440px;width:calc(100% - 2*var(--sp-5));
+  background:var(--panel);color:var(--ink);border:1px solid var(--line-strong);border-inline-start:3px solid var(--gold);
+  border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);box-shadow:var(--sh-2)}
+.rtnote p{margin:0 0 var(--sp-3);font-size:var(--fs-md);line-height:1.7}
+.rtnote .rtact{display:flex;gap:var(--sp-2);flex-wrap:wrap}
+@media print{ .rtnote{display:none!important} }
+
 /* ---- زر العودة إلى لوحة البداية (الشريط العلوي) ---- */
 .homebtn{display:inline-flex;align-items:center;gap:6px;min-height:var(--ctl-h-sm);padding:2px 12px;border:1px solid var(--line);
   border-radius:var(--r-md);color:var(--ink-2);font-weight:var(--fw-bold);font-size:var(--fs-sm);background:var(--panel)}
@@ -1702,6 +1710,11 @@ tr.rowneg td{background:var(--absent-bg)}
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- تنبيه لحظي: سجل مفتوح أمام المستخدم غيّره غيره — لا يُغلق إلا باختياره -->
+<div class="rtnote hidden" id="rtNote" role="alertdialog" aria-labelledby="rtNoteText">
+  <p id="rtNoteText"></p>
+  <div class="rtact" id="rtNoteAct"></div>
+</div>
 
 <!-- ===== نافذة عامة: بديل prompt / confirm ===== -->
 <div class="ovl hidden" id="dlgBack">
@@ -2965,11 +2978,13 @@ function saveBldNotes(iso,b,text){
   setZonesNotes(iso,ids,text);
   const k=iso+"|"+b.id, cur=notesPending[k];
   if(cur) clearTimeout(cur.t);
-  notesPending[k]={iso:iso, b:b, text:text, t:setTimeout(()=>flushNotes(k),700)};
+  /* تنبيه تعارض قائم على هذه الملاحظة (كتب غيره فيها): لا يُرسل شيء حتى يختار المستخدم */
+  notesPending[k]={iso:iso, b:b, text:text, t:rtHold.has("n|"+k)?null:setTimeout(()=>flushNotes(k),700)};
 }
 function flushNotes(only){
   Object.keys(notesPending).forEach(k=>{
     if(only && k!==only) return;
+    if(rtHold.has("n|"+k)) return;          // تعارض ينتظر اختيار المستخدم: لا يُرسل شيء فوق نسخة غيره
     const x=notesPending[k]; clearTimeout(x.t); delete notesPending[k];
     dbSaveDayZones(x.iso,bldZoneIds(x.b),{notes:x.text},"ملاحظات "+x.b.name+" يوم "+dateSlash(x.iso));
   });
@@ -3015,21 +3030,32 @@ el("roster").addEventListener("click",e=>{
   /* التأشير يعتمد جهة العامل كما كان يعتمد اليوم — يُكتب مرة واحدة إن لم تكن معتمدة */
   const bd=workerBld(w);
   if(bd && canConfirmBld(bd) && bldState(dayCtx(),bd,curDate)!=="all") confirmBld(curDate,bd);
-  const card=b.closest(".wcard");
-  if(!card){ refresh(); return; }
-  card.dataset.s=b.dataset.set;
-  card.querySelectorAll("button[data-set]").forEach(x=>x.setAttribute("aria-pressed",x===b?"true":"false"));
-  const secBox=card.closest("[data-sec]");
-  if(secBox){
-    const ids=[...secBox.querySelectorAll(".wcard")].map(x=>x.dataset.wid);
-    const pres=ids.filter(id=>stateOf(curDate,id)==="present").length;
-    const cnt=secBox.querySelector(".cnt"); if(cnt) cnt.textContent="حاضر "+fmtNum(pres)+" من "+fmtNum(ids.length);
-  }
+  if(!rosterPatch([w.id])) refresh();
+});
+/* تحديث بطاقات عمال بالكشف بمكانها (نقرة، أو تغيير لحظي من جهاز آخر): حالتها وعدّاد قسمها
+   ومنطقتها والعدّاد العام وشريط اليوم، والورقة بعد توقّف التغييرات. false إن لم تُرسم بطاقة. */
+function rosterPatch(wids){
+  let any=false;
+  wids.forEach(id=>{
+    const card=document.querySelector('#roster .wcard[data-wid="'+id+'"]'); if(!card) return;
+    any=true;
+    const st=stateOf(curDate,id);
+    card.dataset.s=st;
+    card.querySelectorAll("button[data-set]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.set===st?"true":"false"));
+    const secBox=card.closest("[data-sec]");
+    if(secBox){
+      const ids=[...secBox.querySelectorAll(".wcard")].map(x=>x.dataset.wid);
+      const pres=ids.filter(x=>stateOf(curDate,x)==="present").length;
+      const cnt=secBox.querySelector(".cnt"); if(cnt) cnt.textContent="حاضر "+fmtNum(pres)+" من "+fmtNum(ids.length);
+    }
+  });
+  if(!any) return false;
   const today=compute(curDate);
   document.querySelectorAll("#roster [data-zc]").forEach(z=>{ z.textContent="حضور "+fmtNum(today.byZone[z.dataset.zc]||0); });
   renderTally(); renderDayStatus(); syncConfirmBtn();
   clearTimeout(sheetTimer); sheetTimer=setTimeout(drawSheet,350);
-});
+  return true;
+}
 el("search").addEventListener("input",renderRoster);
 /* جهة واحدة بالعرض: الزرّان بأعلى الكشف كما كانا. أكثر: لكل جهة زرّاها بشريط حالة اليوم */
 el("allPresent").onclick=()=>{ const bs=viewBuildings(); if(bs.length===1) allPresentFor(bs[0]); };
@@ -11796,6 +11822,180 @@ function setScope(bid,view){
   }
   switchView(viewAllowed(target)?target:"daily");
 }
+/* ==================== [لحظي] تغييرات الآخرين تصل بلا إنعاش ====================
+   كل تغيير يُطبَّق على الذاكرة بمكانه ويُعاد رسم ما يمسّه وحده — لا تحميل كامل (إلا بعد
+   انقطاع: ما فات لا يُعرف إلا بقراءة). صدى كتابات هذا الجهاز لا يُطبَّق (db.js). وما لا يراه
+   المستخدم — صف خارج نطاقه، أو حذف تأشير لعامل ليس عنده — يُتجاهل بلا أي إعلان.
+   سجلٌّ مفتوح أمامه يغيّره غيره (وثيقة بنموذجها، ملاحظة يكتبها، عامل يعدّل بياناته): تنبيه هادئ
+   بخيارين «اعرض نسخته» و«اكتب فوقها» — لا يضيع عمله بصمت، ولا يُكتب فوق عمل غيره بصمت. */
+let rtWas=null, rtTimer=null;
+const rtHold=new Set(), rtTheirs={};
+function rtFresh(){ return {cards:new Set(), days:new Set(), notesDay:new Set(), workers:false, docs:new Set()}; }
+let rtD=rtFresh();
+function rtStart(){
+  dbSubscribe(rtApply,st=>{
+    if(st==="SUBSCRIBED" && rtWas && rtWas!=="SUBSCRIBED") resyncFromServer();   // عاد بعد انقطاع
+    rtWas=st;
+  });
+}
+function rtApply(c){
+  if(!c || c.mine || !stateLoaded) return;
+  const hit = c.table==="day_states" ? rtDayState(c) : c.table==="day_zones" ? rtDayZone(c)
+    : c.table==="workers" ? rtWorker(c) : c.table==="documents" ? rtDoc(c) : false;
+  if(hit){ clearTimeout(rtTimer); rtTimer=setTimeout(rtFlush,60); }
+}
+/* يرى المستخدم هذا العامل؟ من منطقة قسمه — وعامل بلا قسم لا يراه إلا من نطاقه كل المناطق */
+function rtSees(w){
+  if(!w) return false;
+  const s=(CF().sections||[]).find(x=>x.id===w.sectionId);
+  return s ? seesZone(s.zoneId) : meAllZones();
+}
+function rtDayState(c){
+  const f=CF(), w=f.workers.find(x=>x.id===c.wid);
+  if(!w || !rtSees(w)) return false;
+  const r=f.days[c.date];
+  if(!c.state){ if(!r || !r.states[c.wid]) return false; delete r.states[c.wid]; }
+  else{ const d=r||(f.days[c.date]={states:{},zones:{}}); if(d.states[c.wid]===c.state) return false; d.states[c.wid]=c.state; }
+  rtD.days.add(c.date); if(c.date===curDate) rtD.cards.add(c.wid);
+  return true;
+}
+function rtNotesBusy(b){
+  const k=curDate+"|"+b.id, a=document.activeElement;
+  if(notesPending[k] || rtHold.has("n|"+k)) return true;
+  if(!a) return false;
+  if(a.id==="notes") return viewBuildings().length===1 && viewBuildings()[0].id===b.id;
+  return !!(a.dataset && a.dataset.nb===b.id);
+}
+function rtDayZone(c){
+  const f=CF(), z=(f.zones||[]).find(x=>x.id===c.zid);
+  if(!z || !seesZone(z.id)) return false;
+  if(!f.days[c.date]) f.days[c.date]={states:{},zones:{}};
+  const m=dayZoneMap(c.date), was=m[c.zid]||{notes:"",confirmed:false};
+  if(was.notes===c.notes && was.confirmed===c.confirmed) return false;
+  const b=c.date===curDate ? buildingOfZone(c.zid) : null;
+  if(b && was.notes!==c.notes && rtNotesBusy(b)){ rtTheirs["n|"+curDate+"|"+b.id]=c.notes; rtNotesConflict(c,b); }
+  m[c.zid]={notes:c.notes, confirmed:c.confirmed};
+  rtD.days.add(c.date); if(was.notes!==c.notes) rtD.notesDay.add(c.date);
+  return true;
+}
+/* ملاحظة يكتبها المستخدم وكتب غيره فيها: مربّعه لا يُمسّ، والإرسال معلّق حتى يختار */
+function rtNotesConflict(c,b){
+  const k=curDate+"|"+b.id, hk="n|"+k;
+  if(rtHold.has(hk)) return;
+  rtHold.add(hk);
+  const cur=notesPending[k]; if(cur && cur.t){ clearTimeout(cur.t); cur.t=null; }
+  rtNotice(hk,c.by,n=>"كتب "+n+" ملاحظة "+(viewBuildings().length>1?"«"+b.name+"» ":"")+"لهذا اليوم وأنت تكتب فيها.",[
+    ["اعرض نسخته",()=>{ rtHold.delete(hk); delete notesPending[k];
+      if(hk in rtTheirs) setZonesNotes(curDate,bldZoneIds(b),rtTheirs[hk]); delete rtTheirs[hk];
+      rtNotesRefresh(true); drawSheet(); renderDayStatus(); }],
+    ["اكتب فوقها",()=>{ rtHold.delete(hk); delete rtTheirs[hk]; const t=rtNotesBox(b); saveBldNotes(curDate,b,t?t.value:bldNotes(b,curDate)); flushNotes(k); drawSheet(); }]]);
+}
+function rtNotesBox(b){ return viewBuildings().length===1 ? el("notes") : document.querySelector('#notesZones [data-nb="'+b.id+'"]'); }
+/* مربّعات الملاحظات من الذاكرة — إلا مربّعاً يكتب فيه المستخدم (أو كلها مع force) */
+function rtNotesRefresh(force){
+  viewBuildings().forEach(b=>{ const t=rtNotesBox(b); if(t && (force || !rtNotesBusy(b))) t.value=bldNotes(b,curDate); });
+}
+function rtDropDocsOf(f,id){ ["leaves","penalties","achievements","issues","passes"].forEach(k=>{ if(Array.isArray(f[k])) f[k]=f[k].filter(d=>d.workerId!==id); }); }
+function rtWorkerOpen(id){ return editWorkerId===id || editDirId===id; }
+function rtWorker(c){
+  const f=CF(), i=f.workers.findIndex(x=>x.id===c.id);
+  if(c.deleted || !c.worker || !rtSees(c.worker)){
+    if(i<0) return false;                          // لم يكن عنده ولا صار: لا شيء
+    if(rtWorkerOpen(c.id)) rtWorkerGone(c,f.workers[i]);
+    f.workers=f.workers.filter(x=>x.id!==c.id); rtDropDocsOf(f,c.id);   // حُذف أو خرج من نطاقه
+    rtD.workers=true; return true;
+  }
+  const nw=normalizeWorker(c.worker);
+  if(i<0){ f.workers.push(nw); rtD.workers=true; return true; }
+  const w=f.workers[i];
+  if(rtWorkerOpen(c.id)) rtWorkerConflict(c,w);
+  Object.keys(w).forEach(k=>{ delete w[k]; }); Object.assign(w,nw);
+  rtD.workers=true; return true;
+}
+function rtWorkerConflict(c,w){
+  const hk="w|"+c.id;
+  rtNotice(hk,c.by,n=>"عدّل "+n+" بيانات «"+w.name+"» وأنت تعدّلها.",[
+    ["اعرض نسخته",()=>{ if(editWorkerId===c.id) editWorkerId=null; if(editDirId===c.id) editDirId=null; renderPeople(); renderDirectory(); }],
+    ["اكتب فوقها",()=>{}]]);
+}
+function rtWorkerGone(c,w){
+  rtNotice("w|"+c.id,c.by,n=>(c.deleted?"حذف "+n+" العامل «"+w.name+"»":"نقل "+n+" العامل «"+w.name+"» خارج نطاقك")+" وأنت تعدّل بياناته — تعديلك لم يُحفظ.",[
+    ["حسناً",()=>{ if(editWorkerId===c.id) editWorkerId=null; if(editDirId===c.id) editDirId=null; renderPeople(); renderDirectory(); }]]);
+}
+const RT_DOC={leaves:["leavesList","lopen",()=>lvEditId,()=>{ lvEditId=null; lvSyncSave(); }],
+  penalties:["penaltiesList","popen",()=>pnEditId,()=>{ pnEditId=null; pnSyncSave(); }],
+  achievements:["achList","aopen",()=>acEditId,()=>{ acEditId=null; acSyncSave(); }],
+  issues:["issuesList","iopen",()=>mtEditId,()=>{ mtEditId=null; mtSyncSave(); }],
+  letters:["lfList","lfopen",()=>lfEditId,()=>{ lfEditId=null; lfSync(); }]};
+function rtDocOpen(key,id){ const d=RT_DOC[key]; return !!d && d[2]()===id; }
+/* فتح الوثيقة بنموذجها كما يفتحها زر «عرض» */
+function rtReopen(key,id){
+  if(key==="letters"){ lfOpen(id); return; }
+  const d=RT_DOC[key], box=el(d[0]), b=document.createElement("button");
+  b.setAttribute("data-"+d[1],id); b.hidden=true; box.appendChild(b); b.click(); b.remove();
+}
+function rtDoc(c){
+  const f=CF();
+  let key=c.list, i=-1;
+  if(!key){ for(const k of Object.keys(RT_DOC).concat(["passes"])){ const j=(f[k]||[]).findIndex(x=>x.id===c.id); if(j>=0){ key=k; i=j; break; } } if(!key) return false; }
+  else i=(f[key]||[]).findIndex(x=>x.id===c.id);
+  const list=f[key]||(f[key]=[]);
+  const vis=!!c.doc && !c.deleted && (!c.doc.workerId || rtSees(f.workers.find(w=>w.id===c.doc.workerId)));
+  if(!vis){
+    if(i<0) return false;
+    if(rtDocOpen(key,c.id)) rtNotice("d|"+c.id,c.by,n=>(c.deleted?"حذف "+n+" الوثيقة "+(list[i].no||"")+" المفتوحة أمامك":"خرجت الوثيقة "+(list[i].no||"")+" من نطاقك")+
+      " — ما في النموذج لم يُحفظ، وحفظه الآن يصدر وثيقة جديدة.",[["حسناً",()=>{ RT_DOC[key][3](); }]]);
+    f[key]=list.filter(x=>x.id!==c.id); rtD.docs.add(key); return true;
+  }
+  if(i<0){ if(key==="letters") list.push(c.doc); else list.unshift(c.doc); rtD.docs.add(key); return true; }
+  if(rtDocOpen(key,c.id))
+    rtNotice("d|"+c.id,c.by,n=>"عدّل "+n+" الوثيقة "+(c.doc.no||"")+" المفتوحة أمامك.",[
+      ["اعرض نسخته",()=>rtReopen(key,c.id)],
+      ["اكتب فوقها",()=>{}]]);   // حفظك يعدّل نسخته، ونسخته تبقى بسجل نسخها السابقة
+  const d=list[i]; Object.keys(d).forEach(k=>{ delete d[k]; }); Object.assign(d,c.doc);
+  rtD.docs.add(key); return true;
+}
+/* التنبيه: واحد ظاهر، والتالي بالدور؛ لا يُغلق إلا باختيار */
+const rtQueue=[];
+function rtNotice(key,by,textOf,acts){
+  if(rtQueue.some(x=>x.key===key)) return;
+  const item={key:key, text:"", acts:acts};
+  rtQueue.push(item);
+  dbUserName(by).then(n=>{ item.text=textOf("«"+n+"»"); rtShow(); });
+}
+function rtShow(){
+  const box=el("rtNote"), it=rtQueue.find(x=>x.text);
+  if(!it || rtQueue[0]!==it){ if(!rtQueue.length) box.classList.add("hidden"); return; }
+  el("rtNoteText").textContent=it.text;
+  const act=el("rtNoteAct"); act.innerHTML="";
+  it.acts.forEach((a,i)=>{ const b=document.createElement("button"); b.type="button"; b.className="btn sm"+(i===0?" primary":"");
+    b.textContent=a[0]; b.onclick=()=>{ rtQueue.shift(); try{ a[1](); }finally{ rtShow(); } }; act.appendChild(b); });
+  box.classList.remove("hidden");
+}
+/* الرسم: ما مسّته التغييرات وحده، وتبويب فيه تعديل مفتوح لا يُعاد رسمه تحت يد المستخدم */
+function rtFlush(){
+  const d=rtD; rtD=rtFresh();
+  if(d.workers || d.docs.size) scopeDirty();
+  const v=currentView(), editing=editWorkerId!==null || editDirId!==null;
+  if(v==="daily"){
+    if(d.workers) renderRoster(); else if(d.cards.size && !rosterPatch([...d.cards])) renderRoster();
+    if(d.workers || d.days.has(curDate)){ renderTally(); renderDayStatus(); syncConfirmBtn(); clearTimeout(sheetTimer); sheetTimer=setTimeout(drawSheet,350); }
+    if(d.notesDay.has(curDate)) rtNotesRefresh(false);
+  }
+  if(v==="home") renderHome();
+  if(v==="history" && (d.days.size || d.workers)) renderHistory();
+  if(v==="people" && d.workers && !editing) renderPeople();
+  if(v==="variables" && d.workers) renderVariables();
+  if(v==="report" && RP && (d.days.size || d.workers || d.docs.size)) runReport();
+  if(v==="ledger" && LG && (d.days.size || d.workers || d.docs.size)) runLedger(false);
+  if(v==="leaves" && d.docs.has("leaves")) renderLeaves();
+  if(v==="penalties" && d.docs.has("penalties")) renderPenalties();
+  if(v==="achievements" && d.docs.has("achievements")) renderAchievements();
+  if(v==="materials" && d.docs.has("issues")) renderIssues();
+  if(v==="form" && d.docs.has("letters")) renderLetters();
+  if(d.days.size || d.workers || d.docs.size) scheduleAlerts();
+}
+
 /* ==================== [واجهة] لوحة البداية ====================
    أول ما يُفتح بعد الدخول لمن يرى أكثر من جهة: الشركة، واليوم، وبطاقة لكل جهة يراها بأرقام حيّة
    (المستمرون، الحاضرون اليوم، الغياب، اعتماد اليوم، آخر يوم معتمد)، وصف وصول سريع على جهته
@@ -11958,6 +12158,7 @@ async function init(st){
   el("dateInput").value=curDate;
   bootView();
   if(st) startView();                // الفحوص (بلا خادم) تبقى على جرد اليوم كما كانت
+  if(st) rtStart();                  // التحديث اللحظي بعد أن تكتمل الحالة
   refreshDbState(); badge(st?"server":"local");
   dbOnWrite(onWriteStatus);
   /* شهر بدء إصلاح أشهر الـ٣١ يوماً: غيابه يغيّر رواتب أشهر مضت بصمت — يُعلن */

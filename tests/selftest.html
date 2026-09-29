@@ -1136,6 +1136,60 @@ try{
   check("عامل بلا قسم: تنبيه هادئ بعدده بعرض «الكل»، ولا تنبيه بعرض جهة",
     W19('(function(){ var a=alertItems().filter(function(x){return x.t.indexOf("بلا قسم")>=0;}).map(function(x){return x.sev+":"+x.t;}).join(""); scopeBld="bO"; scopeDirty(); var b=alertItems().some(function(x){return x.t.indexOf("بلا قسم")>=0;}); scopeBld=""; scopeDirty(); return a+"|"+b; })()'),
     "info:"+W19('fmtNum(1)')+" عامل بلا قسم|false");
+
+  /* ---- ٢٠) التحديث اللحظي: تطبيق أحداث الآخرين بلا خادم (أحداث مصنوعة بشكل db.js) ---- */
+  group("٢٠ · التحديث اللحظي — التطبيق الموضعي، وما خارج النطاق، وتنبيه السجل المفتوح");
+  const w20=await boot();
+  const lv20={id:"L1",kind:"leave",no:"إ-2026-001",worker_id:"a",zone_id:null,date:"2026-09-08",date_to:"2026-09-08",revisions:[],
+    data:{name:"عامل a",section:"",type:"اعتيادية",days:1,hours:null,policy:"half",reason:"سبب أول",admin:"",issued:"2026-09-08"}};
+  w20.__rows=Object.assign({},ROWS17,{documents:[lv20]});
+  w20.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-23"; scopeBld=""; bootView(); switchView("daily"); refresh(); stateLoaded=true;');
+  const W20=x=>w20.eval(x);
+  const ev=o=>W20('rtApply('+JSON.stringify(o)+')');
+  ev({table:"day_states",ev:"INSERT",by:"u-other",mine:false,date:"2026-09-23",wid:"a",state:"absent"}); await tick(120);
+  check("تأشير من جهاز آخر: بطاقته والعدّاد بلا إعادة رسم الكشف", W20('[document.querySelector(\'#roster .wcard[data-wid="a"]\').dataset.s, stateOf(curDate,"a"), compute(curDate).absent].join(",")'), "absent,absent,1");
+  ev({table:"day_states",ev:"DELETE",by:null,mine:false,date:"2026-09-23",wid:"a",state:null}); await tick(120);
+  check("حذفه («حاضر») كذلك", W20('document.querySelector(\'#roster .wcard[data-wid="a"]\').dataset.s'), "present");
+  ev({table:"day_states",ev:"INSERT",by:"local",mine:true,date:"2026-09-23",wid:"b",state:"misc"}); await tick(120);
+  check("صدى كتابة هذا الجهاز لا يُطبَّق", W20('stateOf(curDate,"b")'), "present");
+  ev({table:"day_states",ev:"INSERT",by:"u-other",mine:false,date:"2026-09-23",wid:"zz",state:"absent"}); await tick(120);
+  check("تأشير لعامل غير معروف: لا يُنشئ شيئاً", W20('JSON.stringify(CF().days["2026-09-23"].states)'), "{}");
+  /* هوية إداري الجديدة: ما يخص القديمة يُتجاهل بلا إعلان */
+  W20('ME={id:"t-new20",email:"",name:"أحمد",active:true,perms:new Set(["roster.mark","roster.confirm","docs.manage","workers.manage"]),zones:new Set(["zNi","zNo"]),allZones:false,zoneNames:{},'+
+    'roles:[{id:"r",companyId:"co",name:"إداري البناية الجديدة",color:"#1D6A8C",perms:new Set(["roster.mark","roster.confirm","docs.manage","workers.manage"]),allZones:false,zones:new Set(["zNi","zNo"]),isSystem:true,sortOrder:4}]};'+
+    ' scopeBld=""; bootView(); switchView("daily"); refresh();');
+  const days20=W20('JSON.stringify(CF().days["2026-09-23"])');
+  ev({table:"day_states",ev:"DELETE",by:null,mine:false,date:"2026-09-23",wid:"a",state:null});
+  ev({table:"day_states",ev:"INSERT",by:"u-other",mine:false,date:"2026-09-23",wid:"a",state:"absent"});
+  ev({table:"day_zones",ev:"UPDATE",by:"u-other",mine:false,date:"2026-09-23",zid:"zOi",notes:"ملاحظة القديمة",confirmed:true});
+  ev({table:"workers",ev:"INSERT",by:"u-other",mine:false,id:"x9",deleted:false,worker:{id:"x9",name:"عامل من القديمة",sectionId:"sOi",status:"مستمر",seq:9,salary:null,deduct:null,offWeekdays:[],offDates:[],statusHistory:[]}});
+  await tick(150);
+  check("أحمد: أحداث القديمة (تأشير، حذفه، ملاحظة، عامل جديد) لا تُغيّر ذاكرته ولا تُنبّه", W20('[JSON.stringify(CF().days["2026-09-23"]), CF().workers.some(function(w){return w.id==="x9";}), el("rtNote").classList.contains("hidden")].join("|")'),
+    days20+"|false|true");
+  ev({table:"workers",ev:"INSERT",by:"u-other",mine:false,id:"x10",deleted:false,worker:{id:"x10",name:"عامل للجديدة",sectionId:"sNi",status:"مستمر",seq:10,salary:null,deduct:null,offWeekdays:[],offDates:[],statusHistory:[]}});
+  await tick(150);
+  check("وعامل أُضيف للجديدة يظهر بكشفه", W20('el("roster").innerText.indexOf("عامل للجديدة")>=0 && C().workers.some(function(w){return w.id==="x10";})'), true);
+  ev({table:"workers",ev:"UPDATE",by:"u-other",mine:false,id:"x10",deleted:false,worker:{id:"x10",name:"عامل للجديدة",sectionId:"sOi",status:"مستمر",seq:10,salary:null,deduct:null,offWeekdays:[],offDates:[],statusHistory:[]}});
+  await tick(150);
+  check("ونقله للقديمة يُخرجه من ذاكرته بصمت", W20('[CF().workers.some(function(w){return w.id==="x10";}), el("rtNote").classList.contains("hidden")].join(",")'), "false,true");
+  /* تنبيه السجل المفتوح */
+  W20('dbLocalOwner(); scopeBld=""; bootView(); curDate="2026-09-23"; switchView("daily"); refresh();'+
+    ' var t=document.querySelector(\'#notesZones [data-nb="bO"]\'); t.focus(); t.value="أكتب الآن"; t.dispatchEvent(new Event("input",{bubbles:true}));');
+  ev({table:"day_zones",ev:"UPDATE",by:"u-other",mine:false,date:"2026-09-23",zid:"zOi",notes:"نص غيري",confirmed:true});
+  ev({table:"day_zones",ev:"UPDATE",by:"u-other",mine:false,date:"2026-09-23",zid:"zOo",notes:"نص غيري",confirmed:true});
+  await tick(200);
+  check("ملاحظة أكتبها وكتب غيري فيها: تنبيه واحد بخياريه، ومربّعي كما هو، والإرسال معلّق",
+    W20('[el("rtNote").classList.contains("hidden"), [].map.call(document.querySelectorAll("#rtNoteAct button"),function(b){return b.textContent;}).join("/"), document.querySelector(\'#notesZones [data-nb="bO"]\').value, !notesPending["2026-09-23|bO"] || notesPending["2026-09-23|bO"].t===null].join(",")'),
+    "false,اعرض نسخته/اكتب فوقها,أكتب الآن,true");
+  W20('document.querySelector("#rtNoteAct button").click();');
+  check("«اعرض نسخته»: مربّعي بنص غيري والذاكرة كذلك، والتنبيه أُغلق", W20('[document.querySelector(\'#notesZones [data-nb="bO"]\').value, zoneNotes("2026-09-23","zOi"), el("rtNote").classList.contains("hidden")].join(",")'),
+    "نص غيري,نص غيري,true");
+  W20('document.activeElement && document.activeElement.blur(); switchView("leaves"); document.querySelector(\'[data-lopen="L1"]\').click();');
+  ev({table:"documents",ev:"UPDATE",by:"u-other",mine:false,id:"L1",list:"leaves",deleted:false,doc:Object.assign({},lv20.data,{id:"L1",no:"إ-2026-001",workerId:"a",from:"2026-09-08",to:"2026-09-08",reason:"سبب غيري"})});
+  await tick(200);
+  check("وثيقة مفتوحة بنموذجها عدّلها غيري: تنبيه، والنموذج كما هو", W20('[el("rtNote").classList.contains("hidden"), el("lvReason").value].join(",")'), "false,سبب أول");
+  W20('document.querySelector("#rtNoteAct button").click();');
+  check("«اعرض نسخته»: النموذج بنسخته", W20('el("lvReason").value'), "سبب غيري");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
