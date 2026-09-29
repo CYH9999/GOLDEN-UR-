@@ -551,8 +551,18 @@ function dbWriteErr(e, what) {
 }
 
 /* كتابة واحدة بالطابور. fn تُرجع وعد استعلام Supabase.
+   ما يعود من الخادم ثلاث حالات لا حالتان، ولا تُخلط:
+     ١) خطأ ← رُفض فعلاً: نصّ الخادم (أو ترجمة رمزه).
+     ٢) لا خطأ وعدد الصفوف المكتوبة ≥ ١ ← كُتب. هذا العدد يأتي من الخادم نفسه (count=exact)
+        لا من الصفوف العائدة: الصف العائد تمرّ عليه سياسة القراءة، فصفٌّ كُتب خارج نطاق
+        المستخدم يعود صفراً وهو محفوظ. من يحتاج أن يعرف هل يرى ما كتبه يقرؤه بعدها
+        (dbInsertWorkers) أو يحسبه من منطقته.
+     ٣) لا خطأ وصفر صفوف مكتوبة (تعديل أو حذف منطقي) ← لم يُكتب شيء: السجل غير موجود أو
+        خارج ما يُسمح بتعديله. الإدراج لا يصل هذه الحالة: إما يُكتب وإما يُرفض بخطأ.
+   الإدراج لا يطلب أعمدة عائدة أصلاً (return=minimal)، فلا تمرّ عليه سياسة القراءة.
    opts.quiet: المستدعي يعرض الخطأ بنفسه (الوثائق: لا تتغيّر الذاكرة إلا بعد القبول).
-   opts.expect: تعديل سجل موجود — صفر صفوف معدّلة رفضٌ صامت من السياسات، فيُعلن. */
+   opts.expect: تعديل سجل موجود — الحالة ٣ تُعلن ولا تمرّ صامتة.
+   يُحلّ بالصفوف العائدة إن وُجدت، وإلا { count } — وبـ null لطلب بلا عدد ولا صفوف. */
 function dbWrite(what, fn, opts) {
   opts = opts || {};
   if (dbLocal()) return Promise.resolve(opts.local === undefined ? null : opts.local);
@@ -561,14 +571,22 @@ function dbWrite(what, fn, opts) {
     let r;
     try { r = await fn(); } catch (e) { throw dbWriteErr(e, what); }
     if (r && r.error) throw dbWriteErr(r.error, what);
-    if (opts.expect && !(r && Array.isArray(r.data) && r.data.length))
-      throw dbWriteErr({ message: "لم يتغيّر أي سجل على الخادم — السجل غير موجود أو لا تملك تعديله." }, what);
-    return r ? r.data : null;
+    const n = dbWritten(r);
+    if (opts.expect && n === 0)
+      throw dbWriteErr({ message: "لم يُكتب شيء: السجل غير موجود على الخادم (ربما حُذف من جهاز آخر) أو ليس ضمن ما يُسمح لك بتعديله." }, what);
+    if (r && r.data != null) return r.data;
+    return typeof n === "number" ? { count: n } : null;
   });
   dbQ = run.catch(() => {});
   return run.then(
     d => { if (!--dbBusy) dbEmit("saved"); return d; },
     e => { dbBusy--; dbEmit(e.network ? "offline" : "rejected", e, opts.quiet); throw e; });
+}
+/* عدد الصفوف المكتوبة كما عدّها الخادم؛ وبلا عدد (خادم لا يرسله) يُقرأ من الصفوف العائدة */
+function dbWritten(r) {
+  if (r && typeof r.count === "number") return r.count;
+  if (r && Array.isArray(r.data)) return r.data.length;
+  return null;
 }
 /* كتابة تتفاؤلية: الذاكرة تغيّرت سلفاً، والرفض تعالجه الواجهة مركزياً (dbOnWrite) */
 function dbFire(what, fn, opts) { return dbWrite(what, fn, opts).catch(() => null); }
@@ -618,20 +636,31 @@ function dbWorkerRow(w) {
     salary: dbNumOrNull(w.salary), deduct: dbNumOrNull(w.deduct), leave_policy: n(w.leavePolicy),
     off_weekdays: (w.offWeekdays || []).map(Number), off_dates: (w.offDates || []).slice() };
 }
-/* إدراج عمال (واحد أو دفعة بطلب واحد) بلا seq — يعطيه الخادم ويُقرأ من ردّه.
-   الوعد يُحلّ بـ { id: seq } */
+/* إدراج عمال (واحد أو دفعة بطلب واحد) بلا seq — يعطيه الخادم. الإدراج بلا أعمدة عائدة،
+   ثم تُقرأ الصفوف بمعرّفاتها: ما عاد منها هو ما يراه المستخدم (ومعه seq)، وما لم يعد حُفظ
+   لكنه خارج نطاقه. الوعد يُحلّ بـ { seq: {id: seq}, hidden: [ids] }، وبـ null إن رُفض. */
 function dbInsertWorkers(ws, what) {
   const rows = ws.map(w => Object.assign({ id: w.id, company_id: DB_CID, created_by: dbMe() }, dbWorkerRow(w)));
-  return dbWrite(what, () => sb.from("workers").insert(rows).select("id,seq"), { local: [] })
-    .then(d => { const m = {}; (d || []).forEach(r => { m[r.id] = Number(r.seq) || 0; }); return m; })
+  const ids = ws.map(w => w.id);
+  return dbWrite(what, () => sb.from("workers").insert(rows, { count: "exact" }), { local: { count: rows.length } })
+    .then(async () => {
+      const out = { seq: {}, hidden: [] };
+      if (dbLocal()) return out;
+      let got = null;
+      try { const r = await sb.from("workers").select("id,seq").in("id", ids); if (!r.error) got = r.data || []; } catch (e) {}
+      if (!got) return out;                     // تعذّرت القراءة: الإدراج نفسه نجح، ولا يُدّعى غير ذلك
+      got.forEach(r => { out.seq[r.id] = Number(r.seq) || 0; });
+      out.hidden = ids.filter(id => !(id in out.seq));
+      return out;
+    })
     .catch(() => null);
 }
 function dbUpdateWorker(w, what) {
-  return dbFire(what, () => sb.from("workers").update(dbWorkerRow(w)).eq("company_id", DB_CID).eq("id", w.id).select("id"),
+  return dbFire(what, () => sb.from("workers").update(dbWorkerRow(w), { count: "exact" }).eq("company_id", DB_CID).eq("id", w.id).select("id"),
     { expect: true });
 }
 function dbDeleteWorker(id, what) {
-  return dbFire(what, () => sb.from("workers").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+  return dbFire(what, () => sb.from("workers").update({ deleted_at: dbNow(), deleted_by: dbMe() }, { count: "exact" })
     .eq("company_id", DB_CID).eq("id", id).select("id"), { expect: true });
 }
 
@@ -662,23 +691,23 @@ function dbDocRow(kind, rec) {
 function dbInsertDoc(kind, rec, zoneId, what) {
   const row = Object.assign({ id: rec.id, company_id: DB_CID, kind: kind, zone_id: zoneId || null, created_by: dbMe() },
     dbDocRow(kind, rec));
-  return dbWrite(what, () => sb.from("documents").insert(row), { quiet: true });
+  return dbWrite(what, () => sb.from("documents").insert(row, { count: "exact" }), { quiet: true });
 }
 /* تعديل وثيقة: الصف كله مع revisions (النسخة السابقة مدفوعة فيها). zoneId يُرسل فقط إذا
    تغيّر العامل — المنطقة تُثبَّت وقت الإصدار. */
 function dbUpdateDoc(kind, rec, zoneId, what) {
   const row = dbDocRow(kind, rec);
   if (zoneId !== undefined) row.zone_id = zoneId || null;
-  return dbWrite(what, () => sb.from("documents").update(row).eq("company_id", DB_CID).eq("id", rec.id).select("id"),
+  return dbWrite(what, () => sb.from("documents").update(row, { count: "exact" }).eq("company_id", DB_CID).eq("id", rec.id).select("id"),
     { quiet: true, expect: true });
 }
 /* تعديل وثيقة بالخلفية (تصحيح اسم عامل بنسختها مثلاً): الرفض يُعالج مركزياً */
 function dbUpdateDocBg(kind, rec, what) {
-  return dbFire(what, () => sb.from("documents").update(dbDocRow(kind, rec)).eq("company_id", DB_CID).eq("id", rec.id)
+  return dbFire(what, () => sb.from("documents").update(dbDocRow(kind, rec), { count: "exact" }).eq("company_id", DB_CID).eq("id", rec.id)
     .select("id"), { expect: true });
 }
 function dbDeleteDoc(id, what) {
-  return dbWrite(what, () => sb.from("documents").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+  return dbWrite(what, () => sb.from("documents").update({ deleted_at: dbNow(), deleted_by: dbMe() }, { count: "exact" })
     .eq("company_id", DB_CID).eq("id", id).select("id"), { quiet: true, expect: true });
 }
 
@@ -700,49 +729,49 @@ function dbCompanyRow(c) {
 function dbSaveCompany(c, what) {
   const row = dbCompanyRow(c), key = dbCanon(row);
   if (key === DB_CO_LAST) return Promise.resolve(null);      // لا تغيير — لا كتابة
-  return dbFire(what, () => sb.from("companies").update(row).eq("id", DB_CID).select("id"), { expect: true })
+  return dbFire(what, () => sb.from("companies").update(row, { count: "exact" }).eq("id", DB_CID).select("id"), { expect: true })
     .then(d => { if (d) DB_CO_LAST = key; return d; });
 }
 
 /* ---- الهيكل: المناطق والأقسام (الحذف منطقي) ---- */
 function dbInsertZone(z, sortOrder, what) {
   return dbFire(what, () => sb.from("zones").insert({ id: z.id, company_id: DB_CID, building_id: z.buildingId || null,
-    name: z.name, short: z.short || "", color: z.color || null, sort_order: sortOrder }));
+    name: z.name, short: z.short || "", color: z.color || null, sort_order: sortOrder }, { count: "exact" }), { local: { count: 1 } });
 }
 function dbUpdateZone(z, sortOrder, what) {
   const row = { name: z.name, short: z.short || "", color: z.color || null };
   if (sortOrder !== undefined) row.sort_order = sortOrder;
-  return dbFire(what, () => sb.from("zones").update(row).eq("company_id", DB_CID).eq("id", z.id).select("id"), { expect: true });
+  return dbFire(what, () => sb.from("zones").update(row, { count: "exact" }).eq("company_id", DB_CID).eq("id", z.id).select("id"), { expect: true });
 }
 function dbDeleteZone(id, what) {
-  return dbFire(what, () => sb.from("zones").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+  return dbFire(what, () => sb.from("zones").update({ deleted_at: dbNow(), deleted_by: dbMe() }, { count: "exact" })
     .eq("company_id", DB_CID).eq("id", id).select("id"), { expect: true });
 }
 function dbInsertSection(sec, what) {
   return dbFire(what, () => sb.from("sections").insert({ id: sec.id, company_id: DB_CID, zone_id: sec.zoneId || null,
-    name: sec.name, sort_order: Number(sec.sortOrder) || 0 }));
+    name: sec.name, sort_order: Number(sec.sortOrder) || 0 }, { count: "exact" }), { local: { count: 1 } });
 }
 function dbUpdateSection(sec, what) {
   return dbFire(what, () => sb.from("sections").update({ zone_id: sec.zoneId || null, name: sec.name,
-    sort_order: Number(sec.sortOrder) || 0 }).eq("company_id", DB_CID).eq("id", sec.id).select("id"), { expect: true });
+    sort_order: Number(sec.sortOrder) || 0 }, { count: "exact" }).eq("company_id", DB_CID).eq("id", sec.id).select("id"), { expect: true });
 }
 function dbDeleteSection(id, what) {
-  return dbFire(what, () => sb.from("sections").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+  return dbFire(what, () => sb.from("sections").update({ deleted_at: dbNow(), deleted_by: dbMe() }, { count: "exact" })
     .eq("company_id", DB_CID).eq("id", id).select("id"), { expect: true });
 }
 
 /* ---- كتالوج المواد ---- */
 function dbInsertMaterial(m, sortOrder, what) {
   return dbFire(what, () => sb.from("materials").insert({ id: m.id, company_id: DB_CID, name: m.name, unit: m.unit || "",
-    qty: Number(m.qty) || 0, sort_order: sortOrder }));
+    qty: Number(m.qty) || 0, sort_order: sortOrder }, { count: "exact" }), { local: { count: 1 } });
 }
 function dbUpdateMaterial(m, sortOrder, what) {
   const row = { name: m.name, unit: m.unit || "", qty: Number(m.qty) || 0 };
   if (sortOrder !== undefined) row.sort_order = sortOrder;
-  return dbFire(what, () => sb.from("materials").update(row).eq("company_id", DB_CID).eq("id", m.id).select("id"), { expect: true });
+  return dbFire(what, () => sb.from("materials").update(row, { count: "exact" }).eq("company_id", DB_CID).eq("id", m.id).select("id"), { expect: true });
 }
 function dbDeleteMaterial(id, what) {
-  return dbFire(what, () => sb.from("materials").update({ deleted_at: dbNow(), deleted_by: dbMe() })
+  return dbFire(what, () => sb.from("materials").update({ deleted_at: dbNow(), deleted_by: dbMe() }, { count: "exact" })
     .eq("company_id", DB_CID).eq("id", id).select("id"), { expect: true });
 }
 
@@ -753,10 +782,10 @@ function dbDeleteMaterial(id, what) {
 function dbInsertHolidays(hs, what) {
   if (!hs.length) return Promise.resolve(null);
   return dbFire(what, () => sb.from("holidays").insert(hs.map(h =>
-    ({ company_id: DB_CID, date: h.date, name: h.name || "", added_by: dbMe() }))));
+    ({ company_id: DB_CID, date: h.date, name: h.name || "", added_by: dbMe() })), { count: "exact" }), { local: { count: hs.length } });
 }
 function dbDeleteHoliday(date, what) {
-  return dbFire(what, () => sb.from("holidays").delete().eq("company_id", DB_CID).eq("date", date).select("date"),
+  return dbFire(what, () => sb.from("holidays").delete({ count: "exact" }).eq("company_id", DB_CID).eq("date", date).select("date"),
     { expect: true });
 }
 function dbInsertLock(month, snapshot, what) {

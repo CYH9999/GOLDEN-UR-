@@ -1119,6 +1119,18 @@ try{
     "true,true,true,0,false");
   w19e.eval('document.querySelector(\'#hmBlds [data-first="sec"]\').click();');
   check("«إضافة أول قسم»: تبويب الأقسام على الجهة الفارغة ومنطقتها مختارة", w19e.eval('[currentView(), scopeBld, el("secZone").value].join(",")'), "people,bN,zNi");
+  /* نموذج إضافة العامل: القسم إلزامي — لا خيار فارغ، والنطاق بلا أقسام يقود لإضافة قسم */
+  w19e.eval('setScope("bO","people");');
+  check("النموذج: أقسام الجهة وحدها بلا خيار فارغ، وأولها مختار", w19e.eval('[[].some.call(el("wSec").options,function(o){return o.value==="";}), el("wSec").value===sortedSections()[0].id, el("addW").disabled, el("wNoSec").classList.contains("hidden")].join(",")'),
+    "false,true,false,true");
+  w19e.eval('setScope("bN","people");');
+  check("جهة بلا أقسام: سطر يقود لإضافة قسم مكان النموذج، والحقل يقول ذلك، والحفظ معطّل",
+    w19e.eval('[el("wNoSec").classList.contains("hidden"), el("wFormBody").classList.contains("hidden"), !!document.getElementById("wGoSec"), el("wSec").options[0].textContent, el("addW").disabled, el("addBulk").disabled].join(",")'),
+    "false,true,true,أضف قسماً أولاً,true,true");
+  w19e.eval('el("secName").value="قسم أول"; el("secZone").value="zNi"; el("addSec").click();');
+  check("بعد إضافة قسم: النموذج يعود بقسمه مختاراً", w19e.eval('[el("wNoSec").classList.contains("hidden"), el("addW").disabled, el("wSec").options[el("wSec").selectedIndex].textContent.indexOf("قسم أول")===0].join(",")'), "true,false,true");
+  w19e.eval('el("wName").value="أول عامل"; el("wStart").value="2026-09-01"; el("addW").click();');
+  check("ويُضاف العامل ويظهر بالعرض", w19e.eval('C().workers.map(function(w){return w.name;}).join(",")'), "أول عامل");
   /* عامل بلا قسم: تنبيه بعرض «الكل» وحده */
   W19('dbLocalOwner(); scopeBld=""; CF().workers.push(newWorker({name:"عامل بلا قسم",sectionId:""})); bootView();');
   check("عامل بلا قسم: تنبيه هادئ بعدده بعرض «الكل»، ولا تنبيه بعرض جهة",

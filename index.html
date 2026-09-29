@@ -557,6 +557,10 @@ tr.rowneg td{background:var(--absent-bg)}
 /* ---- زر العودة إلى لوحة البداية (الشريط العلوي) ---- */
 .homebtn{display:inline-flex;align-items:center;gap:6px;min-height:var(--ctl-h-sm);padding:2px 12px;border:1px solid var(--line);
   border-radius:var(--r-md);color:var(--ink-2);font-weight:var(--fw-bold);font-size:var(--fs-sm);background:var(--panel)}
+.wnosec{border:1px solid var(--line);border-inline-start:3px solid var(--gold);border-radius:var(--r-md);padding:var(--sp-4);
+  margin-bottom:var(--sp-4);background:var(--surface-2)}
+.wnosec p{margin:0 0 var(--sp-3)}
+.wnosec p b{color:var(--ink)}
 .homebtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round}
 .homebtn:hover{color:var(--ink);border-color:var(--line-strong)}
 .homebtn[aria-current="page"]{color:var(--brand-text);border-color:var(--brand)}
@@ -1156,6 +1160,9 @@ tr.rowneg td{background:var(--absent-bg)}
       <div class="panel-head"><h2>العمال</h2></div>
       <div class="panel-body">
         <div data-perm="workers.manage" id="wForm">
+        <!-- نطاق بلا أقسام: العامل يُضاف إلى قسم، فالترتيب قسم ثم عامل — يُقال بدل أن يُكتشف بالفشل -->
+        <div class="wnosec hidden" id="wNoSec"></div>
+        <div id="wFormBody">
         <div class="row2">
           <label class="field"><span>اسم العامل</span><input type="text" id="wName" placeholder="الاسم الثلاثي"></label>
           <label class="field"><span>القسم</span><select id="wSec"></select></label>
@@ -1180,6 +1187,7 @@ tr.rowneg td{background:var(--absent-bg)}
         </label>
         <button class="btn" id="addBulk">إضافة الأسماء للقسم المختار</button>
         <span class="hint">بتاريخ المباشرة المكتوب أعلاه.</span>
+        </div>
         </div>
         <label class="field" style="margin-top:16px;margin-bottom:0"><span>ترتيب الجدول</span>
           <select id="wSort" class="wsel" style="width:auto"></select></label>
@@ -3693,14 +3701,18 @@ el("addZone").onclick=()=>{
   /* تُضاف بآخر مناطق جهتها، فتبقى الجهة الواحدة متتالية بالقائمة */
   const f=CF(), sib=f.zones.filter(x=>(x.buildingId||"")===bid), last=sib.length?f.zones.indexOf(sib[sib.length-1]):f.zones.length-1;
   f.zones.splice(last+1,0,z);
-  dbInsertZone(z,sib.length+1,zoneWhat(z,"إضافة المنطقة"));
+  /* منطقة جديدة لا يراها إلا من نطاقه كل المناطق حتى تُضاف لنطاق رول: إن حُفظت ولم يرها كاتبها
+     فتلك حالة ثالثة لا رفض — تُقال بعد الحفظ لا قبله */
+  dbInsertZone(z,sib.length+1,zoneWhat(z,"إضافة المنطقة")).then(ok=>{
+    if(ok && !seesZone(z.id)){
+      alertBox("حُفظت المنطقة «"+n+"» على الخادم، لكنها لا تظهر في نطاقك: لا يراها إلا من نطاقه كل المناطق، "+
+        "حتى يضيفها مالك النظام لنطاق رول (مثل رولك) — وبعدها تظهر لك بعد إعادة التحميل.\n\nلا تُعِد إضافتها: الإضافة تمّت.","حُفظت خارج نطاقك");
+      refresh(); renderPeople();
+    }
+  });
   el("zName").value=""; el("zShort").value="";
   el("zColor").value=ZONE_COLORS[(c.zones.length)%ZONE_COLORS.length];
   refresh(); renderPeople();
-  /* منطقة جديدة لا يراها إلا من يشملها نطاق روله */
-  if(!window.__JARD_TEST__ && ME && !ME.allZones)
-    alertBox("انحفظت المنطقة «"+n+"». تنبيه: لا يراها أحد إلا من يشمل نطاقُ رولِه كل المناطق، "+
-      "حتى يضيفها مالك النظام لنطاق رول (مثل رولك) — وبعدها تظهر لك بعد إعادة التحميل.","منطقة جديدة");
 };
 el("zoneList").addEventListener("click",e=>{
   const c=C();
@@ -3780,12 +3792,14 @@ function renderPeople(){
     }
   }
 
-  const sel=el("wSec"), keep=sel.value;
-  sel.innerHTML='<option value="">بدون قسم</option>'+sortedSections().map(s=>{
-    const z=zoneOf(s.zoneId);
-    return '<option value="'+s.id+'">'+esc(s.name)+(z?" — "+esc(z.short||z.name):"")+'</option>';
-  }).join("");
-  if(keep) sel.value=keep;
+  /* القسم إلزامي: لا خيار فارغ. نطاق بلا أقسام: الحقل يقول ذلك، والحفظ معطّل، ومكان النموذج
+     سطر يقود لإضافة قسم */
+  const sel=el("wSec"), keep=sel.value, secs=sortedSections(), noSec=!secs.length;
+  sel.innerHTML=noSec ? '<option value="" disabled selected>أضف قسماً أولاً</option>' : secOptions("",true);
+  sel.disabled=noSec;
+  if(keep && secs.some(s=>s.id===keep)) sel.value=keep;
+  el("addW").disabled=noSec; el("addBulk").disabled=noSec;
+  renderNoSecGuide(noSec);
 
   const ws0=el("wStart"); if(ws0 && !ws0.value) ws0.value=todayISO();
   const wsSel=el("wStatus");
@@ -3805,10 +3819,7 @@ function renderPeople(){
     return '<tr'+(isActiveWorker(w)?"":' class="rowvar"')+'>'+nameCell+
       '<td class="mini">'+esc(motherText(w))+'</td>'+
       '<td class="mini">'+esc(dobText(w))+'</td>'+
-      '<td><select data-wsec="'+w.id+'"><option value="">بدون قسم</option>'+
-      sortedSections().map(s=>{ const z=zoneOf(s.zoneId);
-        return '<option value="'+s.id+'"'+(s.id===w.sectionId?" selected":"")+'>'+esc(s.name)+(z?" — "+esc(z.short||z.name):"")+'</option>'; }).join("")+
-      '</select></td>'+
+      '<td><select data-wsec="'+w.id+'">'+secOptions(w.sectionId)+'</select></td>'+
       '<td><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">'+
         statusBadge(w)+
         '<select class="wsel" data-wstat="'+w.id+'">'+statusOptions(getWorkerStatus(w))+'</select>'+
@@ -3913,11 +3924,48 @@ function newWorkerStart(){
   return d;
 }
 /* إدراج العمال الجدد بطلب واحد؛ الرقم التسلسلي يعطيه الخادم ويُقرأ من ردّه */
+/* خيارات القسم: الأقسام وحدها بلا خيار فارغ (القسم إلزامي على الخادم). عامل موجود بلا قسم (قديم)
+   يظهر له سطر «اختر قسماً» غير قابل للاختيار حتى يُختار له قسم؛ ونموذج عامل جديد يبدأ بأول قسم */
+function secOptions(selId,fresh){
+  const secs=sortedSections(), has=fresh || secs.some(x=>x.id===selId);
+  return (has?"":'<option value="" disabled selected>— اختر قسماً —</option>')+secs.map(x=>{
+    const z=zoneOf(x.zoneId);
+    return '<option value="'+x.id+'"'+(x.id===selId?" selected":"")+'>'+esc(x.name)+(z?" — "+esc(z.short||z.name):"")+'</option>';
+  }).join("");
+}
+/* نطاق بلا أقسام: مكان نموذج العامل سطر يقول إن العامل يُضاف إلى قسم، وزر يفتح إضافة قسم */
+function renderNoSecGuide(noSec){
+  const g=el("wNoSec"), body=el("wFormBody");
+  g.classList.toggle("hidden",!noSec); body.classList.toggle("hidden",noSec);
+  if(!noSec){ g.innerHTML=""; return; }
+  const bs=viewBuildings(), where=bs.length===1&&bs[0].id ? "«"+bs[0].name+"»" : "النطاق";
+  const canSec=C().zones.some(z=>canZone("structure.manage",z.id));
+  g.innerHTML='<p><b>'+esc(where)+' بلا أقسام بعد.</b> العامل يُضاف إلى قسم، فالخطوة الأولى إضافة قسم ثم العمال.</p>'+
+    (canSec ? '<button type="button" class="btn primary" id="wGoSec">إضافة قسم</button>'
+            : '<p class="hint" style="margin:0">تُضاف الأقسام بصلاحية «المناطق والأقسام».</p>');
+  const b=document.getElementById("wGoSec");
+  if(b) b.onclick=()=>{ const f=el("secName"); try{ f.scrollIntoView({block:"center"}); }catch(_){} f.focus(); };
+}
+/* الإدراج ثلاث حالات: رُفض (الرسالة مركزياً) · حُفظ ويراه · حُفظ خارج نطاقه — الأخيرة ليست رفضاً
+   ولا تُعاد المحاولة فيها: يُقال ما جرى، ويخرج العامل من الذاكرة لأنه لن يظهر له بعد التحميل */
 function insertWorkers(ws,what){
-  dbInsertWorkers(ws,what).then(m=>{ if(m) ws.forEach(w=>{ if(m[w.id]) w.seq=m[w.id]; }); });
+  return dbInsertWorkers(ws,what).then(m=>{
+    if(!m) return;
+    ws.forEach(w=>{ if(m.seq[w.id]) w.seq=m.seq[w.id]; });
+    if(!m.hidden.length) return;
+    const gone=ws.filter(w=>m.hidden.indexOf(w.id)>=0), f=CF();
+    f.workers=f.workers.filter(w=>m.hidden.indexOf(w.id)<0);
+    const one=gone.length===1, name=one?"«"+gone[0].name+"»":fmtNum(gone.length)+" عامل";
+    const why=gone.every(w=>!w.sectionId) ? (one?"لأنه بلا قسم":"لأنهم بلا قسم")+" — يراه من نطاقه كل المناطق ويستطيع وضعه في قسم."
+      : (one?"لأن قسمه":"لأن أقسامهم")+" خارج مناطق نطاقك.";
+    alertBox("حُفظ "+(one?"العامل ":"")+name+" على الخادم، لكن"+(one?"ه":"هم")+" لا "+(one?"يظهر":"يظهرون")+" في نطاقك "+why+
+      "\n\nلا تُعِد إضافته: الإضافة تمّت.","حُفظ خارج نطاقك");
+    refresh(); renderPeople(); renderVariables();
+  });
 }
 el("addW").onclick=()=>{
   const n=normName(el("wName").value); if(!n){ el("wName").focus(); return; }
+  if(!sectionOf(el("wSec").value)){ alertBox("اختر قسم العامل — العامل يُضاف إلى قسم.","إضافة عامل"); el("wSec").focus(); return; }
   const sd=newWorkerStart(); if(!sd) return;
   const st=normStatus(el("wStatus").value);
   const w=newWorker({ name:n, sectionId:el("wSec").value,
@@ -3935,8 +3983,9 @@ el("addW").onclick=()=>{
 el("addBulk").onclick=()=>{
   const lines=el("bulk").value.split("\n").map(s=>normName(s)).filter(Boolean);
   if(!lines.length)return;
-  const sd=newWorkerStart(); if(!sd) return;
   const sid=el("wSec").value;
+  if(!sectionOf(sid)){ alertBox("اختر القسم أولاً — العمال يُضافون إلى قسم.","إضافة عمال"); el("wSec").focus(); return; }
+  const sd=newWorkerStart(); if(!sd) return;
   const ws=lines.map(n=>{ const w=newWorker({name:n,sectionId:sid}); w.startDate=sd; return w; });
   ws.forEach(w=>CF().workers.push(w));
   insertWorkers(ws,"إضافة "+fmtNum(ws.length)+" عامل");
@@ -3998,7 +4047,7 @@ el("wTable").addEventListener("change",e=>{
   const s=e.target.closest("[data-wsec]");
   if(s){
     const w=C().workers.find(x=>x.id===s.dataset.wsec);
-    if(w){ w.sectionId=s.value; scopeDirty(); saveWorker(w,"نقل «"+w.name+"» لقسم آخر"); refresh(); renderPeople(); }
+    if(w && s.value && s.value!==w.sectionId){ w.sectionId=s.value; scopeDirty(); saveWorker(w,"نقل «"+w.name+"» لقسم آخر"); refresh(); renderPeople(); }
     return;
   }
   const st=e.target.closest("[data-wstat]");
@@ -6003,10 +6052,7 @@ function renderDirectory(){
     ? fmtNum(list.length)+" من "+fmtNum(c.workers.length)+" عامل" : "";
   if(!c.workers.length){ box.innerHTML='<div class="empty"><p>ماكو عمال بعد.</p></div>'; return; }
   if(!list.length){ box.innerHTML='<div class="empty"><p>ماكو نتيجة للبحث.</p></div>'; return; }
-  const secOpts=(sel)=>'<option value="">بدون قسم</option>'+sortedSections().map(x=>{
-    const z=zoneOf(x.zoneId);
-    return '<option value="'+x.id+'"'+(x.id===sel?" selected":"")+'>'+esc(x.name)+(z?" — "+esc(z.short||z.name):"")+'</option>';
-  }).join("");
+  const secOpts=secOptions;
   let h='<table><thead><tr><th>ت</th><th>الاسم</th><th>اسم الأم</th><th>التولد</th><th>القسم</th><th>رقم الهاتف</th>'+
     '<th>رقم الطوارئ</th><th>العنوان</th><th>المباشرة</th><th>الخدمة</th><th>حالة العمل</th><th></th></tr></thead><tbody>';
   list.forEach((w,i)=>{
@@ -6071,7 +6117,7 @@ function dirSave(id){
   w.address=g("dirAddr");
   w.motherName=normName(g("dirMother"));
   w.dob=normDob(g("dirDob"));
-  if(secNode){ w.sectionId=secNode.value; scopeDirty(); }
+  if(secNode && secNode.value && secNode.value!==w.sectionId){ w.sectionId=secNode.value; scopeDirty(); }
   editDirId=null;
   if(name!==w.name){
     /* تعديل الاسم يمرّ من نفس الدالة حتى ينزل على الوصولات المحفوظة */
