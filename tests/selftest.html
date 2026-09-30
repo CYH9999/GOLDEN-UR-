@@ -1190,6 +1190,18 @@ try{
   check("وثيقة مفتوحة بنموذجها عدّلها غيري: تنبيه، والنموذج كما هو", W20('[el("rtNote").classList.contains("hidden"), el("lvReason").value].join(",")'), "false,سبب أول");
   W20('document.querySelector("#rtNoteAct button").click();');
   check("«اعرض نسخته»: النموذج بنسخته", W20('el("lvReason").value'), "سبب غيري");
+
+  /* ---- ٢١) قفل الشهر: السجل وصورته بجدولين — الصورة لمن يملك month.lock وحده ---- */
+  group("٢١ · قفل الشهر بجدولين — قفل بلا صورة حالة طبيعية");
+  const w21=await boot();
+  const snap21={at:"2026-09-01 09:00",net:1000,n:1,rows:{a:1000}};
+  w21.__rows=Object.assign({},ROWS17,{locks:[{month:"2026-08",locked_at:"2026-09-01T06:00:00Z"}],lockSnaps:[],documents:[]});
+  w21.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; bootView();');
+  check("بلا صورة: الشهر مقفل، ولا أرقام مخترعة", w21.eval('[monthLocked("2026-08-10"), lockHasSnap(monthLock("2026-08-10")), monthLock("2026-08-10").net===undefined, !!monthLock("2026-08-10").at].join(",")'), "true,false,true,true");
+  check("كشفه: «مقفل» بلا خانة فرق ولا «عامل محذوف»", w21.eval('switchView("report"); el("rpFrom").value="2026-08-01"; el("rpTo").value="2026-08-31"; runReport(true); [el("rpLock").textContent.indexOf("مقفل")>=0, el("rpLock").textContent.indexOf("تغيّر صافي"), lockDrift(monthLock("2026-08-10"),RP).length].join(",")'), "true,-1,0");
+  w21.__rows=Object.assign({},ROWS17,{locks:[{month:"2026-08",locked_at:"2026-09-01T06:00:00Z"}],lockSnaps:[{month:"2026-08",snapshot:snap21}],documents:[]});
+  w21.eval('state=ensureFields(dbBuildState(__rows)); bootView();');
+  check("بصورة من جدولها: الأرقام كما حُفظت", w21.eval('JSON.stringify([lockHasSnap(monthLock("2026-08-10")), monthLock("2026-08-10").net, monthLock("2026-08-10").rows])'), JSON.stringify([true,1000,{a:1000}]));
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});

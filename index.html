@@ -4396,6 +4396,7 @@ function backupScope(st){
     o.days=days;
     const locks={};
     Object.keys(f.locks||{}).forEach(m=>{
+      if(!lockHasSnap(f.locks[m])){ locks[m]=Object.assign({},f.locks[m]); return; }   // قفل بلا صورة: كما هو
       const L=Object.assign({},f.locks[m]), rows={};
       Object.keys(L.rows||{}).forEach(id=>{ if(ws.has(id)) rows[id]=L.rows[id]; });
       L.rows=rows; L.n=Object.keys(rows).length;
@@ -11200,9 +11201,12 @@ function lockSnapshot(R){
   const rows={}; R.rows.forEach(r=>{ rows[r.id]=money(r.net); });
   return {net:money(R.tot.net), n:R.rows.length, rows:rows};
 }
-/* من تغيّر صافيه منذ القفل (تغيير من خارج الشهر: راتب، سياسة، أيام راحة…) */
+/* صورة القفل (صافي كل عامل) يقرؤها من يملك month.lock وحده: بدونها الشهر مقفل وأرقامه لا تُعرض */
+function lockHasSnap(L){ return !!(L && L.rows && typeof L.rows==="object"); }
+/* من تغيّر صافيه منذ القفل (تغيير من خارج الشهر: راتب، سياسة، أيام راحة…) — لا شيء بلا صورة */
 function lockDrift(L,R){
-  const out=[], snap=L.rows||{};
+  if(!lockHasSnap(L)) return [];
+  const out=[], snap=L.rows;
   R.rows.forEach(r=>{
     const a=snap[r.id];
     if(a===undefined){ if(Math.abs(r.net)>0.5) out.push({name:r.name,a:null,b:r.net}); }
@@ -11225,7 +11229,7 @@ function renderLockBar(){
   if(!full){ box.innerHTML=""; return; }
   const mn=esc(monthNameOf(RP.from));
   if(L){
-    const dr=lockDrift(L,RP);
+    const dr=lockDrift(L,RP);   // بلا صورة (لا month.lock): السطر يقول إنه مقفل، ولا خانة فرق
     box.innerHTML='<div class="lockbar on"><span><b>راتب '+mn+' مقفل</b> منذ '+esc(L.at)+
       ' — الحضور والوصولات والحالات بتواريخه للقراءة فقط.</span><button class="btn sm" id="rpUnlock">فتح القفل…</button></div>'+
       (dr.length?'<div class="errbox"><b>تغيّر صافي '+fmtNum(dr.length)+' عامل منذ القفل</b> — تغيير من خارج الشهر '+
@@ -11253,9 +11257,10 @@ function lockMonth(iso){
     {ok:"اقفل الشهر"}).then(y=>{
     if(!y) return false;
     const snap=Object.assign({at:nowStamp()}, lockSnapshot(R));
-    return dbInsertLock(mk,snap,"قفل راتب "+mn).then(()=>{
-      C().locks[mk]=snap;
-      audit("lock","راتب "+mn,"مفتوح","مقفل — الصافي "+fmtMoney(R.tot.net));
+    /* lock_month تكتب السجل والصورة وقيد التدقيق معاً؛ القيد هنا للعرض وحده (serverWrote) */
+    return dbLockMonth(mk,snap,"قفل راتب "+mn).then(()=>{
+      CF().locks[mk]=snap;
+      audit("lock","راتب "+mn,"مفتوح","مقفل — الصافي "+fmtMoney(R.tot.net),null,true);
       if(RP) renderReport(); refresh(); scheduleAlerts();
       return true;
     },e=>{ alertBox(e.message,"لم يُقفل الشهر"); return false; });
@@ -11277,7 +11282,7 @@ function unlockMonth(iso){
     const why=String(v.ulReason||"").trim();
     if(why.length<3){ alertBox("اكتب سبب الفتح — القفل لا يُفتح بلا سبب مسجَّل."); return false; }
     return dbUnlockMonth(mk,why,"فتح قفل راتب "+mn).then(()=>{
-      delete C().locks[mk];
+      delete CF().locks[mk];
       audit("unlock","راتب "+mn,"مقفل","مفتوح",{reason:why},true);
       if(RP) renderReport(); refresh(); scheduleAlerts();
       return true;

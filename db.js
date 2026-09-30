@@ -294,7 +294,13 @@ async function dbFetchAll() {
     return r.data || [];
   })();
 
-  const [buildings, zones, sections, workers, dayStates, dayZones, documents, materials, holidays, locks, audit] =
+  /* صور أقفال الأشهر (صافي كل عامل) في جدولها: يقرؤها من يملك month.lock وحده، فلا تُطلب لغيره أصلاً.
+     غيابها حالة طبيعية: الشهر مقفل وأرقامه لا تُعرض */
+  const snapsQ = can("month.lock")
+    ? dbReadAll("month_lock_snapshots", "month,snapshot", "صور أقفال الأشهر", cid, q => q.order("month"))
+    : Promise.resolve([]);
+
+  const [buildings, zones, sections, workers, dayStates, dayZones, documents, materials, holidays, locks, lockSnaps, audit] =
     await Promise.all([
       dbReadAll("buildings", "id,name,short,sort_order", "الجهات", cid,
         q => q.order("sort_order").order("id")),
@@ -315,12 +321,13 @@ async function dbFetchAll() {
       dbReadAll("materials", "id,name,unit,qty,sort_order", "المواد", cid,
         q => live(q).order("sort_order").order("id")),
       dbReadAll("holidays", "date,name", "العطل", cid, q => q.order("date")),
-      dbReadAll("month_locks", "month,locked_at,snapshot", "أقفال الأشهر", cid, q => q.order("month")),
+      dbReadAll("month_locks", "month,locked_at", "أقفال الأشهر", cid, q => q.order("month")),
+      snapsQ,
       auditQ
     ]);
 
   return { company: co.data, buildings, zones, sections, workers, dayStates, dayZones,
-    documents, materials, holidays, locks, audit };
+    documents, materials, holidays, locks, lockSnaps, audit };
 }
 
 /* ---- أدوات التحويل ----
@@ -470,13 +477,19 @@ function dbBuildState(raw) {
   const materials = (raw.materials || []).map(m => ({ id: m.id, name: dbStr(m.name), unit: dbStr(m.unit),
     qty: Number(m.qty) || 0 }));
 
-  /* قفل الشهر: الصورة كلها (at, net, n, rows) كما حُفظت */
+  /* قفل الشهر: السجل (الشهر ووقته) من month_locks، والصورة (net, n, rows) من month_lock_snapshots لمن
+     يقرؤها. بلا صورة يبقى القفل قفلاً — { at } وحده — والواجهة تُخفي ما لا أرقام له.
+     (صف قفل يحمل صورته — ملفات الفحص والنسخ القديمة — يُقرأ كما هو) */
+  const isObj = v => v && typeof v === "object" && !Array.isArray(v);
+  const snapOf = {};
+  (raw.lockSnaps || []).forEach(r => { if (r && r.month && isObj(r.snapshot)) snapOf[String(r.month)] = r.snapshot; });
   const locks = {};
   (raw.locks || []).forEach(r => {
     if (!r || !r.month) return;
-    const s = (r.snapshot && typeof r.snapshot === "object" && !Array.isArray(r.snapshot)) ? Object.assign({}, r.snapshot) : {};
+    const m = String(r.month), sn = snapOf[m] || (isObj(r.snapshot) ? r.snapshot : null);
+    const s = sn ? Object.assign({}, sn) : {};
     if (!s.at && r.locked_at) s.at = dbStamp(r.locked_at);
-    locks[String(r.month)] = s;
+    locks[m] = s;
   });
 
   /* سجل التدقيق بالترتيب الزمني (الأقدم أولاً) كما يضيفه البرنامج */
@@ -508,8 +521,8 @@ function dbBuildState(raw) {
 async function dbLoadState() {
   return dbScopeLocks(dbBuildState(await dbFetchAll()));
 }
-/* صورة قفل الشهر تحمل صافي كل عامل بالشركة (month_locks يقرؤه كل منتسب). من ليس نطاقه كل
-   المناطق لا يُبقى في ذاكرته إلا صافي عماله هو: الصفوف تُقصّ للعمال المحمّلين، والمجموع والعدد
+/* حزام ثانٍ: صور الأقفال صارت بجدولها لمن يملك month.lock وحده (الحماية على الخادم). وإن وصلت صورة
+   لمن ليس نطاقه كل المناطق فلا يُبقى في ذاكرته إلا صافي عماله هو: الصفوف تُقصّ للعمال المحمّلين، والمجموع والعدد
    يُعادان منها. من نطاقه كل المناطق تبقى صورته كاملة (ومنها صافي عامل حُذف بعد القفل). */
 function dbScopeLocks(st) {
   if (!ME || ME.allZones) return st;
@@ -517,6 +530,7 @@ function dbScopeLocks(st) {
     const ids = new Set((c.workers || []).map(w => w.id));
     Object.keys(c.locks || {}).forEach(m => {
       const L = c.locks[m], rows = {};
+      if (!L.rows || typeof L.rows !== "object") return;     // بلا صورة: لا أرقام تُقصّ ولا تُخترع
       Object.keys(L.rows || {}).forEach(id => { if (ids.has(id)) rows[id] = L.rows[id]; });
       L.rows = rows; L.n = Object.keys(rows).length;
       L.net = Math.round(Object.keys(rows).reduce((t, id) => t + (Number(rows[id]) || 0), 0) * 1e4) / 1e4;
@@ -826,9 +840,10 @@ function dbDeleteHoliday(date, what) {
   return dbFire(what, () => sb.from("holidays").delete({ count: "exact" }).eq("company_id", DB_CID).eq("date", date).select("date"),
     { expect: true });
 }
-function dbInsertLock(month, snapshot, what) {
-  return dbWrite(what, () => sb.from("month_locks").insert({ company_id: DB_CID, month: month, snapshot: snapshot,
-    locked_by: dbMe(), locked_at: dbNow() }), { quiet: true });
+/* قفل الشهر بدالة الخادم lock_month: تكتب سجل القفل وصورته معاً وقيد التدقيق بنفسها (فلا يُرسل قيد
+   ثانٍ من هنا)، وترفض بنصّ عربي إن نقصت الصلاحية أو كان الشهر مقفلاً. */
+function dbLockMonth(month, snapshot, what) {
+  return dbWrite(what, () => sb.rpc("lock_month", { cid: DB_CID, m: month, snap: snapshot }), { quiet: true });
 }
 /* فتح القفل بدالة الخادم لا بحذف: تفرض صلاحية month.lock وسبباً غير فارغ ووجود القفل،
    وتكتب هي قيد التدقيق بالصافي عند القفل ثم تحذف — فلا يُكتب قيد ثانٍ من هنا. */
