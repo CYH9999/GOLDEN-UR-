@@ -281,9 +281,11 @@ async function dbFetchAll() {
   DB_CO_LAST = dbCanon({ name: co.data.name, theme: co.data.theme, accent: co.data.accent,
     settings: (co.data.settings && typeof co.data.settings === "object") ? co.data.settings : {} });
 
-  /* سجل التدقيق لمن يملك قراءته وحده: قيوده تحمل أسماء عمال كل الجهات، فلا يُطلب لغيره أصلاً */
+  /* سجل التدقيق لمن يملك قراءته وحده: قيوده تحمل أسماء عمال كل الجهات، فلا يُطلب لغيره أصلاً.
+     ولا لمن نطاقه بعض المناطق: القيد لا يحمل منطقته (لا عمود zone_id في audit_log)، فلا يُعرف أيّ
+     قيوده يخصّ مناطقه — ولا يُعرض له قيد عن عامل خارج نطاقه، لا مطويّاً ولا باسم آخر. */
   const auditQ = (async () => {
-    if (!can("audit.read")) return [];
+    if (!dbAuditReadable()) return [];
     let r;
     try {
       r = await sb.from("audit_log").select("id,user_id,kind,what,before_val,after_val,reason,at")
@@ -316,7 +318,7 @@ async function dbFetchAll() {
         q => q.order("date").order("worker_id")),
       dbReadAll("day_zones", "date,zone_id,notes,confirmed", "اعتماد الأيام والملاحظات", cid,
         q => q.order("date").order("zone_id")),
-      dbReadAll("documents", "id,kind,no,worker_id,zone_id,date,date_to,data,revisions",
+      dbReadAll("documents", "id,kind,no,worker_id,zone_id,date,date_to,data,revisions,created_by,created_at",
         "الوثائق", cid, q => live(q).order("id")),
       dbReadAll("materials", "id,name,unit,qty,sort_order", "المواد", cid,
         q => live(q).order("sort_order").order("id")),
@@ -326,9 +328,15 @@ async function dbFetchAll() {
       auditQ
     ]);
 
+  /* أسماء من أصدر الوثائق ومن كتب قيود السجل — من profiles.full_name. لا تُفشل التحميل:
+     اسم لا يُقرأ يظهر «اسم غير متاح» */
+  await dbLoadNames([].concat(audit.map(r => r.user_id), documents.map(r => r.created_by)));
+
   return { company: co.data, buildings, zones, sections, workers, dayStates, dayZones,
     documents, materials, holidays, locks, lockSnaps, audit };
 }
+/* يقرأ سجل التدقيق؟ الصلاحية، ونطاق كل المناطق (راجع auditQ) */
+function dbAuditReadable() { return can("audit.read") && !!ME && ME.allZones === true; }
 
 /* ---- أدوات التحويل ----
    التاريخ (عمود date) يبقى نصاً YYYY-MM-DD كما جاء، ولا يمرّ عبر new Date —
@@ -384,6 +392,9 @@ function dbDoc(r) {
   if (f[1] && r.date_to != null) o[f[1]] = dbDay(r.date_to);
   const rv = Array.isArray(r.revisions) ? r.revisions : (Array.isArray(d.revisions) ? d.revisions : []);
   if (rv.length) o.revisions = rv; else delete o.revisions;
+  /* من أصدرها ومتى (عمودان على الخادم، لا يُكتبان في data) */
+  if ("created_by" in r) o.issuedBy = r.created_by || "";
+  if ("created_at" in r) o.issuedAt = dbStamp(r.created_at);
   return o;
 }
 
@@ -737,7 +748,7 @@ function dbSeedCounters(what) {
 function dbDocRow(kind, rec) {
   const f = DB_DOC_DATES[kind] || [];
   const data = Object.assign({}, rec);
-  ["id", "no", "revisions", "workerId"].concat(f).forEach(k => { delete data[k]; });
+  ["id", "no", "revisions", "workerId", "issuedBy", "issuedAt"].concat(f).forEach(k => { delete data[k]; });
   return { no: String(rec.no || ""), worker_id: kind === "letter" ? null : (rec.workerId || null),
     date: rec[f[0]] || null, date_to: f[1] ? (rec[f[1]] || null) : null, data: data,
     revisions: Array.isArray(rec.revisions) ? rec.revisions : [] };
@@ -880,6 +891,35 @@ function dbAudit(a, onFail) {
 /* يُحلّ حين يفرغ طابور الكتابة */
 function dbIdle() { return dbQ.then(() => {}); }
 
+/* ==================== المحذوفات ====================
+   الحذف في البرنامج منطقي (deleted_at)، فالسجل باقٍ على الخادم ويُستعاد بمسح علامته. الاستعادة
+   تحتاج trash.restore ويفرضها trigger على الخادم — ورفضه يظهر بنصّه. لا حذف نهائي من الواجهة.
+   تُقرأ عند فتح التبويب لا مع التحميل: قائمة لا يحتاجها إلا صاحب الصلاحية. */
+const DB_TRASH = {
+  workers: "id,seq,name,section_id,deleted_at,deleted_by",
+  documents: "id,kind,no,worker_id,zone_id,date,data,deleted_at,deleted_by",
+  sections: "id,zone_id,name,deleted_at,deleted_by",
+  zones: "id,name,building_id,deleted_at,deleted_by",
+  materials: "id,name,unit,deleted_at,deleted_by"
+};
+async function dbTrash() {
+  if (dbLocal()) return { workers: [], documents: [], sections: [], zones: [], materials: [] };
+  const cid = DB_CID || dbCompanyId(), out = {};
+  const del = q => q.not("deleted_at", "is", null).order("deleted_at", { ascending: false }).order("id");
+  const keys = Object.keys(DB_TRASH);
+  const got = await Promise.all(keys.map(t => dbReadAll(t, DB_TRASH[t], "المحذوفات", cid, del)));
+  keys.forEach((t, i) => { out[t] = got[i]; });
+  await dbLoadNames([].concat(...keys.map(t => out[t].map(r => r.deleted_by))));
+  return out;
+}
+function dbRestore(table, id, what) {
+  if (!DB_TRASH[table]) return Promise.reject(new Error("جدول غير معروف: " + table));
+  if (table === "workers") dbRtMine("w|" + id);
+  if (table === "documents") dbRtMine("d|" + id);
+  return dbWrite(what, () => sb.from(table).update({ deleted_at: null, deleted_by: null }, { count: "exact" })
+    .eq("company_id", DB_CID).eq("id", id).select("id"), { quiet: true, expect: true });
+}
+
 /* ==================== التحديث اللحظي (Realtime) ====================
    قناة واحدة للشركة على أربعة جداول: day_states و day_zones و workers و documents.
    الخادم لا يرسل صفَّ إدراج أو تعديل إلا لمن تجيزه سياسة القراءة، لكن الحذف الفعلي
@@ -945,8 +985,21 @@ function dbRtShape(table, p) {
   }
   return null;
 }
-/* اسم من كتب التغيير — للتنبيه وحده. الملفات الشخصية قد لا تُقرأ لغير صاحبها، فالبديل «مستخدم آخر» */
+/* أسماء المستخدمين من profiles.full_name: تُقرأ مرة للمعرّفات المطلوبة وتُحفظ هنا. ما لا يُقرأ
+   (خطأ، أو ملف لا تجيزه سياسته) يبقى بلا اسم — لا يوقف شيئاً */
 const dbNames = {};
+async function dbLoadNames(ids) {
+  const want = Array.from(new Set((ids || []).filter(x => x && !dbNames[x])));
+  if (ME && ME.id && ME.name) dbNames[ME.id] = ME.name;
+  for (let i = 0; i < want.length; i += 100) {
+    try {
+      const r = await sb.from("profiles").select("id,full_name").in("id", want.slice(i, i + 100));
+      (r && r.data || []).forEach(p => { if (p && p.id && p.full_name) dbNames[p.id] = String(p.full_name); });
+    } catch (e) {}
+  }
+}
+function dbNameOf(id) { return (id && dbNames[id]) || ""; }
+/* اسم من كتب التغيير — للتنبيه. البديل «مستخدم آخر» */
 async function dbUserName(id) {
   if (!id) return "مستخدم آخر";
   if (ME && id === ME.id) return ME.name;

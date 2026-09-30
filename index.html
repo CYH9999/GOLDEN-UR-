@@ -227,6 +227,8 @@ label.field>span,.field>span:first-child{display:block;font-size:var(--fs-sm);co
 .saved{font-size:var(--fs-sm);color:var(--ink-2);align-self:center}
 .hint{font-size:var(--fs-sm);color:var(--ink-2);margin-top:6px;line-height:1.7}
 .mini{font-size:var(--fs-xs);color:var(--ink-2)}
+.issuer{font-size:var(--fs-xs);color:var(--ink-2);font-weight:400;direction:rtl;text-align:right;margin-top:2px;line-height:1.35}
+.issuer span{white-space:nowrap}
 /* سطر بيان المدة وملاحظة التذييل بكشف الرواتب والجرد التفصيلي */
 .pline{font-size:var(--fs-sm);color:var(--ink-2);margin:0 0 var(--sp-3);font-variant-numeric:tabular-nums;line-height:1.7}
 .pline b{color:var(--ink)} .pline .pwarn{color:var(--absent);font-weight:var(--fw-bold)}
@@ -756,6 +758,7 @@ tr.rowneg td{background:var(--absent-bg)}
     <button role="tab" id="tab-materials" aria-controls="view-materials" aria-selected="false" tabindex="-1" data-view="materials" title="المواد"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg><span class="tl">المواد</span></button>
     <div class="tsep" role="presentation"></div>
     <button role="tab" id="tab-history" aria-controls="view-history" aria-selected="false" tabindex="-1" data-view="history" title="السجل"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/></svg><span class="tl">السجل</span></button>
+    <button role="tab" id="tab-trash" aria-controls="view-trash" aria-selected="false" tabindex="-1" data-view="trash" data-perm="trash.restore" title="المحذوفات"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"/><path d="M10 11v6M14 11v6"/></svg><span class="tl">المحذوفات</span></button>
     <button role="tab" id="tab-people" aria-controls="view-people" aria-selected="false" tabindex="-1" data-view="people" title="العمال والأقسام"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/></svg><span class="tl">العمال والأقسام</span></button>
     <button role="tab" id="tab-variables" aria-controls="view-variables" aria-selected="false" tabindex="-1" data-view="variables" title="حالات العمال"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="4"/><path d="M3 21a7 7 0 0 1 11-5.7"/><path d="m16 17 2 2 4-4"/></svg><span class="tl">حالات العمال</span></button>
     <div class="tsep" role="presentation"></div>
@@ -1126,6 +1129,26 @@ tr.rowneg td{background:var(--absent-bg)}
       <p class="hint" style="margin-top:0">كل تعديل راتب، وتغيير حالة، وحذف وثيقة، وتعديل يوم معتمد مضى، وقفل شهر أو فتحه —
         بقيمته قبل وبعد. يُحفظ آخر ٢٠٠٠ قيد لكل شركة.</p>
       <div id="auditList"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== المحذوفات ===== -->
+<section id="view-trash" role="tabpanel" aria-labelledby="tab-trash" tabindex="-1" class="hidden">
+  <div class="panel">
+    <div class="panel-head">
+      <h2>المحذوفات</h2>
+      <select id="trKind" class="wsel" style="width:auto" title="النوع">
+        <option value="">الكل</option><option value="workers">العمال</option><option value="documents">الوثائق</option>
+        <option value="sections">الأقسام</option><option value="zones">المناطق</option><option value="materials">المواد</option>
+      </select>
+      <input type="text" id="trSearch" placeholder="بحث: اسم، رقم وثيقة، من حذفه…" style="flex:1;min-width:150px;width:auto">
+      <button class="btn sm ghost" id="trReload" title="قراءة القائمة من الخادم ثانية">تحديث</button>
+    </div>
+    <div class="panel-body">
+      <p class="hint" style="margin-top:0">الحذف في البرنامج لا يمحو السجل: يبقى على الخادم مؤشَّراً بالحذف، ويُستعاد من هنا كما كان.
+        لا حذف نهائي. وحذف يوم جرد يمحو تأشيراته فعلاً، فلا يظهر هنا.</p>
+      <div id="trList"></div>
     </div>
   </div>
 </section>
@@ -2271,7 +2294,7 @@ function workerInLockedMonth(w){
 }
 const AUDIT_MAX=2000;
 const AUDIT_KIND={salary:"تعديل راتب", status:"تغيير حالة", del:"حذف وثيقة", day:"تعديل يوم معتمد",
-  lock:"قفل شهر", unlock:"فتح قفل شهر"};
+  lock:"قفل شهر", unlock:"فتح قفل شهر", restore:"استعادة من المحذوفات"};
 const DAY_TXT={present:"حاضر", absent:"غائب", misc:"متفرقة"};
 function nowStamp(){ const d=new Date(), p=n=>String(n).padStart(2,"0");
   return todayISO()+" "+p(d.getHours())+":"+p(d.getMinutes()); }
@@ -2281,6 +2304,7 @@ function audit(kind, what, before, after, extra, serverWrote){
   const c=CF(); if(!Array.isArray(c.audit)) c.audit=[];
   const a=Object.assign({at:nowStamp(), kind:kind, what:String(what==null?"":what),
     before:String(before==null?"":before), after:String(after==null?"":after)}, extra||{});
+  if(typeof ME!=="undefined" && ME && ME.id) a.userId=ME.id;
   c.audit.push(a);
   if(c.audit.length>AUDIT_MAX) c.audit.splice(0, c.audit.length-AUDIT_MAX);
   /* على الخادم: إضافة فقط (إلا قيداً كتبته دالة الخادم نفسها)، وبعد نجاح التعديل الذي يصفه.
@@ -4484,6 +4508,7 @@ async function docInsert(listKey,rec,atEnd,msgOf){
   const kind=DOC_KIND[listKey];
   try{ await dbInsertDoc(kind,rec,docZone(rec.workerId),"حفظ "+DOC_LABEL[kind]+" "+rec.no); }
   catch(e){ await alertBox((msgOf&&msgOf(e))||e.message,"لم تُحفظ "+DOC_LABEL[kind]); return false; }
+  if(typeof ME!=="undefined" && ME && ME.id){ rec.issuedBy=ME.id; rec.issuedAt=nowStamp(); }   // كما يختمها الخادم (created_by/created_at)
   const list=CF()[listKey]; if(atEnd) list.push(rec); else list.unshift(rec);
   return true;
 }
@@ -4516,6 +4541,23 @@ function syncSaveBtn(id, editing, newText){
 function recOf(list, id){ return id ? (list||[]).find(x=>x.id===id)||null : null; }
 function docIssued(rec){ return (rec && rec.issued) ? rec.issued : todayISO(); }
 function editedLine(rec){ return (rec && rec.editedAt) ? "عُدّل بتاريخ "+dateTextOf(rec.editedAt) : ""; }
+/* «أصدرها: فلان — التاريخ»: من كتبها على الخادم (created_by، واسمه من profiles) ويوم إصدارها.
+   وثيقة نُقلت من النسخة المحلية بلا كاتب مسجّل: «غير مسجّل» */
+function issuerParts(rec){
+  const n=userName(rec.issuedBy), d=rec.issued||String(rec.issuedAt||"").slice(0,10)||rec.date||"";
+  return [n||(rec.issuedBy?"اسم غير متاح":"غير مسجّل"), d?dateSlash(d):""];
+}
+function issuerText(rec){
+  if(!rec) return "";
+  const p=issuerParts(rec);
+  return "أصدرها: "+p[0]+(p[1]?" — "+p[1]:"");
+}
+/* الاسم والتاريخ كلٌّ لا ينكسر، فيلتفّ السطر بينهما في عمود ضيّق */
+function issuerHtml(rec){
+  if(!rec) return "";
+  const p=issuerParts(rec);
+  return '<div class="issuer">أصدرها: <span>'+esc(p[0])+'</span>'+(p[1]?' — <span>'+esc(p[1])+'</span>':'')+'</div>';
+}
 
 /* ---- الوثائق المالية داخل مدة الخدمة فقط ----
    الكشف يفلتر العقوبات والمكافآت بتاريخها وحده، فوثيقة بعد آخر يوم عمل بنفس
@@ -4722,7 +4764,7 @@ function renderLeaves(){
   if(q) list=list.filter(l=>String(l.name||"").indexOf(q)!==-1);
   if(!list.length){ el("leavesList").innerHTML='<div class="empty"><p>ماكو إجازات محفوظة بعد.</p></div>'; return; }
   let h='<table><thead><tr><th>الرقم</th><th>العامل</th><th>النوع</th><th>الاستقطاع</th><th>من</th><th>أيام</th><th></th></tr></thead><tbody>';
-  list.forEach(l=>{ h+='<tr'+(l.id===lvEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+'</td><td>'+
+  list.forEach(l=>{ h+='<tr'+(l.id===lvEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+issuerHtml(l)+'</td><td>'+esc(l.name)+'</td><td>'+
     esc(l.type||"—")+(l.editedAt?' <span class="stag warn" title="'+esc(editedLine(l))+'">معدّل</span>':'')+
     '</td><td class="mini">'+esc(policyName(l.policy||defaultLeavePolicy(l.type)))+
     '</td><td class="dt">'+dateTextOf(l.from)+'</td><td>'+(l.hours?hoursText(l.hours):fmtNum(l.days))+'</td>'+
@@ -5162,7 +5204,7 @@ function renderPenalties(){
   list.forEach(l=>{
     const w=c.workers.find(x=>x.id===l.workerId);
     const amt=penaltyAmount(l,w);
-    h+='<tr'+(l.id===pnEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+
+    h+='<tr'+(l.id===pnEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+issuerHtml(l)+'</td><td>'+esc(l.name)+
       (w?"":' <span class="stag out">محذوف</span>')+'</td><td>'+esc(l.type||"—")+(l.terminates?' <span class="stag out">إنهاء خدمة</span>':'')+
       (l.editedAt?' <span class="stag warn" title="'+esc(editedLine(l))+'">معدّل</span>':'')+'</td>'+
       '<td class="mini">'+esc(penKindName(l.kind))+(l.kind==="days"?" ("+daysText(l.days)+")":"")+'</td>'+
@@ -5468,7 +5510,7 @@ function renderAchievements(){
   list.forEach(l=>{
     const w=c.workers.find(x=>x.id===l.workerId);
     const amt=achAmount(l,w);
-    h+='<tr'+(l.id===acEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+
+    h+='<tr'+(l.id===acEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+issuerHtml(l)+'</td><td>'+esc(l.name)+
       (w?"":' <span class="stag out">محذوف</span>')+'</td><td>'+esc(l.type||"—")+
       (l.editedAt?' <span class="stag warn" title="'+esc(editedLine(l))+'">معدّل</span>':'')+'</td>'+
       '<td class="mini">'+esc(achKindName(l.kind))+(l.kind==="days"?" ("+daysText(l.days)+")":"")+'</td>'+
@@ -5843,7 +5885,7 @@ function renderIssues(){
   list.forEach(l=>{
     const w=c.workers.find(x=>x.id===l.workerId);
     const live = l.to>=today;
-    h+='<tr'+(l.id===mtEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+'</td><td>'+esc(l.name)+
+    h+='<tr'+(l.id===mtEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(l.no)+issuerHtml(l)+'</td><td>'+esc(l.name)+
       (w?"":' <span class="stag out">محذوف</span>')+'</td>'+
       '<td class="mini">'+fmtNum((l.items||[]).length)+" مادة"+'</td>'+
       '<td class="dt">'+dateTextOf(l.from)+'</td><td class="dt">'+dateTextOf(l.to)+'</td>'+
@@ -11070,7 +11112,7 @@ function renderLetters(){
   if(q) list=list.filter(l=>[l.no,l.title,l.to,l.subject].some(x=>String(x||"").indexOf(q)!==-1));
   if(!list.length){ box.innerHTML='<div class="empty"><p>'+(q?"ماكو كتاب يطابق البحث.":"ماكو كتب محفوظة بعد.")+'</p></div>'; return; }
   box.innerHTML='<div class="tblwrap tight"><table><thead><tr><th>العدد</th><th>الاسم</th><th>إلى</th><th>الموضوع</th><th>التاريخ</th><th></th></tr></thead><tbody>'+
-    list.map(l=>'<tr'+(l.id===lfEditId?' class="rowopen"':'')+'><td class="dt" dir="ltr" style="text-align:right">'+esc(l.no)+'</td>'+
+    list.map(l=>'<tr'+(l.id===lfEditId?' class="rowopen"':'')+'><td class="dt" dir="ltr" style="text-align:right">'+esc(l.no)+issuerHtml(l)+'</td>'+
       '<td>'+esc(l.title||"—")+(l.editedAt?' <span class="stag warn" title="'+esc(editedLine(l))+'">معدّل</span>':'')+'</td>'+
       '<td>'+esc(l.to||"—")+'</td><td>'+esc(l.subject||"—")+'</td><td class="dt">'+dateSlash(l.date)+'</td>'+
       '<td class="actcell"><button class="btn sm" data-lfopen="'+l.id+'">فتح</button> '+
@@ -11493,21 +11535,110 @@ function unlockMonth(iso){
 }
 
 /* ==================== [واجهة] سجل التدقيق (تبويب السجل) ==================== */
+/* اسم من كتب القيد، من profiles.full_name */
+function userName(id){ if(!id) return ""; if(typeof ME!=="undefined" && ME && ME.id===id) return ME.name||""; return dbNameOf(id); }
+function auditUser(a){ return a && a.userId ? (userName(a.userId)||"اسم غير متاح") : ""; }
 function renderAudit(){
   const box=el("auditList"); if(!box||box.innerHTML===undefined) return;
   if(!can("audit.read")){ box.innerHTML=""; return; }   // لوحته مخفية أصلاً — ولا يُبنى محتواها
+  /* من نطاقه بعض المناطق: القيد لا يحمل منطقته، فلا يُعرف أيّ القيود يخصّه — لا يُطلب ولا يُعرض منها شيء */
+  if(!meAllZones()){ el("auditCount").textContent="";
+    box.innerHTML='<div class="empty"><p>سجل التدقيق لا يُعرض لمن نطاقه بعض المناطق: قيوده لا تحمل منطقتها بعد، فلا يُعرف أيّها يخصّ مناطقك — '+
+      'ولا يُعرض قيد عن عامل خارج نطاقك.</p></div>'; return; }
   const all=(C().audit||[]), q=String(el("auditSearch").value||"").trim();
   let list=all.slice().reverse();
-  if(q) list=list.filter(a=>[a.at,AUDIT_KIND[a.kind]||a.kind,a.what,a.before,a.after,a.reason,a.ref].some(x=>String(x||"").indexOf(q)!==-1));
+  if(q) list=list.filter(a=>[a.at,AUDIT_KIND[a.kind]||a.kind,a.what,a.before,a.after,a.reason,a.ref,auditUser(a)].some(x=>String(x||"").indexOf(q)!==-1));
   el("auditCount").textContent=fmtNum(all.length)+" قيد"+(q?" · يطابق البحث "+fmtNum(list.length):"");
   if(!list.length){ box.innerHTML='<div class="empty"><p>'+(q?"ماكو قيد يطابق البحث.":"ماكو قيود بعد.")+'</p></div>'; return; }
   const MAX=300, shown=list.slice(0,MAX);
-  box.innerHTML='<div class="tblwrap tight"><table><thead><tr><th>الوقت</th><th>النوع</th><th>على</th><th>قبل</th><th>بعد</th><th>السبب / المرجع</th></tr></thead><tbody>'+
-    shown.map(a=>'<tr><td class="dt">'+esc(a.at)+'</td><td>'+esc(AUDIT_KIND[a.kind]||a.kind)+'</td><td>'+esc(a.what)+'</td>'+
+  /* إضافة فقط: لا زر تعديل ولا حذف على أي قيد */
+  box.innerHTML='<div class="tblwrap tight"><table><thead><tr><th>الوقت</th><th>المستخدم</th><th>النوع</th><th>على</th><th>قبل</th><th>بعد</th><th>السبب / المرجع</th></tr></thead><tbody>'+
+    shown.map(a=>'<tr><td class="dt">'+esc(a.at)+'</td><td>'+esc(auditUser(a)||"—")+'</td><td>'+esc(AUDIT_KIND[a.kind]||a.kind)+'</td><td>'+esc(a.what)+'</td>'+
       '<td>'+esc(a.before||"—")+'</td><td>'+esc(a.after||"—")+'</td><td>'+esc(a.reason||a.ref||"")+'</td></tr>').join("")+
     '</tbody></table></div>'+(list.length>MAX?'<p class="hint">يظهر أحدث '+fmtNum(MAX)+' من '+fmtNum(list.length)+' — ضيّق البحث للباقي.</p>':'');
 }
 el("auditSearch").addEventListener("input",renderAudit);
+
+/* ==================== [واجهة] المحذوفات (trash.restore) ====================
+   تُقرأ من الخادم عند فتح التبويب (dbTrash). ما حُذف، ومن حذفه، ومتى، وزر استعادة. ما خارج نطاق
+   المستخدم لا يُحفظ ولا يُعرض (الخادم يحجبه أصلاً). سجلٌّ يتبع سجلاً محذوفاً (عامل قسمه محذوف،
+   قسم منطقته محذوفة، وثيقة عاملها محذوف) لا يُستعاد قبله: يعود وقد انقطع عن أصله. الاستعادة
+   تمسح علامة الحذف ويُعاد بعدها التحميل، فيعود السجل بكل ما يتبعه. لا حذف نهائي. */
+let TR=null, trBusy=false, trErr="";
+const TR_KIND={workers:"عامل", documents:"وثيقة", sections:"قسم", zones:"منطقة", materials:"مادة"};
+async function loadTrash(){
+  if(!can("trash.restore") || trBusy) return;
+  trBusy=true; trErr="";
+  const box=el("trList"); if(box && box.innerHTML!==undefined && !TR) box.innerHTML='<div class="empty"><p>يقرأ المحذوفات من الخادم…</p></div>';
+  try{ TR=trShape(await dbTrash()); }
+  catch(e){ TR=null; trErr=(e && e.message)||String(e); }
+  finally{ trBusy=false; }
+  renderTrash();
+}
+function trShape(raw){
+  const f=CF(), liveZ={}, liveS={}, delZ={}, delS={}, delW={};
+  (f.zones||[]).forEach(z=>{ liveZ[z.id]=z; }); (f.sections||[]).forEach(x=>{ liveS[x.id]=x; });
+  (raw.zones||[]).forEach(z=>{ delZ[z.id]=z; }); (raw.sections||[]).forEach(x=>{ delS[x.id]=x; });
+  (raw.workers||[]).forEach(w=>{ delW[w.id]=w; });
+  const zoneName=id=>(liveZ[id]||delZ[id]||{}).name||"";
+  const secZone=id=>liveS[id]?liveS[id].zoneId:(delS[id]?delS[id].zone_id:null);
+  const secName=id=>(liveS[id]||delS[id]||{}).name||"";
+  /* يرى المنطقة؟ — وما بلا منطقة معروفة لا يراه إلا من نطاقه كل المناطق */
+  const sees=z=>z ? seesZone(z) : meAllZones();
+  const out=[], base=r=>({id:r.id, by:r.deleted_by?(userName(r.deleted_by)||"اسم غير متاح"):"—", at:dbStamp(r.deleted_at), ts:String(r.deleted_at||"")});
+  (raw.zones||[]).forEach(z=>{ if(!sees(z.id)) return;
+    out.push(Object.assign(base(z),{table:"zones", label:"المنطقة «"+(z.name||"")+"»", sub:""})); });
+  (raw.sections||[]).forEach(x=>{ if(!sees(x.zone_id)) return;
+    out.push(Object.assign(base(x),{table:"sections", label:"القسم «"+(x.name||"")+"»", sub:zoneName(x.zone_id),
+      block:delZ[x.zone_id]?"استعد منطقة «"+zoneName(x.zone_id)+"» أولاً":""})); });
+  (raw.workers||[]).forEach(w=>{ const z=secZone(w.section_id); if(!sees(z)) return;
+    out.push(Object.assign(base(w),{table:"workers", label:"العامل «"+(w.name||"")+"»", sub:(w.seq?"رقم الجرد "+w.seq+" · ":"")+(secName(w.section_id)||"بلا قسم"),
+      block:delS[w.section_id]?"استعد قسم «"+secName(w.section_id)+"» أولاً":""})); });
+  (raw.documents||[]).forEach(d=>{
+    const data=(d.data && typeof d.data==="object")?d.data:{}, lw=d.worker_id?f.workers.find(x=>x.id===d.worker_id):null, dw=d.worker_id?delW[d.worker_id]:null;
+    const z=lw?secZone(lw.sectionId):dw?secZone(dw.section_id):d.zone_id||null;
+    if(d.worker_id ? !(lw?rtSees(lw):(dw && sees(z))) : !sees(d.zone_id)) return;
+    const kind=d.kind||"", who=data.name||data.title||data.subject||"";
+    out.push(Object.assign(base(d),{table:"documents", label:(DOC_LABEL[kind]||"وثيقة")+" "+(d.no||"")+(who?" — "+who:""),
+      sub:d.date?dateSlash(String(d.date).slice(0,10)):"", money:["leave","penalty","achievement"].includes(kind),
+      block:dw?"استعد العامل «"+(dw.name||"")+"» أولاً":""})); });
+  (raw.materials||[]).forEach(m=>{
+    out.push(Object.assign(base(m),{table:"materials", label:"المادة «"+(m.name||"")+"»", sub:m.unit||""})); });
+  return out.sort((a,b)=>b.ts.localeCompare(a.ts));
+}
+function renderTrash(){
+  const box=el("trList"); if(!box||box.innerHTML===undefined) return;
+  if(!can("trash.restore")){ box.innerHTML=""; return; }
+  if(trErr){ box.innerHTML='<div class="empty"><p>'+esc("تعذّرت قراءة المحذوفات: "+trErr)+'</p></div>'; return; }
+  if(!TR){ box.innerHTML='<div class="empty"><p>يقرأ المحذوفات من الخادم…</p></div>'; return; }
+  const k=el("trKind").value, q=String(el("trSearch").value||"").trim();
+  let list=TR.filter(x=>!k || x.table===k);
+  if(q) list=list.filter(x=>[x.label,x.sub,x.by,x.at].some(v=>String(v||"").indexOf(q)!==-1));
+  if(!list.length){ box.innerHTML='<div class="empty"><p>'+(q||k?"ماكو محذوفات تطابق الاختيار.":"ماكو محذوفات.")+'</p></div>'; return; }
+  box.innerHTML='<div class="tblwrap tight"><table><thead><tr><th>النوع</th><th>ما حُذف</th><th>حذفه</th><th>متى</th><th></th></tr></thead><tbody>'+
+    list.map(x=>'<tr><td>'+esc(TR_KIND[x.table])+'</td><td>'+esc(x.label)+(x.sub?'<div class="mini">'+esc(x.sub)+'</div>':'')+'</td>'+
+      '<td>'+esc(x.by)+'</td><td class="dt">'+esc(x.at)+'</td>'+
+      '<td class="actcell">'+(x.block?'<span class="mini">'+esc(x.block)+'</span>':'<button class="btn sm" data-trrestore="'+x.table+':'+x.id+'">استعادة</button>')+'</td></tr>').join("")+
+    '</tbody></table></div>';
+}
+async function trRestore(t,id){
+  const x=(TR||[]).find(v=>v.table===t && v.id===id); if(!x || x.block) return;
+  const ok=await confirmBox("استعادة من المحذوفات",x.label+"\n\nيعود السجل كما كان قبل حذفه"+
+    (x.money?"، ويدخل حساب الراتب ثانية":"")+".",{ok:"استعادة"});
+  if(!ok) return;
+  try{ await dbRestore(t,id,"استعادة "+x.label); }
+  catch(e){ await alertBox(e.message,"لم يُستعد"); return; }
+  audit("restore",x.label,"محذوف","مستعاد");
+  TR=TR.filter(v=>v!==x); renderTrash();
+  await resyncFromServer();            // يعود بكل ما يتبعه (وثائق العامل وأيامه، أقسام المنطقة…) — ويُعاد رسم التبويب
+}
+el("trKind").addEventListener("change",renderTrash);
+el("trSearch").addEventListener("input",renderTrash);
+el("trReload").onclick=()=>{ TR=null; loadTrash(); };
+el("trList").addEventListener("click",e=>{
+  const b=e.target.closest("[data-trrestore]"); if(!b) return;
+  const i=b.dataset.trrestore.indexOf(":"); trRestore(b.dataset.trrestore.slice(0,i),b.dataset.trrestore.slice(i+1));
+});
 
 /* ==================== [واجهة] مركز التنبيهات (الصفحة الأولى) ====================
    كل تنبيه يقرأ من دوال الحساب نفسها (missingDays، salaryFor، buildReport) ويحمل زراً
@@ -11644,7 +11775,7 @@ document.addEventListener("keydown",e=>{
 
 function switchView(v){
   if(!viewAllowed(v)) v="daily";
-  ["home","daily","leaves","penalties","achievements","materials","history","people","variables","report","ledger","form","settings"].forEach(x=>
+  ["home","daily","leaves","penalties","achievements","materials","history","trash","people","variables","report","ledger","form","settings"].forEach(x=>
     el("view-"+x).classList.toggle("hidden",x!==v));
   const tabs=[...document.querySelectorAll(".tabs button")];
   tabs.forEach(b=>{
@@ -11657,6 +11788,7 @@ function switchView(v){
   el("tally").classList.toggle("hidden",v!=="daily");
   if(v==="home") renderHome();
   if(v==="history"){ renderHistory(); renderAudit(); }
+  if(v==="trash") loadTrash();
   if(v==="daily") scheduleAlerts();
   if(v==="people") renderPeople();
   if(v==="variables") renderVariables();
@@ -11951,7 +12083,8 @@ const PERM_HIDE={
     "#applyAllSalary","[data-offclr]","[data-offdel]","#addOffDate"],
   "docs.manage":["#lvSave","#pnSave","#acSave","#mtSave","#lfSave",
     "[data-ldel]","[data-pdel]","[data-adel]","[data-idel]","[data-lfdel]","[data-medit]","[data-mdel]"],
-  "month.lock":["#rpLockBtn","#rpUnlock","[data-hdel]"]
+  "month.lock":["#rpLockBtn","#rpUnlock","[data-hdel]"],
+  "trash.restore":["[data-trrestore]"]
 };
 const PERM_LOCK={
   "company.settings":["[data-wd]","#setProRate"],
@@ -12044,7 +12177,7 @@ function setScope(bid,view){
    بخيارين «اعرض نسخته» و«اكتب فوقها» — لا يضيع عمله بصمت، ولا يُكتب فوق عمل غيره بصمت. */
 let rtWas=null, rtTimer=null;
 const rtHold=new Set(), rtTheirs={};
-function rtFresh(){ return {cards:new Set(), days:new Set(), notesDay:new Set(), workers:false, docs:new Set()}; }
+function rtFresh(){ return {cards:new Set(), days:new Set(), notesDay:new Set(), workers:false, docs:new Set(), resync:false}; }
 let rtD=rtFresh();
 function rtStart(){
   dbSubscribe(rtApply,st=>{
@@ -12120,7 +12253,9 @@ function rtWorker(c){
     rtD.workers=true; return true;
   }
   const nw=normalizeWorker(c.worker);
-  if(i<0){ f.workers.push(nw); rtD.workers=true; return true; }
+  /* عامل يظهر بتعديل لا بإدراج (استُعيد من المحذوفات، أو نُقل إلى نطاقه): وثائقه وأيامه ليست
+     بالذاكرة — تُقرأ بإعادة تحميل واحدة */
+  if(i<0){ f.workers.push(nw); rtD.workers=true; if(c.ev==="UPDATE") rtD.resync=true; return true; }
   const w=f.workers[i];
   if(rtWorkerOpen(c.id)) rtWorkerConflict(c,w);
   Object.keys(w).forEach(k=>{ delete w[k]; }); Object.assign(w,nw);
@@ -12161,7 +12296,10 @@ function rtDoc(c){
       " — ما في النموذج لم يُحفظ، وحفظه الآن يصدر وثيقة جديدة.",[["حسناً",()=>{ RT_DOC[key][3](); }]]);
     f[key]=list.filter(x=>x.id!==c.id); rtD.docs.add(key); return true;
   }
-  if(i<0){ if(key==="letters") list.push(c.doc); else list.unshift(c.doc); rtD.docs.add(key); return true; }
+  if(i<0){ if(key==="letters") list.push(c.doc); else list.unshift(c.doc); rtD.docs.add(key);
+    /* «أصدرها»: كاتب لم يُقرأ اسمه بعد (مستخدم جديد) — يُقرأ ثم يُعاد رسم القائمة */
+    if(c.doc.issuedBy && !dbNameOf(c.doc.issuedBy)) dbLoadNames([c.doc.issuedBy]).then(()=>{ rtD.docs.add(key); clearTimeout(rtTimer); rtTimer=setTimeout(rtFlush,60); });
+    return true; }
   if(rtDocOpen(key,c.id))
     rtNotice("d|"+c.id,c.by,n=>"عدّل "+n+" الوثيقة "+(c.doc.no||"")+" المفتوحة أمامك.",[
       ["اعرض نسخته",()=>rtReopen(key,c.id)],
@@ -12189,6 +12327,7 @@ function rtShow(){
 /* الرسم: ما مسّته التغييرات وحده، وتبويب فيه تعديل مفتوح لا يُعاد رسمه تحت يد المستخدم */
 function rtFlush(){
   const d=rtD; rtD=rtFresh();
+  if(d.resync){ resyncFromServer(); return; }
   if(d.workers || d.docs.size) scopeDirty();
   const v=currentView(), editing=editWorkerId!==null || editDirId!==null;
   if(v==="daily"){

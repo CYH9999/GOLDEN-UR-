@@ -241,7 +241,7 @@ function serverRows(c){
   const put=(kind,list,f)=>(list||[]).forEach(x=>{
     const data=Object.assign({},x); ["id","no","revisions","workerId"].concat(f).forEach(k=>delete data[k]);
     documents.push({id:x.id,kind:kind,no:x.no,worker_id:x.workerId||null,zone_id:null,date:x[f[0]]||null,
-      date_to:f[1]?(x[f[1]]||null):null,data:data,revisions:x.revisions||[],created_at:"2026-09-27T06:00:00Z"}); });
+      date_to:f[1]?(x[f[1]]||null):null,data:data,revisions:x.revisions||[],created_by:null,created_at:"2026-09-27T06:00:00Z"}); });
   put("leave",c.leaves,["from","to"]); put("penalty",c.penalties,["date"]); put("achievement",c.achievements,["date"]);
   put("issue",c.issues,["from","to"]); put("letter",c.letters,["date"]);
   const iso=st=>{ const m=/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(st||""); return m?new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).toISOString():null; };
@@ -477,9 +477,13 @@ try{
   check("أجر اليوم بالعقوبة بدقته الكاملة (رقم ونص)", JSON.stringify([bd("penalties","p1").dayRate,bd("penalties","p2").dayRate]), "[11166.666666666666,13333.333333333334]");
   check("kind داخل العقوبة (days) غير نوع الوثيقة", bd("penalties","p2").kind, "days");
   check("الإجازة: العامل والتاريخان من أعمدتها", JSON.stringify([bd("leaves","l2").workerId,bd("leaves","l2").from,bd("leaves","l2").to]), '["b","2026-09-21","2026-09-23"]');
+  /* من أصدرها ومتى (created_by/created_at) حقلان يُضافان من أعمدتهما، وما عداهما كما هو */
+  const noIss=o=>Object.keys(o).filter(f=>f!=="issuedBy" && f!=="issuedAt").sort().reduce((a,f)=>(a[f]=o[f],a),{});
   check("الوثائق بحقولها كما هي (إجازة، عقوبة، مكافأة، مواد، كتاب)",
-    ["leaves","penalties","achievements","issues","letters"].every(k=>orig[k].every(x=>JSON.stringify(Object.keys(x).sort().reduce((o,f)=>(o[f]=x[f],o),{}))===
-      JSON.stringify(Object.keys(bd(k,x.id)).sort().reduce((o,f)=>(o[f]=bd(k,x.id)[f],o),{})))), true);
+    ["leaves","penalties","achievements","issues","letters"].every(k=>orig[k].every(x=>JSON.stringify(noIss(x))===JSON.stringify(noIss(bd(k,x.id))))), true);
+  check("«أصدرها»: الوقت من created_at، والكاتب من created_by (فارغ للمنقولة)", JSON.stringify([bd("leaves","l2").issuedAt, bd("leaves","l2").issuedBy]),
+    JSON.stringify([w8.eval('dbStamp("2026-09-27T06:00:00Z")'), ""]));
+  check("…ولا يُكتبان في data عند الحفظ", w8.eval('var r=dbDocRow("leave",Object.assign({},C().leaves[0],{issuedBy:"u1",issuedAt:"x"})); ("issuedBy" in r.data)+"/"+("issuedAt" in r.data)'), "false/false");
   check("الإجازات الأحدث أولاً", built.leaves.map(x=>x.no).join(","), "إ-2026-004,إ-2026-003");
   check("pay31From في c.pay31From", built.pay31From, "2026-09");
   check("كل مفاتيح الإعدادات منقولة بقيمها", Object.keys(orig.settings).every(k=>JSON.stringify(orig.settings[k])===JSON.stringify(built.settings[k])), true);
@@ -718,7 +722,7 @@ try{
     'el("lfEditor").querySelectorAll("p")[3].innerHTML="نص <b>عريض</b> <script>x()<\/script><span onclick=y()>و</span>"; lfSave();');
   let LT1=J('C().letters[0]');
   check("أول كتاب يأخذ العدد ك-السنة-001", LT1.no, "ك-2026-001");
-  check("حقول المسوّدة التسعة (ومنها موقّعها sig)", Object.keys(LT1).sort().join(","), "date,editedAt,html,id,no,sig,subject,title,to");
+  check("حقول المسوّدة (ومنها موقّعها sig، ومن أصدرها ومتى)", Object.keys(LT1).sort().join(","), "date,editedAt,html,id,issuedAt,issuedBy,no,sig,subject,title,to");
   check("العدد المعطى عند الحفظ يظهر داخل نص الكتاب", LT1.html.indexOf(">ك-2026-001<")>0, true);
   check("المنظّف: لا script ولا onclick، والعريض باقٍ", /<script|onclick/.test(LT1.html)===false && LT1.html.indexOf("<b>عريض</b>")>0, true);
   check("صورة التوقيع لا تُخزَّن داخل الكتاب", /<img/.test(LT1.html), false);
@@ -1235,6 +1239,32 @@ try{
   check("المنظّف يُبقي data-cc ويُسقط data-blank", w22.eval('lfClean(\'<ul data-cc="1" class="x"><li data-blank="">a</li></ul>\')'), '<ul data-cc="1"><li>a</li></ul>');
   check("الطباعة: السطر الفارغ نقاط", /<ul data-cc="1"><li>…………………<\/li><li>الصادرة<\/li><\/ul>/.test(w22.eval('lfPrintHtml()')), true);
   check("الزر: سطر قبل «الصادرة»", w22.eval('lfCcAdd(); [].map.call(lfEd().querySelectorAll("ul[data-cc]>li"),function(li){ return li.textContent||"_"; }).join("|")'), "_|_|الصادرة");
+
+  /* ---- ٢٣) المحذوفات وسجل التدقيق ---- */
+  group("٢٣ · المحذوفات، «المستخدم» بسجل التدقيق، «أصدرها»");
+  const w23=await boot();
+  load(w23,stateOf([company({id:"coT",workers:[{id:"a",name:"أحمد كاظم"}]})]));
+  w23.eval('CF().audit=[{at:"2026-09-28 10:00",kind:"salary",what:"أحمد كاظم",before:"1",after:"2",userId:ME.id},{at:"2026-09-28 11:00",kind:"lock",what:"راتب آب",before:"مفتوح",after:"مقفل",userId:"u-x"}]; switchView("history");');
+  check("سجل التدقيق: عمود «المستخدم» ثانياً", w23.eval('[].map.call(document.querySelectorAll("#auditList thead th"),function(t){return t.textContent;}).join("|")'), "الوقت|المستخدم|النوع|على|قبل|بعد|السبب / المرجع");
+  check("اسم المستخدم الحالي، ومن لا يُقرأ اسمه «اسم غير متاح»", w23.eval('[].map.call(document.querySelectorAll("#auditList tbody tr"),function(r){return r.children[1].textContent;}).join("|")'), "اسم غير متاح|فحص محلي");
+  check("لا زر ولا حقل تعديل في سجل التدقيق", w23.eval('document.querySelectorAll("#auditList button, #auditList input, #auditList select, #auditList [contenteditable]").length'), 0);
+  check("قيد محلي جديد يحمل كاتبه", w23.eval('audit("salary","x","1","2"); CF().audit[CF().audit.length-1].userId===ME.id'), true);
+  check("من نطاقه بعض المناطق: شرح بلا أي قيد", w23.eval('ME.allZones=false; renderAudit(); var r=[document.querySelectorAll("#auditList tbody tr").length, el("auditList").textContent.indexOf("لا يُعرض لمن نطاقه بعض المناطق")>=0].join(); ME.allZones=true; renderAudit(); r'), "0,true");
+  check("«أصدرها»: الكاتب والتاريخ، وبلا كاتب «غير مسجّل»", w23.eval('[issuerText({issuedBy:ME.id,issued:"2026-09-24"}), issuerText({issuedBy:"",issued:"2026-09-01"}), issuerText({issuedBy:"u-x",issuedAt:"2026-09-02 10:00"})].join("|")'),
+    "أصدرها: فحص محلي — 2026/09/24|أصدرها: غير مسجّل — 2026/09/01|أصدرها: اسم غير متاح — 2026/09/02");
+  /* المحذوفات: الشكل والتبعية والنطاق */
+  w23.__tr={zones:[{id:"zD",name:"منطقة محذوفة",deleted_at:"2026-09-28T08:00:00Z",deleted_by:"u-x"}],
+    sections:[{id:"sD",zone_id:"zD",name:"قسم محذوف",deleted_at:"2026-09-28T09:00:00Z",deleted_by:"u-x"},{id:"sK",zone_id:"z1",name:"قسم في المنطقة",deleted_at:"2026-09-27T09:00:00Z",deleted_by:"local"}],
+    workers:[{id:"wD",seq:9,name:"عامل محذوف",section_id:"sD",deleted_at:"2026-09-29T09:00:00Z",deleted_by:"local"}],
+    documents:[{id:"dD",kind:"penalty",no:"ع-2026-020",worker_id:"wD",zone_id:null,date:"2026-09-03",data:{name:"عامل محذوف"},deleted_at:"2026-09-29T10:00:00Z",deleted_by:"local"}],
+    materials:[{id:"mD",name:"كلور",unit:"لتر",deleted_at:"2026-09-26T09:00:00Z",deleted_by:"u-x"}]};
+  const T23=JSON.parse(w23.eval('JSON.stringify(trShape(__tr).map(function(x){return [x.table,x.label,x.by,x.block||"",!!x.money];}))'));
+  check("الأحدث أولاً، ومن حذفه باسمه", T23.map(x=>x[0]+"/"+x[2]).join(","), "documents/فحص محلي,workers/فحص محلي,sections/اسم غير متاح,zones/اسم غير متاح,sections/فحص محلي,materials/اسم غير متاح");
+  check("لا يُستعاد قبل أصله: وثيقة عاملها محذوف، عامل قسمه محذوف، قسم منطقته محذوفة", T23.slice(0,3).map(x=>x[3]).join("|"),
+    "استعد العامل «عامل محذوف» أولاً|استعد قسم «قسم محذوف» أولاً|استعد منطقة «منطقة محذوفة» أولاً");
+  check("وثيقة مالية: تنبيه أنها تعود لحساب الراتب", T23[0][4], true);
+  check("من نطاقه بعض المناطق: لا يُحفظ ما خارجه", w23.eval('ME.allZones=false; ME.zones=new Set(["z1"]); var r=trShape(__tr).map(function(x){return x.table;}).join(); ME.allZones=true; r'), "sections,materials");
+  check("تبويب المحذوفات بصلاحيته", w23.eval('document.getElementById("tab-trash").dataset.perm'), "trash.restore");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
