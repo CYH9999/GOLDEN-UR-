@@ -281,14 +281,13 @@ async function dbFetchAll() {
   DB_CO_LAST = dbCanon({ name: co.data.name, theme: co.data.theme, accent: co.data.accent,
     settings: (co.data.settings && typeof co.data.settings === "object") ? co.data.settings : {} });
 
-  /* سجل التدقيق لمن يملك قراءته وحده: قيوده تحمل أسماء عمال كل الجهات، فلا يُطلب لغيره أصلاً.
-     ولا لمن نطاقه بعض المناطق: القيد لا يحمل منطقته (لا عمود zone_id في audit_log)، فلا يُعرف أيّ
-     قيوده يخصّ مناطقه — ولا يُعرض له قيد عن عامل خارج نطاقه، لا مطويّاً ولا باسم آخر. */
+  /* سجل التدقيق لمن يملك قراءته وحده. الخادم يفلتره بمنطقة القيد (a_read: has_perm و can_see_zone):
+     قيد عن عامل خارج نطاق القارئ لا يصله، والقيد بلا منطقة لمن نطاقه كل المناطق وحده */
   const auditQ = (async () => {
-    if (!dbAuditReadable()) return [];
+    if (!can("audit.read")) return [];
     let r;
     try {
-      r = await sb.from("audit_log").select("id,user_id,kind,what,before_val,after_val,reason,at")
+      r = await sb.from("audit_log").select("id,user_id,zone_id,kind,what,before_val,after_val,reason,at")
         .eq("company_id", cid).order("at", { ascending: false }).order("id", { ascending: false })
         .limit(DB_AUDIT_LIMIT);
     } catch (e) { throw dbErr(e, "تعذّر تحميل سجل التدقيق."); }
@@ -335,8 +334,6 @@ async function dbFetchAll() {
   return { company: co.data, buildings, zones, sections, workers, dayStates, dayZones,
     documents, materials, holidays, locks, lockSnaps, audit };
 }
-/* يقرأ سجل التدقيق؟ الصلاحية، ونطاق كل المناطق (راجع auditQ) */
-function dbAuditReadable() { return can("audit.read") && !!ME && ME.allZones === true; }
 
 /* ---- أدوات التحويل ----
    التاريخ (عمود date) يبقى نصاً YYYY-MM-DD كما جاء، ولا يمرّ عبر new Date —
@@ -509,6 +506,7 @@ function dbBuildState(raw) {
       before: dbStr(r.before_val), after: dbStr(r.after_val) };
     if (r.reason) a.reason = String(r.reason);
     if (r.user_id) a.userId = r.user_id;
+    if (r.zone_id) a.zoneId = r.zone_id;
     return a;
   });
 
@@ -882,6 +880,7 @@ function dbAudit(a, onFail) {
     .then(oks => {
       if (!oks.every(Boolean)) { if (onFail) onFail(null); return null; }
       return dbWrite("قيد سجل التدقيق", () => sb.from("audit_log").insert({ company_id: DB_CID, user_id: dbMe(),
+        zone_id: a.zoneId || null,
         kind: String(a.kind || ""), what: String(a.what || ""), before_val: String(a.before || ""),
         after_val: String(a.after || ""), reason: (a.reason || a.ref) ? String(a.reason || a.ref) : null }, { count: "exact" }),
         { quiet: true })

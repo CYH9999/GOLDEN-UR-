@@ -1091,7 +1091,7 @@ try{
   check("الشعار بنسبته الحقيقية (logoW/logoH) لا ممطوطاً", W19('(function(){ var st=S(), k=[st.logo,st.logoW,st.logoH]; st.logo="data:image/png;base64,iVBORw0KGgo="; st.logoW=600; st.logoH=150; renderHome();'+
     ' var im=document.querySelector("#hmId img"), r=(im.width/im.height).toFixed(3); st.logo=k[0]; st.logoW=k[1]; st.logoH=k[2]; renderHome(); return r+","+im.height; })()'), "4.000,60");
   check("وصول سريع: جرد اليوم · وصل جديد · كشف الرواتب، على «كل الجهات» قبل أي اختيار",
-    W19('[].map.call(document.querySelectorAll("#hmQuick [data-q]"),function(b){return b.dataset.q;}).join(",")+"|"+el("hmQuick").querySelector(".qon b").textContent+"|"+document.querySelectorAll("#hmBlds .me").length'), "daily,leave,report|كل الجهات|0");
+    W19('[].map.call(document.querySelectorAll("#hmQuick [data-q]"),function(b){return b.dataset.q;}).join(",")+"|"+el("hmQuick").querySelector(".qon b").textContent+"|"+document.querySelectorAll("#hmBlds .me").length'), "daily,new,report|كل الجهات|0");
   check("زر «اللوحة» بالشريط العلوي مؤشَّر، وشريط النطاق مخفي على اللوحة، ولوحة المفاتيح لها مدخل للتبويبات",
     W19('el("homeBtn").getAttribute("aria-current")+","+el("scopeBar").classList.contains("onhome")+","+document.querySelectorAll(".tabs [tabindex=\'0\']").length'), "page,true,1");
   /* الدخول من بطاقة: يختار الجهة ويحفظها */
@@ -1249,7 +1249,9 @@ try{
   check("اسم المستخدم الحالي، ومن لا يُقرأ اسمه «اسم غير متاح»", w23.eval('[].map.call(document.querySelectorAll("#auditList tbody tr"),function(r){return r.children[1].textContent;}).join("|")'), "اسم غير متاح|فحص محلي");
   check("لا زر ولا حقل تعديل في سجل التدقيق", w23.eval('document.querySelectorAll("#auditList button, #auditList input, #auditList select, #auditList [contenteditable]").length'), 0);
   check("قيد محلي جديد يحمل كاتبه", w23.eval('audit("salary","x","1","2"); CF().audit[CF().audit.length-1].userId===ME.id'), true);
-  check("من نطاقه بعض المناطق: شرح بلا أي قيد", w23.eval('ME.allZones=false; renderAudit(); var r=[document.querySelectorAll("#auditList tbody tr").length, el("auditList").textContent.indexOf("لا يُعرض لمن نطاقه بعض المناطق")>=0].join(); ME.allZones=true; renderAudit(); r'), "0,true");
+  w23.eval('CF().audit.push({at:"2026-09-28 12:00",kind:"day",what:"قيد بالمنطقة",before:"",after:"",zoneId:"z1"},{at:"2026-09-28 12:30",kind:"day",what:"قيد بمنطقة أخرى",before:"",after:"",zoneId:"zX"});');
+  check("من نطاقه بعض المناطق: قيود منطقته وحدها، لا بلا منطقة ولا من غيرها", w23.eval('ME.allZones=false; ME.zones=new Set(["z1"]); renderAudit(); var r=[].map.call(document.querySelectorAll("#auditList tbody tr"),function(t){return t.children[3].textContent;}).join("|"); ME.allZones=true; renderAudit(); r'), "قيد بالمنطقة");
+  check("قيد عن عامل يحمل منطقته، والراتب الافتراضي بلا منطقة", w23.eval('[auditZoneW(C().workers[0]), auditZoneOf(["z1"]), auditZoneOf([])].join("/")'), "z1/z1/");
   check("«أصدرها»: الكاتب والتاريخ، وبلا كاتب «غير مسجّل»", w23.eval('[issuerText({issuedBy:ME.id,issued:"2026-09-24"}), issuerText({issuedBy:"",issued:"2026-09-01"}), issuerText({issuedBy:"u-x",issuedAt:"2026-09-02 10:00"})].join("|")'),
     "أصدرها: فحص محلي — 2026/09/24|أصدرها: غير مسجّل — 2026/09/01|أصدرها: اسم غير متاح — 2026/09/02");
   /* المحذوفات: الشكل والتبعية والنطاق */
@@ -1265,6 +1267,34 @@ try{
   check("وثيقة مالية: تنبيه أنها تعود لحساب الراتب", T23[0][4], true);
   check("من نطاقه بعض المناطق: لا يُحفظ ما خارجه", w23.eval('ME.allZones=false; ME.zones=new Set(["z1"]); var r=trShape(__tr).map(function(x){return x.table;}).join(); ME.allZones=true; r'), "sections,materials");
   check("تبويب المحذوفات بصلاحيته", w23.eval('document.getElementById("tab-trash").dataset.perm'), "trash.restore");
+
+  /* ---- ٢٤) سماحية الخروج ---- */
+  group("٢٤ · سماحية الخروج — وثيقة إدارية: رقم «س»، لا راتب ولا جرد ولا قفل، نسختان على A4");
+  const w24=await boot();
+  load(w24,stateOf([company({id:"coP",workers:[{id:"a",name:"أحمد كاظم",startDate:"2024-03-01"},{id:"b",name:"باسم"}]})]));
+  check("الوقت بصيغة ١٢ ساعة", w24.eval('[timeText("00:10"),timeText("12:05"),timeText("13:30"),timeText("")].join("|")'), "12:10 ص|12:05 م|1:30 م|");
+  check("نص السبب لكل نوع", w24.eval('[passReasonText({reason:"طعام"}),passReasonText({reason:"شراء",detail:"منظّف"}),passReasonText({reason:"تكليف من موظف",reqName:"علي",reqDept:"الحسابات"}),passReasonText({reason:"أخرى",detail:"مراجعة طبيب"})].join("|")'),
+    "طعام|شراء — منظّف|تكليف من موظف: علي — الحسابات|مراجعة طبيب");
+  check("التحقق قبل الحفظ", w24.eval('[psInvalid({}), psInvalid({workerId:"a"}), psInvalid({workerId:"a",out:"12:00",back:"11:00"}), psInvalid({workerId:"a",out:"12:00",reason:"أخرى"}), psInvalid({workerId:"a",out:"12:00",reason:"تكليف من موظف"}), psInvalid({workerId:"a",out:"12:00",reason:"طعام"})].join("|")'),
+    "اختر اسم العامل أولاً.|اكتب وقت الخروج.|وقت الرجوع المتوقّع قبل وقت الخروج.|اكتب السبب — «أخرى» تحتاج نصاً.|اكتب اسم الموظف الطالب.|");
+  const rep24=()=>w24.eval('JSON.stringify(buildReport("2026-09-01","2026-09-30").rows.map(function(r){return [r.id,r.net,r.present,r.absent];}))');
+  const before24=rep24(), days24=w24.eval('JSON.stringify(C().days)');
+  /* سماحية بشهر مقفل: لا يمنعها القفل */
+  w24.eval('CF().locks["2026-09"]={at:"2026-10-01 09:00"}; switchView("passes"); el("psNew").onclick(); el("psWorker").value="a"; el("psWorker").dispatchEvent(new Event("change")); el("psDate").value="2026-09-15"; el("psOut").value="09:00"; el("psBack").value="09:45";');
+  await w24.eval('el("psSave").onclick()');
+  const P24=JSON.parse(w24.eval('JSON.stringify(C().passes[0]||null)'));
+  check("شهر مقفل لا يمنعها، والرقم «س-السنة-001»", JSON.stringify([w24.eval('monthLocked("2026-09-15")'), P24 && P24.no]), '[true,"س-2026-001"]');
+  check("حقولها", P24 && [P24.workerId,P24.date,P24.out,P24.back,P24.reason,P24.approver,P24.section].join("|"), "a|2026-09-15|09:00|09:45|طعام|فحص محلي|قسم الإنتاج — م");
+  check("لا تمسّ الكشف ولا الجرد", (rep24()===before24)+"/"+(w24.eval('JSON.stringify(C().days)')===days24), "true/true");
+  check("خانات التوقيع: العامل، المسؤول المباشر، المجيز (بلا صورة: المجيز ليس صاحب التوقيع)", w24.eval('JSON.stringify(passSeats())'),
+    JSON.stringify([{title:"توقيع العامل",name:""},{title:"توقيع المسؤول المباشر",name:""},{title:"المجيز",name:"فحص محلي",sig:false}]));
+  check("صورة التوقيع للمجيز إن كان صاحبها", w24.eval('S().signature="data:image/png;base64,AAAA"; el("psApprover").value=S().signer; var r=passSeats()[2].sig; S().signature=""; r'), true);
+  const ph24=w24.eval('passPrintHtml("data:image/png;base64,AAAA","س-2026-001")');
+  check("الطباعة: نسخة الإدارة فوق، خط القص، نسخة العامل تحت — واسم كل نسخة تحتها", /<div class="copy"><img [^>]+><div class="tag">نسخة الإدارة<\/div><\/div><div class="cut">.*<\/div><div class="copy"><img [^>]+><div class="tag">نسخة العامل<\/div><\/div>/.test(ph24) && ph24.indexOf("size:A4 portrait")>0, true);
+  const dx24=w24.eval('new TextDecoder().decode(passDocx())');
+  check("وورد: النسختان بالترتيب نفسه، و«سماحية خروج»", (dx24.indexOf("نسخة الإدارة")>0 && dx24.indexOf("نسخة العامل")>dx24.indexOf("نسخة الإدارة"))+"/"+(dx24.indexOf("سماحية خروج")>0), "true/true");
+  check("«وصل جديد» على اللوحة: السماحية أولاً", w24.eval('HM_NEW.map(function(x){return x[0];}).join()'), "pass,leave,penalty,ach,issue");
+  check("الجرد التفصيلي: عدّاد السماحيات بالمدة (شاشة فقط)", w24.eval('switchView("ledger"); el("lgFrom").value="2026-09-01"; el("lgTo").value="2026-09-30"; el("lgScope").value="worker"; lgTargetFill(); el("lgTarget").value="a"; runLedger(true); [].filter.call(document.querySelectorAll("#lgCards .card"),function(c){return c.textContent.indexOf("سماحيات خروج")>=0;})[0].querySelector(".v").textContent'), "1");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
