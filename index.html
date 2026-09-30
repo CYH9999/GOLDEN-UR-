@@ -1472,7 +1472,8 @@ tr.rowneg td{background:var(--absent-bg)}
     </div>
     <div class="panel-body">
       <div class="row3">
-        <label class="field"><span>العدد</span><input type="text" id="lfNo" readonly placeholder="يُعطى عند الحفظ"></label>
+        <label class="field"><span>العدد</span><input type="text" id="lfNo" dir="auto" placeholder="يُعطى تلقائياً عند الحفظ — أو اكتبه"
+          title="يُترك فارغاً فيأخذ الكتاب العدد التالي من عدّاد الخادم، أو يُكتب عدد من دفتر الصادرة"></label>
         <label class="field"><span>التاريخ</span><input type="date" id="lfDate"></label>
         <label class="field"><span>اسم المسوّدة (للقائمة فقط)</span><input type="text" id="lfTitle" placeholder="مثال: تأييد — أحمد كاظم"></label>
       </div>
@@ -1482,6 +1483,12 @@ tr.rowneg td{background:var(--absent-bg)}
       </div>
       <label class="field hidden" id="lfWorkerWrap"><span>العامل (يُسحب اسمه وقسمه وتاريخ مباشرته)</span>
         <select id="lfWorker" class="wsel"></select></label>
+      <div class="row3">
+        <label class="field"><span>الموقّع</span><select id="lfSigBy" class="wsel"></select></label>
+        <label class="field"><span>اسم الموقّع</span><input type="text" id="lfSigName"></label>
+        <label class="field"><span>صفته</span><input type="text" id="lfSigRole"></label>
+      </div>
+      <p class="mini" id="lfSigHint" style="margin:-4px 0 8px"></p>
       <div class="lftools" role="toolbar" aria-label="تنسيق نص الكتاب">
         <button class="btn sm" data-lfc="bold" title="عريض (Ctrl+B)"><b>ع</b></button>
         <button class="btn sm" data-lfc="italic" title="مائل (Ctrl+I)"><i>م</i></button>
@@ -1499,6 +1506,7 @@ tr.rowneg td{background:var(--absent-bg)}
         <button class="btn sm" data-lfc="insertUnorderedList" title="قائمة نقطية">• قائمة</button>
         <button class="btn sm" data-lfc="insertOrderedList" title="قائمة مرقّمة">١. قائمة</button>
         <button class="btn sm" id="lfTable" title="إدراج جدول">جدول</button>
+        <button class="btn sm" id="lfCc" title="يُضيف سطراً فارغاً إلى قائمة «نسخة منه إلى»">+ نسخة إلى</button>
         <span class="tsp"></span>
         <button class="btn sm ghost" data-lfc="undo" title="تراجع (Ctrl+Z)">تراجع</button>
         <button class="btn sm ghost" data-lfc="redo" title="إعادة (Ctrl+Y)">إعادة</button>
@@ -1583,6 +1591,18 @@ tr.rowneg td{background:var(--absent-bg)}
           <div class="actions">
             <button class="btn" id="sigClear">مسح التوقيع</button>
             <span class="saved" id="sigState"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>موقّع الكتب الرسمية</h2></div>
+        <div class="panel-body">
+          <p class="hint" style="margin-top:0">الكتاب الرسمي في «الفورمة» يصدر باسم هذا الموقّع افتراضاً، منفصلاً عن موقّع ورقة الجرد أعلاه.
+            يُختار غيره للكتاب الواحد من نموذج الكتاب نفسه، والكتاب المحفوظ يبقى بموقّعه ولو تغيّر هذا لاحقاً.</p>
+          <div class="row2">
+            <label class="field"><span>الاسم</span><input type="text" id="setLtSigner"></label>
+            <label class="field"><span>الصفة</span><input type="text" id="setLtRole"></label>
           </div>
         </div>
       </div>
@@ -4161,9 +4181,17 @@ const setMap={ setCompany:"company", setTitle:"title", setAddress:"address", set
   setCmT1:"cmT1", setCmN1:"cmN1", setCmT2:"cmT2", setCmN2:"cmN2",
   setCmT3:"cmT3", setCmN3:"cmN3", setCmSig:"cmSig", setTermNote:"termNote",
   setMisc:"miscInTotal", setSecCount:"secCount", setDPI:"exportDPI",
-  setPrintMode:"printMode" };
+  setPrintMode:"printMode", setLtSigner:"ltSigner", setLtRole:"ltRole" };
+/* موقّع الكتب الرسمية: مستقل عن موقّع ورقة الجرد. ما لم يُحفظ له اسم فقيمته الأولى العضو الثالث
+   (المدير) — تُحسب ولا تُكتب في الإعدادات عند التحميل، فحفظ الإعدادات بلا تغيير يبقى بلا طلب.
+   أول تعديل لأيّ منهما يثبّت الاثنين معاً. */
+function ltSig(){
+  const s=S();
+  return { name:s.ltSigner!=null?s.ltSigner:(s.cmN3||""), role:s.ltRole!=null?s.ltRole:(s.cmT3||"المدير") };
+}
 function fillSettings(){
   Object.keys(setMap).forEach(id=>{ el(id).value=S()[setMap[id]]||""; });
+  el("setLtSigner").value=ltSig().name; el("setLtRole").value=ltSig().role;
   fillLogoPrev(); fillLhPrev();
   el("setAbsAlert").value=S().absAlert==null?3:S().absAlert;
   if(!S().exportDPI){ S().exportDPI="300"; el("setDPI").value="300"; }
@@ -4179,6 +4207,7 @@ function fillSettings(){
 }
 Object.keys(setMap).forEach(id=>{
   el(id).addEventListener("input",()=>{
+    if(/^lt/.test(setMap[id])){ const v=ltSig(); S().ltSigner=v.name; S().ltRole=v.role; }
     S()[setMap[id]]=el(id).value;
     if(setMap[id]==="company"){ CF().name=el(id).value; renderCompanies(); }
     if(setMap[id]==="printMode"){ sigCache.src=null; redrawSheets(); if(RP) renderReport(); }
@@ -4450,20 +4479,21 @@ async function docNumber(listKey,dateIso){
 }
 /* المنطقة وقت الإصدار: منطقة العامل (لتوزيع المواد بين البنايتين) */
 function docZone(workerId){ const w=workerId?C().workers.find(x=>x.id===workerId):null; return w?(workerZoneId(w)||null):null; }
-async function docInsert(listKey,rec,atEnd){
+/* msgOf(خطأ): رسالة أوضح لرفض يعرفه المستدعي (العدد المستعمل) — وإلا رسالة الخادم */
+async function docInsert(listKey,rec,atEnd,msgOf){
   const kind=DOC_KIND[listKey];
   try{ await dbInsertDoc(kind,rec,docZone(rec.workerId),"حفظ "+DOC_LABEL[kind]+" "+rec.no); }
-  catch(e){ await alertBox(e.message,"لم تُحفظ "+DOC_LABEL[kind]); return false; }
+  catch(e){ await alertBox((msgOf&&msgOf(e))||e.message,"لم تُحفظ "+DOC_LABEL[kind]); return false; }
   const list=CF()[listKey]; if(atEnd) list.push(rec); else list.unshift(rec);
   return true;
 }
 /* تعديل وثيقة: نسخة معدّلة تُكتب أولاً، وبعد القبول تحلّ محلها بالذاكرة */
-async function docRevise(listKey,open,data,plain){
+async function docRevise(listKey,open,data,plain,msgOf){
   const kind=DOC_KIND[listKey], next=JSON.parse(JSON.stringify(open));
   if(plain) Object.assign(next,data); else reviseRecord(next,data);
   const moved=next.workerId!==open.workerId;
   try{ await dbUpdateDoc(kind,next,moved?docZone(next.workerId):undefined,"تعديل "+DOC_LABEL[kind]+" "+open.no); }
-  catch(e){ await alertBox(e.message,"لم يُحفظ التعديل"); return false; }
+  catch(e){ await alertBox((msgOf&&msgOf(e))||e.message,"لم يُحفظ التعديل"); return false; }
   Object.keys(open).forEach(k=>{ delete open[k]; });
   Object.assign(open,next);
   if(moved) scopeDirty();               // وثيقة نُقلت لعامل آخر قد تخرج من العرض أو تدخله
@@ -10670,6 +10700,7 @@ el("lgXls").onclick=async()=>{
    الحفظ هو نفسه المطبوع دائماً. */
 const LF_MARGIN={top:40, bottom:24, side:18};          // مم
 const LF_BASE_PT=13;
+const LF_BLANK="…………………";
 const LF_CSS=
   '.lfed{font:400 '+LF_BASE_PT+'pt/1.75 '+FF+';color:#111;direction:rtl;text-align:right}'+
   '.lfed p,.lfed div{margin:0 0 5pt}'+
@@ -10678,7 +10709,10 @@ const LF_CSS=
   '.lfed td,.lfed th{border:1px solid #555;padding:3pt 6pt;vertical-align:top;min-width:12mm}'+
   '.lfed .lfsig{text-align:left;margin-top:12pt;line-height:1.5}'+
   '.lfed .lfsig img{display:block;margin-inline-start:auto;max-height:17mm;max-width:45mm}'+
-  '.lfed .lfsig b{display:block}';
+  '.lfed .lfsig b{display:block}'+
+  '.lfed .lfsig .sgap{height:14mm}.lfed .lfsig .sgap.none{height:22mm}'+
+  /* سطر «نسخة إلى» فارغ: نقاط على الشاشة (خافتة)، ونقاط فعلية عند الطباعة والوورد (lfCcFill) */
+  '.lfed ul[data-cc]>li[data-blank]::before{content:"'+LF_BLANK+'";opacity:.5}';
 let lfEditId=null, lfInited=false, lfDirty=false;
 
 function lfEd(){ return el("lfEditor"); }
@@ -10704,13 +10738,14 @@ function lfCleanNode(n){
       ch.replaceWith(sp); lfCleanNode(sp); return;
     }
     if(!LF_TAGS[tg]){ lfCleanNode(ch); while(ch.firstChild) n.insertBefore(ch.firstChild,ch); ch.remove(); return; }
-    const f=ch.getAttribute("data-f");
+    const f=ch.getAttribute("data-f"), cc=tg==="UL" && ch.hasAttribute("data-cc");
     const st=ch.style||{};
     const ta=st.textAlign||ch.getAttribute("align")||"", fs=st.fontSize||"", fw=st.fontWeight||"", fi=st.fontStyle||"", td=st.textDecorationLine||st.textDecoration||"";
     Array.from(ch.attributes).forEach(a=>ch.removeAttribute(a.name));
     if(tg==="IMG"){ if(f!=="sigimg"){ ch.remove(); return; } }
     if(f && /^(no|date|to|subject|sig|sigimg)$/.test(f)){ ch.setAttribute("data-f",f); if(f!=="sigimg") ch.setAttribute("contenteditable","false"); }
     if(f==="sig") ch.className="lfsig";
+    if(cc) ch.setAttribute("data-cc","1");
     const css=[];
     if(/^(right|left|center|justify)$/.test(ta)) css.push("text-align:"+ta);
     if(/^\d+(\.\d+)?(pt|px)$/.test(fs)) css.push("font-size:"+fs);
@@ -10718,7 +10753,7 @@ function lfCleanNode(n){
     if(fi==="italic") css.push("font-style:italic");
     if(/underline/.test(td)) css.push("text-decoration:underline");
     if(css.length) ch.setAttribute("style",css.join(";"));
-    /* كتلة التوقيع تُحفظ فارغة وتُرسم من الإعدادات عند العرض — صورة التوقيع لا تتكرّر داخل كل كتاب */
+    /* كتلة التوقيع تُحفظ فارغة وتُرسم عند العرض من موقّع الكتاب نفسه (sig) — صورة التوقيع لا تتكرّر داخل كل كتاب */
     if(f==="sig"){ ch.innerHTML=""; return; }
     if(f==="sigimg") return;
     lfCleanNode(ch);
@@ -10731,25 +10766,137 @@ function lfClean(html){
 }
 
 /* ---- [فورمة] الحقول المرتبطة ---- */
-const LF_BLANK="…………………";
 function lfField(k){ return '<span data-f="'+k+'" contenteditable="false"></span>'; }
-function lfSigHtml(){
-  const s=S();
-  return (s.signature?'<img data-f="sigimg" src="'+s.signature+'" alt="">':'')+
-    '<b>'+esc(s.signer||"المسؤول الإداري")+'</b>'+esc(s.role||"");
-}
 function lfValues(){
-  return { no:el("lfNo").value||LF_BLANK, date:el("lfDate").value?dateSlash(el("lfDate").value):LF_BLANK,
+  return { no:String(el("lfNo").value||"").trim()||LF_BLANK, date:el("lfDate").value?dateSlash(el("lfDate").value):LF_BLANK,
     to:String(el("lfTo").value||"").trim()||LF_BLANK, subject:String(el("lfSubject").value||"").trim()||LF_BLANK };
 }
 function lfSync(root){
-  root=root||lfEd(); if(!root||!root.querySelectorAll) return;
-  const v=lfValues();
+  const live=!root; root=root||lfEd(); if(!root||!root.querySelectorAll) return;
+  const v=lfValues(), g=lfSigCur();
   root.querySelectorAll("[data-f]").forEach(n=>{
     const k=n.getAttribute("data-f");
-    if(k==="sig") n.innerHTML=lfSigHtml();
+    if(k==="sig") n.innerHTML=lfSigHtml(g);
     else if(v[k]!=null) n.textContent=v[k];
   });
+  if(live) lfCcMark(root);
+}
+/* الحقول غير قابلة للتحرير (contenteditable=false). وهذا نفسه ما كان يكسر السطر: أوامر الكتلة بالمتصفح
+   (المحاذاة والقوائم) تعدّ العنصر غير القابل للتحرير حدّاً للفقرة، فتلفّ «إلى / » وحده بكتلة جديدة
+   وتُنزل الحقل إلى السطر التالي. فتُرفع القفلة لحظة الأمر وتُعاد بعده، والتراجع (Ctrl+Z) قد يُعيد
+   الحقل بلا قفلته فيُعاد قفله بعد كل إدخال. */
+function lfLockFields(on){
+  lfEd().querySelectorAll("[data-f]").forEach(n=>{
+    const k=n.getAttribute("data-f"); if(k==="sigimg") return;
+    if(on) n.setAttribute("contenteditable","false");
+    else if(k!=="sig") n.removeAttribute("contenteditable");
+  });
+}
+/* محاذاة سطر داخل فقرة بأسطر (العدد<br>التاريخ) تضع كتلة داخل <p> — والمحلّل يفكّ ذلك عند إعادة
+   الفتح فيضيع السطر الثاني من فقرته. فقرة تحوي كتلة تصير div بخصائصها نفسها */
+function lfUnnest(root){
+  (root||lfEd()).querySelectorAll("p").forEach(p=>{
+    if(!p.querySelector("p,div,ul,ol,table")) return;
+    const d=document.createElement("div");
+    Array.from(p.attributes).forEach(a=>d.setAttribute(a.name,a.value));
+    while(p.firstChild) d.appendChild(p.firstChild);
+    p.replaceWith(d);
+  });
+}
+
+/* ---- [فورمة] الموقّع ----
+   الكتاب يصدر باسم موقّع الكتب (الإعدادات: ltSigner/ltRole) أو من يُختار له وحده، وما يُطبع يُقرأ من
+   الكتاب نفسه (sig) لا من الإعدادات: تغييرها اليوم لا يغيّر توقيع كتاب صدر قبل شهر.
+   صورة التوقيع المرسوم لمن رسمه (موقّع ورقة الجرد): تظهر فقط إذا كان اسم الموقّع اسمَه، والكتاب
+   يحفظ بصمتها لا الصورة. إن رُسم توقيع غيرها بعد صدور الكتاب طُبع بلا صورة — لا يُطبع على كتاب
+   توقيع لم يصدر به. */
+const LF_SIG_LBL={def:"موقّع الكتب", inv:"موقّع ورقة الجرد", cm1:"اللجنة (١)", cm2:"اللجنة (٢)", cm3:"اللجنة (٣)",
+  manual:"اسم يُكتب يدوياً", none:"بلا توقيع — يوقَّع بخط اليد بعد الطباعة"};
+function lfSigOpts(){
+  const s=S();
+  return { def:ltSig(), inv:{name:s.signer||"",role:s.role||""},
+    cm1:{name:s.cmN1||"",role:s.cmT1||""}, cm2:{name:s.cmN2||"",role:s.cmT2||""}, cm3:{name:s.cmN3||"",role:s.cmT3||""} };
+}
+function lfSigKey(src){
+  if(!src) return "";
+  let h=0x811c9dc5; for(let i=0;i<src.length;i++){ h^=src.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
+  return src.length+"-"+h.toString(16);
+}
+function lfSigImgFor(name){
+  const s=S(), n=String(name||"").trim();
+  return (s.signature && n && n===String(s.signer||"").trim()) ? lfSigKey(s.signature) : "";
+}
+function lfSigImgOk(g){ return !!(g && g.by!=="none" && g.img && S().signature && lfSigKey(S().signature)===g.img); }
+let lfSigImg="", lfSigOld=false;       // بصمة صورة التوقيع التي يصدر بها الكتاب · كتاب حُفظ قبل تثبيت الموقّع
+function lfSigCur(){
+  const b=el("lfSigBy"), by=(b&&b.value)||"def";
+  if(by==="none") return {by:"none", name:"", role:"", img:""};
+  return {by:by, name:String(el("lfSigName").value||"").trim(), role:String(el("lfSigRole").value||"").trim(), img:lfSigImg};
+}
+function lfSigFill(){
+  const sel=el("lfSigBy"); if(!sel||sel.innerHTML===undefined) return;
+  const cur=sel.value||"def", o=lfSigOpts();
+  sel.innerHTML=Object.keys(LF_SIG_LBL).map(k=>{
+    const v=o[k], t=LF_SIG_LBL[k]+(v?": "+(v.name||"بلا اسم")+(v.role?" — "+v.role:""):"");
+    return '<option value="'+k+'">'+esc(t)+'</option>'; }).join("");
+  sel.value=cur;
+}
+function lfSigSet(g){
+  el("lfSigBy").value=g.by||"def"; el("lfSigName").value=g.name||""; el("lfSigRole").value=g.role||"";
+  lfSigImg=g.img||""; lfSigUi();
+}
+/* اختيار من القائمة: الاسم والصفة من الإعدادات الآن، ويبقيان قابلين للتعديل */
+function lfSigPick(by){
+  const v=lfSigOpts()[by]||{name:"",role:""};
+  lfSigSet({by:by, name:v.name, role:v.role, img:lfSigImgFor(v.name)});
+}
+function lfSigUi(){
+  const g=lfSigCur(), none=g.by==="none";
+  el("lfSigName").disabled=none; el("lfSigRole").disabled=none;
+  el("lfSigHint").textContent = none ? "يُترك مكان التوقيع فارغاً ليوقَّع بخط اليد بعد الطباعة."
+    : (g.img && !lfSigImgOk(g)) ? "التوقيع المرسوم تغيّر بعد صدور هذا الكتاب، فيُطبع بلا صورة التوقيع — بالاسم والصفة كما صدر."
+    : lfSigOld ? "حُفظ هذا الكتاب قبل تثبيت الموقّع داخل الكتاب، فيظهر بموقّع ورقة الجرد كما كان يُطبع. الحفظ يثبّته فيه."
+    : "";
+}
+function lfSigHtml(g){
+  if(!g || g.by==="none") return '<div class="sgap none"></div>';
+  return (lfSigImgOk(g)?'<img data-f="sigimg" src="'+S().signature+'" alt="">':'<div class="sgap"></div>')+
+    '<b>'+esc(g.name||LF_BLANK)+'</b>'+esc(g.role||"");
+}
+
+/* ---- [فورمة] «نسخة منه إلى» ----
+   القائمة ul[data-cc]: سطورها تُكتب عند الإصدار، والفارغ منها نقاط — خافتة على الشاشة، وفعلية
+   بالطباعة والوورد ليُكتب بخط اليد. Enter داخلها يضيف سطراً (سلوك القوائم نفسه)، وزر
+   «+ نسخة إلى» يضيفه لمن لا يصل إليها بالمؤشر. */
+function lfCcBlank(li){ return !String(li.textContent||"").replace(/[\s\u200b]+/g,"") && !li.querySelector("img,table"); }
+function lfCcMark(root){
+  (root||lfEd()).querySelectorAll("ul[data-cc]>li").forEach(li=>{
+    if(lfCcBlank(li)) li.setAttribute("data-blank",""); else li.removeAttribute("data-blank"); });
+}
+function lfCcFill(root){
+  root.querySelectorAll("ul[data-cc]>li").forEach(li=>{ if(lfCcBlank(li)) li.textContent=LF_BLANK; });
+}
+/* قائمة الكتاب: الموسومة، أو (كتاب قديم) القائمة التي بعد فقرة «نسخة منه إلى» */
+function lfCcList(root){
+  root=root||lfEd();
+  let ul=root.querySelector("ul[data-cc]"); if(ul) return ul;
+  const p=Array.from(root.querySelectorAll("p,div")).find(n=>/^\s*نسخة منه إلى/.test(n.textContent||"") &&
+    n.nextElementSibling && n.nextElementSibling.tagName==="UL");
+  if(!p) return null;
+  ul=p.nextElementSibling; ul.setAttribute("data-cc","1"); return ul;
+}
+function lfCcAdd(){
+  const ed=lfEd(); let ul=lfCcList(ed);
+  if(!ul){ ed.insertAdjacentHTML("beforeend",'<p><b>نسخة منه إلى:</b></p><ul data-cc="1"></ul>'); ul=ed.lastElementChild; }
+  const li=document.createElement("li"); li.appendChild(document.createElement("br"));
+  const items=Array.from(ul.children).filter(x=>x.tagName==="LI"), last=items[items.length-1];
+  /* «الصادرة» تبقى آخر القائمة */
+  if(last && String(last.textContent||"").trim()==="الصادرة") ul.insertBefore(li,last); else ul.appendChild(li);
+  lfCcMark(ed); lfDirty=true;
+  ed.focus();
+  try{ const r=document.createRange(); r.setStart(li,0); r.collapse(true); const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }catch(e){}
+  try{ li.scrollIntoView({block:"nearest"}); }catch(e){}
+  return li;
 }
 
 /* ---- [فورمة] القوالب ---- */
@@ -10757,6 +10904,8 @@ function lfHeadHtml(){
   return '<p style="text-align:left">العدد: '+lfField("no")+'<br>التاريخ: '+lfField("date")+'</p>';
 }
 function lfSigBlock(){ return '<div data-f="sig" class="lfsig" contenteditable="false"></div>'; }
+/* «نسخة منه إلى»: سطر فارغ يُكتب عند الإصدار، و«الصادرة» أسفله */
+function lfCcHtml(){ return '<p><b>نسخة منه إلى:</b></p><ul data-cc="1"><li><br></li><li>الصادرة</li></ul>'; }
 function lfWorkerSentence(w){
   if(!w) return "يُرجى اختيار العامل من القائمة أعلاه ثم إعادة تطبيق القالب.";
   /* اسم القسم وحده (بلا وسم المنطقة المختصر الذي يظهر بالجداول) */
@@ -10777,8 +10926,7 @@ function lfTemplate(k){
     '<p style="text-align:center"><b>م / '+lfField("subject")+'</b></p>'+
     '<p>نعمّم على جميع المنتسبين ما يلي:</p><ol><li>…</li><li>…</li></ol>'+
     '<p>للتفضّل بالاطلاع والعمل بموجبه اعتباراً من تاريخه.</p>'+
-    '<p style="text-align:center">… مع التقدير</p>'+SIG+
-    '<p><b>نسخة منه إلى:</b></p><ul><li>كافة الأقسام والشُعب</li><li>الصادرة</li></ul>';
+    '<p style="text-align:center">… مع التقدير</p>'+SIG+lfCcHtml();
   if(k==="conf"){
     const w=C().workers.find(x=>x.id===el("lfWorker").value)||null;
     return H+
@@ -10787,8 +10935,7 @@ function lfTemplate(k){
     '<p>تحية طيبة…</p>'+
     '<p style="text-align:justify">'+lfWorkerSentence(w)+'</p>'+
     '<p style="text-align:justify">وقد زُوِّد بهذا التأييد بناءً على طلبه لتقديمه إلى الجهة أعلاه، دون أدنى مسؤولية على الشركة.</p>'+
-    '<p style="text-align:center">… مع التقدير</p>'+SIG+
-    '<p><b>نسخة منه إلى:</b></p><ul><li>الأضبارة الشخصية</li><li>الصادرة</li></ul>';
+    '<p style="text-align:center">… مع التقدير</p>'+SIG+lfCcHtml();
   }
   if(k==="blank") return H+'<p><br></p><p><br></p>'+SIG;
   /* الكتاب الرسمي العراقي: العدد والتاريخ أعلى اليسار، ثم الجهة، ثم «م/» الموضوع،
@@ -10798,8 +10945,7 @@ function lfTemplate(k){
     '<p style="text-align:center"><b><u>م / '+lfField("subject")+'</u></b></p>'+
     '<p>تحية طيبة…</p>'+
     '<p style="text-align:justify">نص الكتاب هنا.</p>'+
-    '<p style="text-align:center">… مع التقدير</p>'+SIG+
-    '<p><b>نسخة منه إلى:</b></p><ul><li>الصادرة</li></ul>';
+    '<p style="text-align:center">… مع التقدير</p>'+SIG+lfCcHtml();
 }
 /* قيم افتراضية للخانات الفارغة فقط — ما كتبه المستخدم لا يُمسّ */
 function lfTplDefaults(k){
@@ -10837,16 +10983,17 @@ function lfPaintBg(){
 
 /* ---- [فورمة] فتح التبويب، جديد، فتح مسوّدة ---- */
 function lfReset(){
-  lfEditId=null;
+  lfEditId=null; lfSigOld=false;
   ["lfNo","lfTitle","lfTo","lfSubject"].forEach(id=>{ el(id).value=""; });
   el("lfDate").value=todayISO();
+  lfSigFill(); lfSigPick("def");
   lfApplyTpl(el("lfTpl").value||"gov"); lfDirty=false;
 }
 function lfInit(){
   if(!document.getElementById("lfStyle")){
     const st=document.createElement("style"); st.id="lfStyle"; st.textContent=LF_CSS; document.head.appendChild(st);
   }
-  lfWorkerFill(); lfShowWorker(); lfPaintBg();
+  lfWorkerFill(); lfShowWorker(); lfPaintBg(); lfSigFill(); lfSigUi();
   if(!lfInited){ lfInited=true; lfReset(); }
   renderLetters();
 }
@@ -10855,34 +11002,65 @@ function lfOpen(id){
   lfEditId=r.id;
   el("lfNo").value=r.no||""; el("lfDate").value=r.date||todayISO(); el("lfTitle").value=r.title||"";
   el("lfTo").value=r.to||""; el("lfSubject").value=r.subject||"";
+  /* الموقّع كما صدر به الكتاب. كتاب حُفظ قبل تثبيته كان يُطبع بموقّع ورقة الجرد وصورته */
+  lfSigOld=!(r.sig && typeof r.sig==="object");
+  lfSigFill();
+  lfSigSet(lfSigOld ? {by:"inv", name:S().signer||"", role:S().role||"", img:S().signature?lfSigKey(S().signature):""} : r.sig);
   lfEd().innerHTML=lfClean(r.html||""); lfSync(); lfDirty=false;
   renderLetters();
   const pg=el("lfPage"); if(pg && pg.scrollIntoView) try{ pg.scrollIntoView({block:"start"}); }catch(e){}
 }
-/* حفظ المسوّدة: كتاب جديد يأخذ عدده من عدّاد الخادم أولاً (يظهر داخل النص)، ثم يُكتب؛
-   المفتوح يُعدَّل. يُرجع الكتاب، أو null إن رفض الخادم (والمحرّر يبقى كما هو). */
+/* حفظ المسوّدة. العدد: خانته فارغة ← كتاب جديد يأخذ العدد التالي من عدّاد الخادم (يظهر داخل النص)؛
+   أو يُكتب يدوياً (دفتر الصادرة، عدد متّفق عليه). قيد الخادم (company_id, kind, no) يمنع التكرار،
+   ورفضه يُقال كما هو: العدد مستعمل. عدد يدوي بصيغة العدّاد وأكبر مما أعطاه ← seed_counters بعد الحفظ،
+   فلا يعطي الخادم لاحقاً عدداً مستعملاً. المفتوح يُعدَّل. يُرجع الكتاب، أو null إن لم يُحفظ. */
+function lfNoUsed(no,typed){
+  return e=>{
+    const raw=String((e && e.cause && ((e.cause.message||"")+" "+(e.cause.details||""))) || "");
+    if(!e || e.code!=="23505" || /pkey/i.test(raw)) return "";
+    return typed
+      ? "العدد «"+no+"» مستعمل لكتاب آخر في هذه الشركة (ولو كان محذوفاً)، والعدد لا يتكرّر.\n\nاكتب عدداً غيره، أو امسح خانة العدد ليأخذ الكتاب العدد التالي من العدّاد."
+      : "العدد «"+no+"» الذي أعطاه العدّاد مستعمل لكتاب آخر (أُدخل عدده يدوياً).\n\nاحفظ مرة ثانية فيأخذ الكتاب العدد الذي بعده.";
+  };
+}
+/* عدد يدوي بصيغة العدّاد نفسها (ك-السنة-الرقم) قد يسبق العدّاد. والعدّاد لا يُقرأ من الواجهة، وأكبر
+   عدد تراه الواجهة ليس دليلاً (كتاب أُدخل عدده يدوياً قبل هذا بلا تحديث) — فكل عدد بهذه الصيغة يُتبَع
+   بـseed_counters. الاستدعاء الزائد لا يضرّ: الدالة ترفع العدّاد إلى أكبر عدد مستعمل فقط. وعدد بصيغة
+   أخرى (دفتر الصادرة) لا يلتقي بما يعطيه العدّاد أصلاً. */
+function lfSeedNeeded(no){ return new RegExp("^"+DOC_PREFIX.letter+"-\\d{4}-\\d+$").test(no); }
 async function lfSave(){
-  const c=C(), d=el("lfDate").value||todayISO();
+  const d=el("lfDate").value||todayISO();
   el("lfDate").value=d;
-  const open=lfRec();
+  const open=lfRec(), typed=String(el("lfNo").value||"").trim();
+  el("lfNo").value=typed;
+  if(open && !typed){
+    el("lfNo").value=open.no; lfSync();
+    await alertBox("الكتاب المحفوظ لا يبقى بلا عدد — أُعيد عدده «"+open.no+"». لتغييره اكتب العدد الجديد في خانته.","لم يُحفظ الكتاب");
+    return null;
+  }
   const fields=()=>({
     title:String(el("lfTitle").value||"").trim() || String(el("lfSubject").value||"").trim() || el("lfNo").value,
     to:String(el("lfTo").value||"").trim(), subject:String(el("lfSubject").value||"").trim(),
-    date:d, html:lfClean(lfEd().innerHTML) });
-  let r;
+    date:d, html:lfClean(lfEd().innerHTML), sig:lfSigCur() });
+  let r, no=typed;
   if(!open){
-    const no=await docNumber("letters",d); if(!no) return null;
-    const prevNo=el("lfNo").value;
+    if(!no){ no=await docNumber("letters",d); if(!no) return null; }
     el("lfNo").value=no; lfSync();
     r=Object.assign({id:newId(), no:no, title:"", to:"", subject:"", html:"", date:d, editedAt:""}, fields());
-    if(!await docInsert("letters",r,true)){ el("lfNo").value=prevNo; lfSync(); return null; }
+    if(!await docInsert("letters",r,true,lfNoUsed(no,!!typed))){ el("lfNo").value=typed; lfSync(); return null; }
     lfEditId=r.id;
   }else{
     lfSync();
-    if(!await docRevise("letters",open,Object.assign(fields(),{editedAt:todayISO()}),true)) return null;
+    if(!await docRevise("letters",open,Object.assign(fields(),{no:no, editedAt:todayISO()}),true,lfNoUsed(no,true))) return null;
     r=open;
   }
+  lfSigOld=false; lfSigUi();
   lfDirty=false; renderLetters(); lfNote("انحفظ الكتاب "+r.no+" ✓");
+  if(typed && lfSeedNeeded(no)){
+    try{ await dbSeedCounters("تحديث عدّاد الكتب"); }
+    catch(e){ await alertBox("حُفظ الكتاب بعدده «"+no+"»، لكن عدّاد الكتب على الخادم لم يُحدَّث:\n"+e.message+
+      "\n\nإن أعطى العدّاد هذا العدد لكتاب لاحق رُفض حفظه برسالة «العدد مستعمل»، والحفظ الثاني يأخذ العدد الذي بعده.","عدّاد الكتب"); }
+  }
   return r;
 }
 function renderLetters(){
@@ -10904,7 +11082,7 @@ function renderLetters(){
    position:fixed تتكرّر على كل صفحة — فكتاب من صفحتين يبقى على الفورمة وبهوامشها. */
 function lfPrintHtml(){
   const s=S(), bg=lfBgOn(), html=lfClean(lfEd().innerHTML);
-  const box=document.createElement("div"); box.innerHTML=html; lfSync(box);
+  const box=document.createElement("div"); box.innerHTML=html; lfSync(box); lfCcFill(box);
   const title=(el("lfNo").value?el("lfNo").value+" — ":"")+(el("lfTitle").value||el("lfSubject").value||"كتاب");
   return PRINT_DOC_OPEN+'<title>'+esc(title)+'</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4;margin:0}html,body{margin:0;padding:0;background:#fff}'+
@@ -10947,7 +11125,7 @@ function lhAnchorXml(rid){
 const LF_TEXT_W=11906-1020*2;
 function lfToDocx(html, o){
   o=o||{};
-  const root=document.createElement("div"); root.innerHTML=lfClean(html); lfSync(root);
+  const root=document.createElement("div"); root.innerHTML=lfClean(html); lfSync(root); lfCcFill(root);
   const BLOCK={P:1,DIV:1,UL:1,OL:1,LI:1,TABLE:1};
   const para=(runs,align,ind,after)=>'<w:p><w:pPr><w:bidi/><w:spacing w:before="0" w:after="'+(after==null?100:after)+'" w:line="300" w:lineRule="auto"/>'+
     (ind?'<w:ind w:start="'+ind+'" w:hanging="320"/>':'')+'<w:jc w:val="'+wJc(align)+'"/></w:pPr>'+runs+'</w:p>';
@@ -10982,11 +11160,12 @@ function lfToDocx(html, o){
       if(n.nodeType!==1 || !BLOCK[n.tagName]){ inl.push(n); return; }
       flush();
       const tg=n.tagName;
-      if(n.getAttribute("data-f")==="sig"){          // التوقيع: صورة ثم الاسم والصفة، يساراً
-        const s=S();
-        if(o.sigRid) out+=wImage(o.sigRid,1.45,0.47,"left");
-        out+=wPara(s.signer||"المسؤول الإداري",{size:LF_BASE_PT,bold:true,align:"left",after:0,color:"#111111"});
-        if(s.role) out+=wPara(s.role,{size:LF_BASE_PT-1,align:"left",after:100,color:"#111111"});
+      if(n.getAttribute("data-f")==="sig"){          // التوقيع كما صدر به الكتاب: صورة (أو فراغ) ثم الاسم والصفة، يساراً
+        const g=o.sig||{by:"none"};
+        if(g.by==="none"){ out+=wGap(1250); return; }            // ≈٢٢ مم ليوقَّع بخط اليد
+        if(o.sigRid && lfSigImgOk(g)) out+=wImage(o.sigRid,1.45,0.47,"left"); else out+=wGap(794);   // ≈١٤ مم
+        out+=wPara(g.name||LF_BLANK,{size:LF_BASE_PT,bold:true,align:"left",after:0,color:"#111111"});
+        if(g.role) out+=wPara(g.role,{size:LF_BASE_PT-1,align:"left",after:100,color:"#111111"});
         return;
       }
       if(tg==="UL"||tg==="OL"){
@@ -11033,9 +11212,10 @@ function lfToDocx(html, o){
 }
 function letterDocx(){
   docReset();
-  const s=S(), m=receiptMedia();
-  const media=m.media.filter(x=>x.rid===m.sigRid);     // الشعار ضمن الفورمة نفسها — لا يُكرَّر
-  const body=lfToDocx(lfEd().innerHTML,{sigRid:m.sigRid});
+  const s=S(), m=receiptMedia(), g=lfSigCur(), img=lfSigImgOk(g);
+  /* الشعار ضمن الفورمة نفسها — لا يُكرَّر. وصورة التوقيع فقط إن صدر بها الكتاب */
+  const media=img?m.media.filter(x=>x.rid===m.sigRid):[];
+  const body=lfToDocx(lfEd().innerHTML,{sigRid:img?m.sigRid:null, sig:g});
   let header=null;
   if(lfBgOn()){
     const bytes=dataUrlBytes(s.letterhead);
@@ -11051,7 +11231,8 @@ function lfFileName(ext){
 }
 
 /* ---- [فورمة] الأحداث ---- */
-el("lfEditor").addEventListener("input",()=>{ lfDirty=true; });
+/* كل إدخال (ومنه التراجع بـCtrl+Z) قد يُعيد حقلاً بلا قفلته، ويغيّر سطور «نسخة إلى» */
+el("lfEditor").addEventListener("input",()=>{ lfDirty=true; lfLockFields(true); lfCcMark(); });
 /* اللصق نصاً عادياً فقط: تنسيق مصدر خارجي (وورد، متصفح) يخرج عن مجموعة المحرّر */
 el("lfEditor").addEventListener("paste",e=>{
   const t=e.clipboardData && e.clipboardData.getData("text/plain");
@@ -11060,9 +11241,16 @@ el("lfEditor").addEventListener("paste",e=>{
   try{ document.execCommand("insertText",false,t); }catch(_){}
 });
 document.querySelectorAll("[data-lfc]").forEach(b=>b.addEventListener("mousedown",e=>e.preventDefault()));
+/* أوامر الكتلة (المحاذاة والقوائم) تُنفَّذ والحقول مفتوحة لحظتها — انظر lfLockFields */
+const LF_BLOCK_CMD={justifyRight:1,justifyCenter:1,justifyLeft:1,justifyFull:1,insertUnorderedList:1,insertOrderedList:1};
 document.querySelectorAll("[data-lfc]").forEach(b=>b.onclick=()=>{
   lfEd().focus();
-  try{ document.execCommand("styleWithCSS",false,false); document.execCommand(b.dataset.lfc,false,null); }catch(e){}
+  const blk=!!LF_BLOCK_CMD[b.dataset.lfc];
+  try{
+    if(blk) lfLockFields(false);
+    document.execCommand("styleWithCSS",false,false); document.execCommand(b.dataset.lfc,false,null);
+  }catch(e){}
+  finally{ lfLockFields(true); if(blk) lfUnnest(); lfSync(); }
   lfDirty=true;
 });
 el("lfSize").onchange=()=>{
@@ -11093,6 +11281,20 @@ el("lfTable").onclick=()=>{
   });
 };
 ["lfNo","lfDate","lfTo","lfSubject"].forEach(id=>el(id).addEventListener("input",()=>{ lfSync(); lfDirty=true; }));
+el("lfCc").addEventListener("mousedown",e=>e.preventDefault());
+el("lfCc").onclick=()=>{ lfCcAdd(); };
+/* الموقّع: الاختيار يملأ الاسم والصفة من الإعدادات؛ تعديلهما يجعله «يدوياً» */
+el("lfSigBy").addEventListener("change",()=>{
+  const by=el("lfSigBy").value;
+  if(by==="manual"){ lfSigSet({by:"manual", name:"", role:"", img:""}); el("lfSigName").focus(); }
+  else lfSigPick(by);
+  lfSync(); lfDirty=true;
+});
+["lfSigName","lfSigRole"].forEach(id=>el(id).addEventListener("input",()=>{
+  const v=lfSigOpts()[el("lfSigBy").value];
+  if(v && (String(el("lfSigName").value).trim()!==v.name.trim() || String(el("lfSigRole").value).trim()!==v.role.trim())) el("lfSigBy").value="manual";
+  lfSigImg=lfSigImgFor(el("lfSigName").value); lfSigUi(); lfSync(); lfDirty=true;
+}));
 el("lfTpl").addEventListener("change",lfShowWorker);
 el("lfWorker").addEventListener("change",()=>{ if(el("lfTpl").value==="conf") lfTplDefaults("conf"); });
 el("lfApply").onclick=()=>{

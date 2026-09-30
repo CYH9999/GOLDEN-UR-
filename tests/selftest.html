@@ -718,7 +718,7 @@ try{
     'el("lfEditor").querySelectorAll("p")[3].innerHTML="نص <b>عريض</b> <script>x()<\/script><span onclick=y()>و</span>"; lfSave();');
   let LT1=J('C().letters[0]');
   check("أول كتاب يأخذ العدد ك-السنة-001", LT1.no, "ك-2026-001");
-  check("حقول المسوّدة الثمانية", Object.keys(LT1).sort().join(","), "date,editedAt,html,id,no,subject,title,to");
+  check("حقول المسوّدة التسعة (ومنها موقّعها sig)", Object.keys(LT1).sort().join(","), "date,editedAt,html,id,no,sig,subject,title,to");
   check("العدد المعطى عند الحفظ يظهر داخل نص الكتاب", LT1.html.indexOf(">ك-2026-001<")>0, true);
   check("المنظّف: لا script ولا onclick، والعريض باقٍ", /<script|onclick/.test(LT1.html)===false && LT1.html.indexOf("<b>عريض</b>")>0, true);
   check("صورة التوقيع لا تُخزَّن داخل الكتاب", /<img/.test(LT1.html), false);
@@ -1202,6 +1202,39 @@ try{
   w21.__rows=Object.assign({},ROWS17,{locks:[{month:"2026-08",locked_at:"2026-09-01T06:00:00Z"}],lockSnaps:[{month:"2026-08",snapshot:snap21}],documents:[]});
   w21.eval('state=ensureFields(dbBuildState(__rows)); bootView();');
   check("بصورة من جدولها: الأرقام كما حُفظت", w21.eval('JSON.stringify([lockHasSnap(monthLock("2026-08-10")), monthLock("2026-08-10").net, monthLock("2026-08-10").rows])'), JSON.stringify([true,1000,{a:1000}]));
+
+  /* ---- ٢٢) الفورمة: الموقّع المجمَّد، العدد اليدوي، الحقول بسطرها، «نسخة منه إلى» ---- */
+  group("٢٢ · الفورمة — موقّع الكتاب، العدد اليدوي، الحقل بسطر عنوانه، «نسخة منه إلى»");
+  const w22=await boot();
+  const SIG22="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  load(w22,stateOf([company({id:"coL",settings:{signer:"حسين علي عبدالقادر",cmN3:"فهد صبري",cmT3:"المدير",signature:SIG22}})]));
+  check("موقّع الكتب: قيمته الأولى من العضو الثالث، مستقلاً عن موقّع ورقة الجرد (ولا يُكتب في الإعدادات بالتحميل)", w22.eval('[ltSig().name,ltSig().role,S().signer,"ltSigner" in S()].join("/")'), "فهد صبري/المدير/حسين علي عبدالقادر/false");
+  w22.eval('switchView("form"); lfReset();');
+  check("كتاب جديد: فهد صبري — المدير، بلا صورة توقيع حسين", w22.eval('JSON.stringify(lfSigCur())+"|"+/sigimg/.test(lfPrintHtml())'), JSON.stringify({by:"def",name:"فهد صبري",role:"المدير",img:""})+"|false");
+  await w22.eval('lfSave()');
+  const L22=w22.eval('C().letters[0].id');
+  w22.eval('S().ltSigner="غيره"; S().ltRole="المدير العام"; lfReset(); lfOpen("'+L22+'")');
+  check("تغيير الإعدادات لا يغيّر موقّع كتاب محفوظ", w22.eval('[lfSigCur().name, lfPrintHtml().indexOf("غيره")].join("/")'), "فهد صبري/-1");
+  w22.eval('el("lfSigBy").value="inv"; el("lfSigBy").dispatchEvent(new Event("change"));');
+  check("موقّع ورقة الجرد: صورته المرسومة، وبصمتها لا الصورة في الكتاب", w22.eval('[/<img data-f="sigimg"/.test(lfPrintHtml()), /^\\d+-[0-9a-f]+$/.test(lfSigCur().img)].join()'), "true,true");
+  await w22.eval('lfSave()');
+  w22.eval('S().signature=S().signature.replace("A60e6","A60e7"); lfOpen("'+L22+'")');
+  check("توقيع مرسوم تغيّر بعد الصدور: يُطبع الكتاب بلا صورة", w22.eval('/sigimg/.test(lfPrintHtml())+"/"+(el("lfSigHint").textContent.indexOf("تغيّر")>=0)'), "false/true");
+  check("«بلا توقيع»: فراغ فقط", w22.eval('el("lfSigBy").value="none"; el("lfSigBy").dispatchEvent(new Event("change")); lfEd().querySelector("[data-f=sig]").innerHTML'), '<div class="sgap none"></div>');
+  /* العدد */
+  check("seed_counters لعدد بصيغة العدّاد وحدها", w22.eval('[lfSeedNeeded("ك-2026-050"), lfSeedNeeded("ص/452"), lfSeedNeeded("452"), lfSeedNeeded("إ-2026-001")].join()'), "true,false,false,false");
+  check("رفض 23505: «العدد مستعمل» (لا لمفتاح المعرّف)", w22.eval('var f=lfNoUsed("ك-2026-001",true); [f({code:"23505",cause:{message:"duplicate key value violates unique constraint \\"documents_company_id_kind_no_key\\""}}).indexOf("العدد «ك-2026-001» مستعمل"), f({code:"23505",cause:{message:"documents_pkey"}}), f({code:"42501"})].join("|")'), "0||");
+  w22.eval('lfReset(); el("lfNo").value="ص/9"; el("lfNo").dispatchEvent(new Event("input"));');
+  await w22.eval('lfSave()');
+  check("العدد اليدوي يُحفظ كما كُتب ويظهر داخل النص", w22.eval('var l=C().letters.find(function(x){return x.no==="ص/9";}); !!l && l.html.indexOf(">ص/9<")>0'), true);
+  /* الحقل بسطر عنوانه: فقرة بأسطر تُفكّ كتلها الداخلية إلى div */
+  check("lfUnnest: <p> تحوي كتلة تصير <div> بخصائصها", w22.eval('var d=document.createElement("div"); var p=document.createElement("p"); p.setAttribute("style","text-align:left"); p.innerHTML="<div style=\\"text-align:center\\">العدد</div>التاريخ"; d.appendChild(p); lfUnnest(d); d.innerHTML'), '<div style="text-align:left"><div style="text-align:center">العدد</div>التاريخ</div>');
+  /* «نسخة منه إلى» */
+  w22.eval('lfReset();');
+  check("القالب: سطر فارغ ثم «الصادرة»، والفارغ موسوم", w22.eval('[].map.call(lfEd().querySelectorAll("ul[data-cc]>li"),function(li){ return li.textContent+(li.hasAttribute("data-blank")?"·":""); }).join("|")'), "·|الصادرة");
+  check("المنظّف يُبقي data-cc ويُسقط data-blank", w22.eval('lfClean(\'<ul data-cc="1" class="x"><li data-blank="">a</li></ul>\')'), '<ul data-cc="1"><li>a</li></ul>');
+  check("الطباعة: السطر الفارغ نقاط", /<ul data-cc="1"><li>…………………<\/li><li>الصادرة<\/li><\/ul>/.test(w22.eval('lfPrintHtml()')), true);
+  check("الزر: سطر قبل «الصادرة»", w22.eval('lfCcAdd(); [].map.call(lfEd().querySelectorAll("ul[data-cc]>li"),function(li){ return li.textContent||"_"; }).join("|")'), "_|_|الصادرة");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});

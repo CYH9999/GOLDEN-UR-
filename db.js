@@ -726,6 +726,12 @@ function dbNextDocNo(kind, prefix, yr, list) {
     { quiet: true })
     .then(no => { if (!no) throw dbWriteErr({ message: "الخادم لم يُعطِ رقماً للوثيقة." }, "رقم وثيقة جديد"); return String(no); });
 }
+/* عدد يدوي بصيغة العدّاد وأكبر مما أعطاه: seed_counters ترفع عدّادات الشركة إلى أكبر عدد مستعمل،
+   فلا يعطي next_doc_no لاحقاً عدداً مستعملاً */
+function dbSeedCounters(what) {
+  if (dbLocal()) return Promise.resolve(null);
+  return dbWrite(what, () => sb.rpc("seed_counters", { cid: DB_CID }), { quiet: true });
+}
 /* الوثيقة ← صف: الأعمدة (الرقم، العامل، التاريخان، النسخ السابقة) وما بقي في data —
    عكس dbDoc تماماً */
 function dbDocRow(kind, rec) {
