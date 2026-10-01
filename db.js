@@ -303,7 +303,7 @@ async function dbFetchAll() {
 
   const [buildings, zones, sections, workers, dayStates, dayZones, documents, materials, holidays, locks, lockSnaps, audit] =
     await Promise.all([
-      dbReadAll("buildings", "id,name,short,sort_order", "الجهات", cid,
+      dbReadAll("buildings", "id,name,short,sort_order,settings", "الجهات", cid,
         q => q.order("sort_order").order("id")),
       dbReadAll("zones", "id,building_id,name,short,color,sort_order", "المناطق", cid,
         q => live(q).order("sort_order").order("id")),
@@ -432,8 +432,11 @@ function dbBuildState(raw) {
     .map(h => ({ date: dbDay(h.date), name: dbStr(h.name) }))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
-  const buildings = (raw.buildings || []).map(b => ({ id: b.id, name: dbStr(b.name), short: dbStr(b.short),
-    sortOrder: Number(b.sort_order) || 0 }))
+  const buildings = (raw.buildings || []).map(b => {
+    const st = dbBldSettings(b.settings);
+    DB_BLD_LAST[b.id] = dbCanon({ settings: st });
+    return { id: b.id, name: dbStr(b.name), short: dbStr(b.short), sortOrder: Number(b.sort_order) || 0, settings: st };
+  })
     .sort((a, b) => (a.sortOrder - b.sortOrder) || DB_AR.compare(a.name, b.name));
   const bIdx = {};
   buildings.forEach((b, i) => { bIdx[b.id] = i; });
@@ -800,6 +803,24 @@ function dbSaveCompany(c, what) {
     .then(d => { if (d) DB_CO_LAST = key; return d; });
 }
 
+/* ---- إعدادات الجهة (buildings.settings): مفاتيح قليلة هي بطبيعتها للبناية — موقّع ورقة الجرد،
+   ولجنة العقوبات والإنجازات، والملاحظة الاعتيادية. ما وُجد منها في الجهة يُستعمل وإلا فقيمة الشركة؛
+   والفارغ غياب (يرث). ما عداها للشركة ولا يُجزّأ — ولا يُكتب في الجهة مفتاح غير هذه. */
+const DB_BLD_KEYS = ["signer", "role", "cmT1", "cmN1", "cmT2", "cmN2", "cmT3", "cmN3", "cmSig", "defNote"];
+const DB_BLD_LAST = {};
+function dbBldSettings(o) {
+  const r = {};
+  if (o && typeof o === "object")
+    DB_BLD_KEYS.forEach(k => { const v = o[k]; if (v != null && typeof v !== "object" && String(v).trim() !== "") r[k] = String(v); });
+  return r;
+}
+function dbSaveBuildingSettings(id, settings, what) {
+  const row = { settings: dbBldSettings(settings) }, key = dbCanon(row);
+  if (DB_BLD_LAST[id] === key) return Promise.resolve(null);   // لا تغيير — لا كتابة
+  return dbFire(what, () => sb.from("buildings").update(row, { count: "exact" }).eq("company_id", DB_CID).eq("id", id).select("id"),
+    { expect: true }).then(d => { if (d) DB_BLD_LAST[id] = key; return d; });
+}
+
 /* ---- الهيكل: المناطق والأقسام (الحذف منطقي) ---- */
 function dbInsertZone(z, sortOrder, what) {
   return dbFire(what, () => sb.from("zones").insert({ id: z.id, company_id: DB_CID, building_id: z.buildingId || null,
@@ -949,10 +970,10 @@ function dbUnsubscribe() {
    الحقيقة في access_requests (و can_see_worker على الخادم)؛ notifications للعرض وحده — لا يُبنى عليها
    قرار وصول، وإشعار فُقد أو تأخّر لا يغيّر شيئاً. الطلبات والإشعارات تُقرأ بعد التحميل، وفشلها لا
    يوقف البرنامج. */
-const DB_REQ_COLS = "id,worker_id,requested_by,reason,status,decided_by,decided_at,expires_at,created_at";
+const DB_REQ_COLS = "id,worker_id,requested_by,reason,to_section_id,status,decided_by,decided_at,expires_at,created_at";
 function dbReq(r) {
   return { id: r.id, workerId: dbStr(r.worker_id), by: dbStr(r.requested_by), reason: dbStr(r.reason),
-    status: dbStr(r.status), decidedBy: dbStr(r.decided_by), decidedAt: r.decided_at ? dbStamp(r.decided_at) : "",
+    toSection: dbStr(r.to_section_id), status: dbStr(r.status), decidedBy: dbStr(r.decided_by), decidedAt: r.decided_at ? dbStamp(r.decided_at) : "",
     expiresAt: dbStr(r.expires_at), createdAt: dbStamp(r.created_at) };
 }
 async function dbAccessRequests() {
@@ -965,10 +986,12 @@ async function dbAccessRequests() {
   return rows.map(dbReq);
 }
 /* الطالب لا يرى العامل فلا يعرف معرّفه: يذكر رقم الجرد والاسم، والخادم يطابقهما وينشئ الطلب باسمه
-   (بانتظار البتّ) — وعدم التطابق رسالة واحدة لا تكشف أيّ الاثنين خطأ */
-function dbRequestAccess(seq, name, reason, what) {
-  return dbWrite(what, () => sb.rpc("request_access", { cid: DB_CID, seq: Number(seq), name: String(name || ""),
-    reason: String(reason || "") }), { quiet: true });
+   (بانتظار البتّ) — وعدم التطابق رسالة واحدة لا تكشف أيّ الاثنين خطأ. توقيع الدالة على الخادم:
+   request_access(cid, p_seq, p_name, p_reason, p_to_section default null) → uuid الطلب.
+   p_to_section: القسم الذي يريد الطالب نقل العامل إليه إن نُقل (من أقسامه هو) — اختياري */
+function dbRequestAccess(seq, name, reason, toSection, what) {
+  return dbWrite(what, () => sb.rpc("request_access", { cid: DB_CID, p_seq: Number(seq), p_name: String(name || ""),
+    p_reason: String(reason || ""), p_to_section: toSection || null }), { quiet: true });
 }
 /* البتّ (اطلاع/نقل/رفض) أو السحب: الحالة ومدة الاطلاع وحدهما — decided_by/decided_at يختمهما الخادم */
 function dbSetRequest(id, patch, what) {

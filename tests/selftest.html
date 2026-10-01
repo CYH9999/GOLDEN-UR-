@@ -1049,7 +1049,7 @@ try{
     W18('["pnAudit","salDefaults","wForm","pnSalary"].map(function(id){return el(id).classList.contains("noperm")?1:0;}).join("")'), "1100");
   const hid18=id=>'(!!el("'+id+'").closest(".noperm"))';
   check("تبويب الإعدادات ظاهر وفيه مظهر الواجهة وحده (الهوية والتوقيع وخيارات الحساب والنسخة مخفية)",
-    W18('switchView("settings"); [currentView(), '+hid18("uiTheme")+', '+hid18("setCompany")+', '+hid18("setSigner")+', '+hid18("setNumerals")+', '+hid18("backupOut")+'].join(",")'),
+    W18('switchView("settings"); [currentView(), '+hid18("uiTheme")+', '+hid18("setCompany")+', '+hid18("sigPad")+', '+hid18("setNumerals")+', '+hid18("backupOut")+'].join(",")'),
     "settings,false,true,true,true,true");
   W18('switchView("report"); renderHolidays(); refresh();'); await tick(5);
   check("العطل: الإضافة والحذف مخفيان (month.lock) وأيام الراحة للاطلاع بشرح", W18(''+
@@ -1316,6 +1316,35 @@ try{
   check("التبويب: لمن يبتّ أو نطاقه بعض المناطق", w25.eval('var m=ME; var a=reqTabAllowed(); ME={id:"o",perms:new Set(),zones:new Set(),allZones:true,roles:[]}; var b=reqTabAllowed(); ME=m; [a,b].join()'), "true,false");
   check("الجرس: عدد غير المقروء، والقائمة", w25.eval('NOTES=[{id:"n1",title:"طلب وصول جديد",body:"أحمد يطلب",read:false,at:"2026-10-01 09:00"},{id:"n2",title:"بُتّ طلبك",body:"",read:true,at:"2026-10-01 08:00"}]; bellRender(); el("bellBtn").click(); var r=[el("bellCount").textContent, el("bellPop").querySelectorAll(".bn").length, el("bellPop").querySelectorAll(".bn.unread").length].join(); el("bellBtn").click(); NOTES=[]; bellRender(); r'), "1,2,1");
   check("قيد البتّ يحمل منطقة العامل", w25.eval('var n=CF().audit.length; reqAudit({by:"u-x",reason:"س"},CF().workers[0],"رفض","z1"); var a=CF().audit[CF().audit.length-1]; [a.kind,a.zoneId,a.after,a.reason].join("|")'), "access|z1|رفض|س");
+  /* ---- ٢٦) إعدادات الجهة، وحال السماحية ---- */
+  group("٢٦ · إعدادات الجهة — الوراثة من الشركة، كل وصل بجهة عامله، التوقيع المرسوم لصاحبه · حال السماحية");
+  const w26=await boot();
+  const C26=company({id:"coB",workers:[{id:"a",name:"عامل القديمة"},{id:"b",name:"عامل الجديدة",sectionId:"s2"}]});
+  C26.buildings=[{id:"b1",name:"القديمة",short:"القديمة",settings:{}},{id:"b2",name:"الجديدة",short:"الجديدة",
+    settings:{signer:"أحمد",role:"إداري الجديدة",cmN2:"أحمد",defNote:"ملاحظة الجديدة"}}];
+  C26.zones=[{id:"z1",name:"داخل القديمة",short:"داخلي",buildingId:"b1"},{id:"z2",name:"داخل الجديدة",short:"داخلي",buildingId:"b2"}];
+  C26.sections=[{id:"s1",name:"قسم الإنتاج",zoneId:"z1"},{id:"s2",name:"استعلامات الجديدة",zoneId:"z2"}];
+  load(w26,stateOf([C26]));
+  w26.eval('S().signer="حسين"; S().role="المسؤول الإداري"; S().signature="data:image/png;base64,AAAA"; '+
+    'CF().buildings[0].settings={signer:"حسين",role:"المسؤول الإداري",cmT1:S().cmT1,cmT2:S().cmT2,cmT3:S().cmT3,cmSig:"2",defNote:S().defNote};');
+  check("db.js: المفاتيح العشرة وحدها، والفارغ غياب", w26.eval('JSON.stringify(dbBldSettings({signer:"أ",salary:5,cmN1:"  ",theme:"#000",cmSig:"3",defNote:"ن",x:{a:1}}))'),
+    JSON.stringify({signer:"أ",cmSig:"3",defNote:"ن"}));
+  check("جهة مُلئت بقيم الشركة: هي إعدادات الشركة نفسها (لا يتغيّر شيء في ورقها)", w26.eval('setOfB("b1")===S()'), true);
+  check("جهة لها قيمها: تُستعمل، وما لم تضعه يرث، وما ليس من مفاتيحها لا يُجزّأ أبداً", w26.eval('var w=CF().workers.find(function(x){return x.id==="b";}), s=setOfW(w); '+
+    '[s.signer,s.role,s.cmN2,s.cmT1===S().cmT1,s.cmSig===S().cmSig,s.salary===S().salary,s.company===S().company].join("|")'), "أحمد|إداري الجديدة|أحمد|true|true|true|true");
+  check("التوقيع المرسوم لصاحبه: يُطبع على ورق القديمة، ولا يُطبع فوق اسم أحمد", w26.eval('var W=function(i){return CF().workers.find(function(x){return x.id===i;});}; '+
+    '[sigOwner(setOfW(W("a"))), sigOwner(setOfW(W("b"))), committeeSeats(W("a")).map(function(x){return x.sig?1:0;}).join(""), committeeSeats(W("b")).map(function(x){return x.sig?1:0;}).join("")].join("|")'), "true|false|010|000");
+  check("وصل الإجازة لعامل الجديدة: «يعتمد» أحمد بلا صورة التوقيع", w26.eval('switchView("leaves"); el("lvWorker").value="b"; JSON.stringify(leaveSeats()[2])'),
+    JSON.stringify({title:"يعتمد ، ، ،",name:"أحمد — إداري الجديدة",sig:false}));
+  check("ورقة العرض: «الكل» بجهتين مختلفتين ← الشركة · الجديدة وحدها ← أحمد · وجرد عمال جهة واحدة ← جهتهم", w26.eval('var a=setOfView().signer; setScope("b2"); var b=setOfView().signer; setScope(""); '+
+    '[a,b,setOfWs([CF().workers[1]]).signer,setOfWs(CF().workers).signer].join("|")'), "حسين|أحمد|أحمد|حسين");
+  check("الملاحظة الاعتيادية لجهتها", w26.eval('setOfB("b2").defNote+"|"+(setOfB("b1").defNote===S().defNote)'), "ملاحظة الجديدة|true");
+  check("لوحة الجهة: لمن يملك المناطق والأقسام، بمبدّل جهتين، والفارغ يقول «موروثة من الشركة»", w26.eval('switchView("settings"); fillSettings(); el("bsBld").value="b2"; el("bsBld").dispatchEvent(new Event("change")); '+
+    'var q=function(k){return el("bsPanel").querySelector("[data-bk="+k+"]");}, t=function(k){return el("bsPanel").querySelector("[data-inh="+k+"]").textContent;}; '+
+    '[el("bsPanel").classList.contains("hidden"), el("bsBld").options.length, q("signer").value, t("signer"), q("cmT1").value, q("cmT1").placeholder===S().cmT1, t("cmT1")].join("|")'),
+    "false|2|أحمد|||true|موروثة من الشركة");
+  check("حال السماحية", w26.eval('var t="2026-10-01"; [passState({date:t,out:"09:00",back:"10:00"},t,"09:30").t, passState({date:t,out:"09:00",back:"10:00"},t,"10:05").t, '+
+    'passState({date:"2026-09-29",out:"09:00"},t,"08:00").t, passState({date:t,out:"09:00",actual:"13:40"},t,"14:00").t].join("|")'), "خارج|لم يرجع بعد|لم يُسجَّل رجوعه|رجع في 1:40 م");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});

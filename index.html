@@ -129,6 +129,11 @@ html[data-ui="dark"] .datebox input::-webkit-calendar-picker-indicator{filter:in
 .bellpop .bfoot{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3) var(--sp-1);
   border-top:1px solid var(--line);font-size:var(--fs-xs);color:var(--ink-2)}
 .rqreason{white-space:pre-line;font-size:var(--fs-sm)}
+.inh{display:block;margin-top:3px;font-size:var(--fs-xs);color:var(--ink-2);min-height:1em}
+.inh:empty{display:none}
+.bsbld{margin-inline-start:auto;max-width:14em}
+.notebox{margin:var(--sp-2) 0;padding:var(--sp-2) var(--sp-3);border-inline-start:3px solid var(--brand);background:var(--brand-lite);
+  border-radius:var(--r-sm);font-size:var(--fs-sm);line-height:1.8}
 .rqvisit h4{margin:var(--sp-4) 0 var(--sp-2);font-size:var(--fs-sm);color:var(--ink-2)}
 .dbbadge.warn{color:var(--gold-text);border-color:var(--gold-soft);background:var(--gold-bg)}
 .dbbadge.warn::before{background:var(--gold)}
@@ -417,6 +422,7 @@ tr.rowneg td{background:var(--absent-bg)}
 .stag.ok,.stag.in{background:var(--present-bg);color:var(--present)}
 .stag.warn,.stag.soon{background:var(--misc-bg);color:var(--misc)}
 .stag.out{background:var(--absent-bg);color:var(--absent)}
+.stag.away{background:var(--brand-lite);color:var(--brand-text)}
 .wst{font-size:var(--fs-xs);font-weight:var(--fw-bold);padding:2px 10px;border-radius:var(--r-pill);white-space:nowrap;display:inline-block;line-height:1.55}
 .wst.s-on{background:var(--present-bg);color:var(--present)}
 .wst.s-end{background:var(--misc-bg);color:var(--misc)}
@@ -907,7 +913,7 @@ tr.rowneg td{background:var(--absent-bg)}
           <label class="field"><span>ملاحظة</span><textarea id="psNote" rows="2"></textarea></label>
           <div class="row3">
             <label class="field"><span>المجيز</span><input type="text" id="psApprover"></label>
-            <label class="field"><span>الرجوع الفعلي (يُملأ عند عودته)</span><input type="time" id="psActual"></label>
+            <label class="field"><span>الرجوع الفعلي (يُملأ عند عودته)</span><input type="time" id="psActual"><small class="inh" id="psState"></small></label>
             <label class="field"><span>رقم السماحية</span><input type="text" id="psNo" readonly></label>
           </div>
           <div class="actions">
@@ -1264,13 +1270,15 @@ tr.rowneg td{background:var(--absent-bg)}
   <div class="panel hidden" id="rqAskPanel">
     <div class="panel-head"><h2>طلب وصول إلى عامل في جهة أخرى</h2></div>
     <div class="panel-body">
-      <p class="hint" style="margin-top:0">لعامل لا تراه: اكتب رقم جرده واسمه كما هما، وسبب الطلب. يبتّ فيه من يملك صلاحية البتّ على منطقته،
-        ويصلك إشعار بقراره.</p>
+      <p class="notebox" id="rqNeed" style="margin-top:0">الوصول يحتاج <b>رقم الجرد</b> و<b>الاسم الكامل</b> للعامل كما هما في سجلات البناية الأخرى،
+        ويُؤخذان من مسؤول تلك البناية.</p>
+      <p class="hint" style="margin-top:0">يبتّ في الطلب من يملك صلاحية البتّ على منطقة العامل، ويصلك إشعار بقراره.</p>
       <div class="row2">
-        <label class="field"><span>رقم الجرد</span><input type="number" id="rqSeq" min="1" step="1"></label>
-        <label class="field"><span>اسم العامل</span><input type="text" id="rqName"></label>
+        <label class="field"><span>رقم الجرد</span><input type="number" id="rqSeq" min="1" step="1" autocomplete="off"></label>
+        <label class="field"><span>الاسم الكامل</span><input type="text" id="rqName" autocomplete="off" spellcheck="false"></label>
       </div>
       <label class="field"><span>سبب الطلب</span><textarea id="rqReason" rows="2" placeholder="مثال: يعمل في بنايتنا منذ بداية الشهر"></textarea></label>
+      <label class="field"><span>القسم الذي ينتقل إليه إن نُقل نهائياً (اختياري)</span><select id="rqToSec"></select></label>
       <div class="actions"><button class="btn primary" id="rqSend" type="button">إرسال الطلب</button></div>
     </div>
   </div>
@@ -1732,13 +1740,10 @@ tr.rowneg td{background:var(--absent-bg)}
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h2>التوقيع</h2></div>
+        <div class="panel-head"><h2>التوقيع المرسوم</h2></div>
         <div class="panel-body">
-          <div class="row2">
-            <label class="field"><span>الاسم تحت التوقيع</span><input type="text" id="setSigner"></label>
-            <label class="field"><span>الصفة</span><input type="text" id="setRole"></label>
-          </div>
-          <span class="fieldlbl">ارسم توقيعك بالماوس داخل المربّع</span>
+          <p class="hint" style="margin-top:0" id="sigOwnerTxt"></p>
+          <span class="fieldlbl">ارسم التوقيع بالماوس داخل المربّع</span>
           <div class="sigwrap">
             <canvas id="sigPad" width="640" height="220"></canvas>
             <div class="sigline"></div>
@@ -1762,32 +1767,6 @@ tr.rowneg td{background:var(--absent-bg)}
         </div>
       </div>
 
-      <div class="panel">
-        <div class="panel-head"><h2>لجنة العقوبات والإنجازات</h2></div>
-        <div class="panel-body">
-          <p class="hint" style="margin-top:0">هذه الأسماء تظهر تحت خانات التوقيع في إشعار العقوبة وإشعار المكافأة.
-            الترتيب من اليمين إلى اليسار كما يظهر على الورقة.</p>
-          <div class="row2">
-            <label class="field"><span>العضو الأول — المنصب (يمين)</span><input type="text" id="setCmT1" placeholder="مراقب العمل"></label>
-            <label class="field"><span>الاسم</span><input type="text" id="setCmN1"></label>
-          </div>
-          <div class="row2">
-            <label class="field"><span>العضو الثاني — المنصب (الوسط)</span><input type="text" id="setCmT2" placeholder="المسؤول الإداري"></label>
-            <label class="field"><span>الاسم</span><input type="text" id="setCmN2"></label>
-          </div>
-          <div class="row2">
-            <label class="field"><span>العضو الثالث — المنصب (يسار)</span><input type="text" id="setCmT3" placeholder="المدير"></label>
-            <label class="field"><span>الاسم</span><input type="text" id="setCmN3"></label>
-          </div>
-          <label class="field"><span>التوقيع المرسوم يظهر عند</span>
-            <select id="setCmSig">
-              <option value="1">العضو الأول (يمين)</option>
-              <option value="2">العضو الثاني (الوسط)</option>
-              <option value="3">العضو الثالث (يسار)</option>
-              <option value="0">بلا توقيع مطبوع</option>
-            </select></label>
-        </div>
-      </div>
     </div>
 
     <div>
@@ -1802,6 +1781,40 @@ tr.rowneg td{background:var(--absent-bg)}
             </select></label>
           <p class="hint" style="margin:0">خاص بهذا الجهاز وحده. لا يغيّر الأوراق ولا الطباعة ولا ملفات Word وExcel —
             تبقى كلها بألوان الشركة على خلفية بيضاء.</p>
+        </div>
+      </div>
+
+      <!-- إعدادات الجهة: لمن يملك «المناطق والأقسام» على منطقة منها (سياسة b_edit على الخادم) -->
+      <div class="panel hidden" id="bsPanel">
+        <div class="panel-head"><h2 id="bsTitle">إعدادات الجهة</h2>
+          <select id="bsBld" class="bsbld hidden" aria-label="الجهة التي تضبطها"></select></div>
+        <div class="panel-body">
+          <p class="hint" style="margin-top:0">لكل بناية موقّع ورقتها ولجنتها وملاحظتها الاعتيادية: ورقة الجرد وكل وصل يقرأ إعداد جهة
+            عامله. الحقل الفارغ يرث قيمة الشركة وتظهر فيه باهتة.</p>
+          <h3 class="subhead">التوقيع</h3>
+          <div class="row2">
+            <label class="field"><span>الاسم تحت التوقيع</span><input type="text" data-bk="signer"><small class="inh" data-inh="signer"></small></label>
+            <label class="field"><span>الصفة</span><input type="text" data-bk="role"><small class="inh" data-inh="role"></small></label>
+          </div>
+          <p class="hint" id="bsSigNote"></p>
+          <h3 class="subhead">لجنة العقوبات والإنجازات</h3>
+          <p class="hint" style="margin-top:0">الأسماء تحت خانات التوقيع في إشعار العقوبة وإشعار المكافأة، من اليمين إلى اليسار كما على الورقة.</p>
+          <div class="row2">
+            <label class="field"><span>العضو الأول — المنصب (يمين)</span><input type="text" data-bk="cmT1"><small class="inh" data-inh="cmT1"></small></label>
+            <label class="field"><span>الاسم</span><input type="text" data-bk="cmN1"><small class="inh" data-inh="cmN1"></small></label>
+          </div>
+          <div class="row2">
+            <label class="field"><span>العضو الثاني — المنصب (الوسط)</span><input type="text" data-bk="cmT2"><small class="inh" data-inh="cmT2"></small></label>
+            <label class="field"><span>الاسم</span><input type="text" data-bk="cmN2"><small class="inh" data-inh="cmN2"></small></label>
+          </div>
+          <div class="row2">
+            <label class="field"><span>العضو الثالث — المنصب (يسار)</span><input type="text" data-bk="cmT3"><small class="inh" data-inh="cmT3"></small></label>
+            <label class="field"><span>الاسم</span><input type="text" data-bk="cmN3"><small class="inh" data-inh="cmN3"></small></label>
+          </div>
+          <label class="field"><span>التوقيع المرسوم يظهر عند</span>
+            <select data-bk="cmSig"></select></label>
+          <h3 class="subhead">الملاحظة الاعتيادية (ورقة الجرد)</h3>
+          <label class="field"><textarea data-bk="defNote" rows="3" aria-label="الملاحظة الاعتيادية"></textarea><small class="inh" data-inh="defNote"></small></label>
         </div>
       </div>
 
@@ -1831,7 +1844,6 @@ tr.rowneg td{background:var(--absent-bg)}
                 <option value="450">فائقة — 450 (ملف أثقل)</option>
               </select></label>
           </div>
-          <label class="field"><span>الملاحظة الاعتيادية (ورقة الجرد)</span><textarea id="setDefNote" rows="3"></textarea></label>
           <label class="field"><span>المستند القانوني لإنهاء الخدمات</span>
             <textarea id="setTermNote" rows="3"></textarea></label>
         </div>
@@ -1860,6 +1872,8 @@ tr.rowneg td{background:var(--absent-bg)}
           <div class="actions">
             <button class="btn primary" id="backupOut">تنزيل نسخة</button>
           </div>
+          <p class="notebox" id="bkRestoreNote">هذا الملف للأرشيف، ولا يُفتح من البرنامج: الاستعادة منه تُجرى عند الحاجة بأداة منفصلة،
+            لأن استعادة نسخة على بيانات مشتركة تمحو عمل الجميع منذ لحظة أخذها. وما يُحذف يُستعاد من تبويب «المحذوفات» لا من نسخة.</p>
           <p class="hint" id="dbState"></p>
 
           <div id="bkWarn"></div>
@@ -2426,7 +2440,8 @@ function workerInLockedMonth(w){
 }
 const AUDIT_MAX=2000;
 const AUDIT_KIND={salary:"تعديل راتب", status:"تغيير حالة", del:"حذف وثيقة", day:"تعديل يوم معتمد",
-  lock:"قفل شهر", unlock:"فتح قفل شهر", restore:"استعادة من المحذوفات", access:"بتّ طلب وصول"};
+  lock:"قفل شهر", unlock:"فتح قفل شهر", restore:"استعادة من المحذوفات", access:"بتّ طلب وصول",
+  pass_back:"رجوع من سماحية"};
 const DAY_TXT={present:"حاضر", absent:"غائب", misc:"متفرقة"};
 function nowStamp(){ const d=new Date(), p=n=>String(n).padStart(2,"0");
   return todayISO()+" "+p(d.getHours())+":"+p(d.getMinutes()); }
@@ -2539,6 +2554,37 @@ function withFullScope(fn){ scopeWide++; try{ return fn(); } finally{ scopeWide-
 /* عرض مفلتر الآن؟ */
 function scoped(){ return C()!==CF(); }
 function S(){ return C().settings; }
+/* ==== إعدادات الجهة ====
+   مفاتيح قليلة بطبيعتها للبناية (DB_BLD_KEYS في db.js): موقّع ورقة الجرد وصفته، ولجنة العقوبات
+   والإنجازات، والملاحظة الاعتيادية. ما وُجد منها في الجهة يُستعمل، وإلا فقيمة الشركة.
+   setOfB(جهة) · setOfW(عامل) — كل وصل يقرأ إعداد جهة عامله · setOfView() ورقة العرض: جهة واحدة ← إعدادها،
+   وأكثر من جهة ← قيمها إن اتّفقت وإلا قيم الشركة. ما عدا هذه المفاتيح يُقرأ من S() كما هو، ولا يُجزّأ. */
+const BLD_KEYS=["signer","role","cmT1","cmN1","cmT2","cmN2","cmT3","cmN3","cmSig","defNote"];
+function bldById(id){ return id ? (CF().buildings||[]).find(b=>b.id===id)||null : null; }
+function bldOwn(b,k){ const v=b && b.settings ? b.settings[k] : null; return v!=null && String(v).trim()!=="" ? String(v) : ""; }
+function setOfB(bid){
+  const s=S(), b=bldById(bid); if(!b) return s;
+  let r=null;
+  BLD_KEYS.forEach(k=>{ const v=bldOwn(b,k); if(v && v!==s[k]){ r=r||Object.assign({},s); r[k]=v; } });
+  return r||s;
+}
+function workerBldId(w){
+  const f=CF(), sc=w ? (f.sections||[]).find(x=>x.id===w.sectionId) : null, z=sc ? (f.zones||[]).find(x=>x.id===sc.zoneId) : null;
+  return z ? (z.buildingId||"") : "";
+}
+function setOfW(w){ return setOfB(workerBldId(w)); }
+function setOfView(){
+  const bs=viewBuildings(); if(bs.length===1) return setOfB(bs[0].id);
+  const a=bs.map(b=>setOfB(b.id));            // جهات العرض متّفقة على قيمها ← قيمها، وإلا قيم الشركة
+  return a.length && a.every(x=>BLD_KEYS.every(k=>String(x[k]||"")===String(a[0][k]||""))) ? a[0] : S();
+}
+/* إعداد ورقة تجمع عمالاً: جهتهم إن كانت واحدة، وإلا ورقة العرض */
+function setOfWs(ws){ const ids=new Set((ws||[]).map(workerBldId)); return ids.size===1 ? setOfB([...ids][0]) : setOfView(); }
+/* التوقيع المرسوم واحد للشركة، وصاحبه موقّعها (S().signer): يُطبع في ورق جهة موقّعها هو نفسه، ولا
+   يُطبع فوق اسم غيره — توقيع حسين لا يظهر على ورق جهة موقّعها أحمد. وفي اللجنة يُطبع فوق خانتها ما
+   دامت الخانة نفسها بالاسم الذي في الشركة (لم تغيّره الجهة) */
+function sigOwner(st){ return !st || st===S() || String(st.signer||"").trim()===String(S().signer||"").trim(); }
+function cmSigOwner(st,slot){ return sigOwner(st) && (st===S() || String(st["cmN"+slot]||"")===String(S()["cmN"+slot]||"")); }
 
 /* ترحيل من النسخة القديمة (شركة واحدة بدون مناطق) */
 function ensureFields(st){
@@ -2791,7 +2837,7 @@ function saveCompany(what){
 function flushCompany(){ if(companyTimer){ clearTimeout(companyTimer); companyTimer=null; dbSaveCompany(CF(),"إعدادات الشركة"); } }
 /* إغلاق الصفحة وتعديل لم يصل الخادم بعد: المتصفح يسأل قبل الإغلاق */
 window.addEventListener("beforeunload",e=>{
-  flushNotes(); flushCompany();
+  flushNotes(); flushCompany(); flushBld();
   if(typeof dbPendingWrites==="function" && dbPendingWrites()>0){ e.preventDefault(); e.returnValue=""; }
 });
 
@@ -3295,7 +3341,7 @@ el("insertDefaultNote").onclick=()=>{
   if(lockBlock(curDate,"تعديل ملاحظات يوم")) return;
   const bs=viewBuildings().filter(canNoteBld); if(!bs.length) return;
   const b=(bs.length>1 && bs.find(x=>x.id===notesFocusBld)) || bs[0];
-  const t=S().defNote||"", cur=bldNotes(b,curDate).trim();
+  const t=setOfB(b.id).defNote||"", cur=bldNotes(b,curDate).trim();
   saveBldNotes(curDate,b, cur ? cur+"\n"+t : t);
   renderNotesEditor(); drawSheet(); renderDayStatus();
 };
@@ -3545,7 +3591,7 @@ function drawSheet(target,k){
   }
   ctx.setTransform(k,0,0,k,0,0);
   const CLR=CL();
-  const s=S(), c=compute(curDate), rec=dayRec(curDate), zs=C().zones;
+  const s=setOfView(), c=compute(curDate), rec=dayRec(curDate), zs=C().zones;
   const L=PAD, R=SH_W-PAD, W=SH_W-PAD*2;
   ctx.clearRect(0,0,SH_W,SH_H); ctx.fillStyle="#fff"; ctx.fillRect(0,0,SH_W,SH_H);
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
@@ -3675,7 +3721,7 @@ function drawSheet(target,k){
   // التذييل
   ctx.strokeStyle=CLR.gold; ctx.lineWidth=1; line(ctx,L,footTop,R,footTop);
   const sx=L+40;
-  drawSignature(ctx, sx, footTop+64, 280, 54);
+  if(sigOwner(s)) drawSignature(ctx, sx, footTop+64, 280, 54);
   ctx.strokeStyle=CLR.purple; ctx.lineWidth=1.5; line(ctx,sx,footTop+64,sx+280,footTop+64);
   ctx.fillStyle=CLR.ink2; ctx.font=f(600,20); ctxCenter(ctx,"التوقيع",sx+140,footTop+86);
   if(s.signer){ ctx.fillStyle=CLR.purpleDeep; fitFill(ctx,s.signer,sx+140,footTop+111,300,24,700,{center:true,keep:true}); }
@@ -3751,7 +3797,7 @@ el("printBtn").onclick=()=>{
   w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 };
 el("copyTxt").onclick=()=>{
-  const s=S(), c=compute(curDate), rec=dayRec(curDate);
+  const s=setOfView(), c=compute(curDate), rec=dayRec(curDate);
   const L=[s.company,s.title,"اليوم: "+dayNameOf(curDate)+" — التاريخ: "+dateTextOf(curDate),"",
     "الحضور الكلي: "+fmtNum(c.attendance),"عدد الأقسام: "+fmtNum(c.sections)];
   C().zones.forEach(z=>L.push(z.name+": "+fmtNum(c.byZone[z.id])));
@@ -4343,10 +4389,9 @@ function changeWorkerStatus(id,next,opts){
 }
 
 /* ==================== [واجهة] الإعدادات ==================== */
-const setMap={ setCompany:"company", setTitle:"title", setAddress:"address", setSigner:"signer",
-  setRole:"role", setMark:"mark", setDefNote:"defNote", setNumerals:"numerals",
-  setCmT1:"cmT1", setCmN1:"cmN1", setCmT2:"cmT2", setCmN2:"cmN2",
-  setCmT3:"cmT3", setCmN3:"cmN3", setCmSig:"cmSig", setTermNote:"termNote",
+/* موقّع ورقة الجرد واللجنة والملاحظة الاعتيادية ليست هنا: هي إعدادات الجهة (bsPanel تحت) */
+const setMap={ setCompany:"company", setTitle:"title", setAddress:"address",
+  setMark:"mark", setNumerals:"numerals", setTermNote:"termNote",
   setMisc:"miscInTotal", setSecCount:"secCount", setDPI:"exportDPI",
   setPrintMode:"printMode", setLtSigner:"ltSigner", setLtRole:"ltRole" };
 /* موقّع الكتب الرسمية: مستقل عن موقّع ورقة الجرد. ما لم يُحفظ له اسم فقيمته الأولى العضو الثالث
@@ -4370,8 +4415,72 @@ function fillSettings(){
   el("accentHex").textContent=(c.accent||"#B8912E").toUpperCase();
   loadSigToPad();
   el("sigState").textContent=S().signature?"توقيع محفوظ ✓":"";
+  el("sigOwnerTxt").textContent="التوقيع المرسوم واحد للشركة، وصاحبه موقّعها «"+(S().signer||"—")+"». يُطبع على ورق كل جهة موقّعها "+
+    "هذا الاسم، ولا يُطبع فوق اسم غيره.";
   el("uiTheme").value=uiThemePref();
+  bsRender();
 }
+
+/* ---- إعدادات الجهة ----
+   الجهات التي يضبطها المستخدم: ما يملك «المناطق والأقسام» على منطقة منها (b_edit على الخادم).
+   من يرى أكثر من جهة يختار أيّها من قائمة بعنوان اللوحة. الفارغ يرث قيمة الشركة. */
+let bsSel="", bsTimer=null, bsPend=null;
+function bsEditable(){
+  const f=CF(), zs=f.zones||[];
+  return (f.buildings||[]).filter(b=>zs.some(z=>(z.buildingId||"")===b.id && canZone("structure.manage",z.id)));
+}
+const CM_SIG_TXT={"1":"العضو الأول (يمين)","2":"العضو الثاني (الوسط)","3":"العضو الثالث (يسار)","0":"بلا توقيع مطبوع"};
+function bsCur(){ const bs=bsEditable(); return bs.find(b=>b.id===bsSel)||null; }
+function bsRender(){
+  const panel=el("bsPanel"); if(!panel || !panel.classList) return;
+  const bs=bsEditable();
+  panel.classList.toggle("hidden",!bs.length);
+  if(!bs.length) return;
+  if(!bs.some(b=>b.id===bsSel)){ const v=viewBuildings(); bsSel=(v.length===1 && bs.some(b=>b.id===v[0].id)) ? v[0].id : bs[0].id; }
+  const b=bsCur(), sel=el("bsBld"), co=S();
+  sel.classList.toggle("hidden",bs.length<2);
+  const opts=bs.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
+  if(sel.innerHTML!==opts) sel.innerHTML=opts;
+  sel.value=b.id;
+  el("bsTitle").textContent=bs.length<2 ? "إعدادات الجهة — "+b.name : "إعدادات الجهة";
+  const cs=panel.querySelector('select[data-bk="cmSig"]');
+  const cso='<option value="">موروث من الشركة — '+esc(CM_SIG_TXT[String(co.cmSig||"2")]||"")+'</option>'+
+    ["1","2","3","0"].map(v=>'<option value="'+v+'">'+CM_SIG_TXT[v]+'</option>').join("");
+  if(cs.innerHTML!==cso) cs.innerHTML=cso;
+  panel.querySelectorAll("[data-bk]").forEach(n=>{
+    const k=n.dataset.bk;
+    if(document.activeElement!==n) n.value=bldOwn(b,k);
+    if(n.tagName!=="SELECT") n.placeholder=String(co[k]||"");
+  });
+  bsInh(b);
+}
+/* «موروثة من الشركة» تحت كل حقل فارغ له قيمة في الشركة، وحال التوقيع المرسوم في هذه الجهة */
+function bsInh(b){
+  const co=S(), st=setOfB(b.id);
+  el("bsPanel").querySelectorAll("[data-inh]").forEach(n=>{
+    const k=n.dataset.inh;
+    n.textContent = bldOwn(b,k) ? "" : (String(co[k]||"").trim() ? "موروثة من الشركة" : "");
+  });
+  el("bsSigNote").textContent = !co.signature ? "لا توقيع مرسوم محفوظ للشركة."
+    : sigOwner(st) ? "التوقيع المرسوم يُطبع على ورق هذه الجهة: موقّعها «"+(st.signer||"")+"» صاحبه."
+    : "التوقيع المرسوم لا يُطبع على ورق هذه الجهة: صاحبه «"+(co.signer||"")+"» لا «"+(st.signer||"")+"». تُوقَّع أوراقها باليد.";
+}
+function bsSave(){
+  const b=bsPend; bsPend=null; bsTimer=null; if(!b) return;
+  dbSaveBuildingSettings(b.id, b.settings, "إعدادات جهة «"+b.name+"»");
+}
+function flushBld(){ if(bsTimer){ clearTimeout(bsTimer); bsSave(); } }
+el("bsBld").addEventListener("change",()=>{ flushBld(); bsSel=el("bsBld").value; bsRender(); });
+el("bsPanel").addEventListener("input",e=>{
+  const n=e.target.closest("[data-bk]"), b=bsCur(); if(!n || !b) return;
+  const k=n.dataset.bk, v=String(n.value||"");
+  b.settings=Object.assign({},b.settings||{});
+  if(v.trim()) b.settings[k]=v; else delete b.settings[k];
+  bsInh(b);
+  if(bsPend && bsPend!==b) flushBld();
+  bsPend=b; clearTimeout(bsTimer); bsTimer=setTimeout(bsSave,600);
+  sigCache.src=null; redrawSheets(); refresh();
+});
 Object.keys(setMap).forEach(id=>{
   el(id).addEventListener("input",()=>{
     if(/^lt/.test(setMap[id])){ const v=ltSig(); S().ltSigner=v.name; S().ltRole=v.role; }
@@ -4744,16 +4853,23 @@ function initLeaveView(){
     '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("lvFrom").value) el("lvFrom").value=curDate;
-  if(!el("lvAdmin").value) el("lvAdmin").value=S().signer||"";
+  if(!el("lvAdmin").value) el("lvAdmin").value=setOfView().signer||"";
   if(!el("lvNo").value) el("lvNo").value=nextLeaveNo();
   if(!el("lvPolicy").value) el("lvPolicy").value=defaultLeavePolicy(el("lvType").value);
   lvSyncType(); lvSyncSave();
   renderLeaves(); drawLeave(); lvHint();
 }
+/* «اسم الإداري» في الوصل يقترح موقّع جهة العامل، ما دام الحقل فارغاً أو فيه اقتراح سابق لا ما كتبه المستخدم */
+function adminFollow(id,w){
+  const f=el(id), cur=String(f.value||"");
+  const sugg=new Set([S().signer||""].concat((CF().buildings||[]).map(b=>setOfB(b.id).signer||"")));
+  if(w && (cur==="" || sugg.has(cur))) f.value=setOfW(w).signer||"";
+}
 el("lvWorker").addEventListener("change",()=>{
   const w=C().workers.find(x=>x.id===el("lvWorker").value);
   if(w){ const s=sectionOf(w.sectionId), z=s?zoneOf(s.zoneId):null;
     el("lvSection").value=s?(s.name+(z?" — "+(z.short||z.name):"")):""; }
+  adminFollow("lvAdmin",w);
   drawLeave();
 });
 ["lvSection","lvType","lvFrom","lvDays","lvReason","lvAdmin"].forEach(id=>
@@ -5025,11 +5141,11 @@ function drawLeave(target,k){
 }
 /* خانات توقيع وصل الإجازة — مصدر واحد للمعاينة والوورد */
 function leaveSeats(){
-  const s=S();
+  const s=setOfW(C().workers.find(x=>x.id===el("lvWorker").value));
   return [
     {title:"توقيع العامل", name:""},
     {title:"توقيع المسؤول المباشر", name:el("lvAdmin").value||""},
-    {title:"يعتمد ، ، ،", name:(s.signer||"")+(s.role?" — "+s.role:""), sig:true}
+    {title:"يعتمد ، ، ،", name:(s.signer||"")+(s.role?" — "+s.role:""), sig:sigOwner(s)}
   ];
 }
 el("lvWord").onclick=()=>{
@@ -5084,6 +5200,21 @@ function timeText(t){
   return fmtNum(h%12||12)+":"+fmtNum(m[2])+" "+(h<12?"ص":"م");
 }
 function nowHM(){ const d=new Date(), p=n=>String(n).padStart(2,"0"); return p(d.getHours())+":"+p(d.getMinutes()); }
+/* حال السماحية كما تُقرأ: رجع في … · لم يرجع بعد (مضى وقت رجوعه المتوقّع اليوم) · خارج ·
+   ويوم مضى بلا رجوع مسجّل: «لم يُسجَّل رجوعه» (لا «لم يرجع بعد» عن عامل خرج قبل أيام) */
+function passState(x,today,now){
+  today=today||todayISO(); now=now||nowHM();
+  if(x.actual) return {t:"رجع في "+timeText(x.actual), c:"ok"};
+  if(String(x.date||"")<today) return {t:"لم يُسجَّل رجوعه", c:"out"};
+  if(x.date===today && x.back && now>x.back) return {t:"لم يرجع بعد", c:"warn"};
+  return {t:"خارج", c:"away"};
+}
+/* تسجيل الرجوع ليس تعديلاً للسماحية (لا نسخة سابقة ولا «معدّل») لكنه واقعة: قيد بمن سجّله ومتى
+   (يختمهما القيد) وعن أي سماحية، بمنطقة العامل */
+function passBackAudit(x,before){
+  audit("pass_back","سماحية خروج "+x.no+" — "+(x.name||""), before?"رجع في "+timeText(before):"خارج", "رجع في "+timeText(x.actual),
+    {zoneId:docZone(x.workerId)});
+}
 function psSyncReason(){
   const r=el("psReason").value;
   el("psReqWrap").classList.toggle("hidden", r!=="تكليف من موظف");
@@ -5109,7 +5240,7 @@ function psForm(){
     approver:String(el("psApprover").value||"").trim(), actual:el("psActual").value };
 }
 /* المجيز: المستخدم الحالي، ويقبل التعديل */
-function psDefaultApprover(){ return (typeof ME!=="undefined" && ME && ME.name) || S().signer || ""; }
+function psDefaultApprover(){ return (typeof ME!=="undefined" && ME && ME.name) || setOfView().signer || ""; }
 function psWorkerFill(){
   const sel=el("psWorker"), keep=sel.value;
   sel.innerHTML='<option value="">— اختر العامل —</option>'+workersAZ().map(w=>
@@ -5162,7 +5293,9 @@ el("psSave").onclick=async()=>{
   if(open){
     /* تسجيل الرجوع وحده جزء من حياة السماحية لا تعديل لها: لا نسخة سابقة ولا «معدّل» */
     const only=Object.keys(p).every(k=>k==="actual" || String(p[k]||"")===String(open[k]||""));
+    const was=open.actual||"";
     if(!await docRevise("passes",open,p,only)) return;
+    if(only && p.actual && p.actual!==was) passBackAudit(open,was);
     note=(only?"سُجّل رجوعه على السماحية ":"انحفظ التعديل على السماحية ")+open.no+" ✓";
   }else{
     const no=await docNumber("passes",p.date); if(!no) return;
@@ -5175,18 +5308,21 @@ el("psSave").onclick=async()=>{
 };
 function renderPasses(){
   const box=el("passesList"); if(!box||box.innerHTML===undefined) return;
+  const open=psRec(), stEl=el("psState");                 // حال السماحية المفتوحة تحت حقل رجوعها
+  if(stEl && stEl.textContent!==undefined) stEl.textContent=open ? "الحال: "+passState(open).t : "";
   const c=C(), q=String(el("psSearch").value||"").trim(), today=todayISO();
   let list=c.passes||[];
   if(q) list=list.filter(x=>[x.name,x.no].some(v=>String(v||"").indexOf(q)!==-1));
   if(!list.length){ box.innerHTML='<div class="empty"><p>'+(q?"ماكو سماحية تطابق البحث.":"ماكو سماحيات محفوظة بعد.")+'</p></div>'; return; }
-  let h='<table><thead><tr><th>الرقم</th><th>العامل</th><th>التاريخ</th><th>الخروج ← الرجوع</th><th>السبب</th><th></th></tr></thead><tbody>';
+  const now=nowHM();
+  let h='<table><thead><tr><th>الرقم</th><th>العامل</th><th>التاريخ</th><th>الخروج ← الرجوع المتوقّع</th><th>الحال</th><th>السبب</th><th></th></tr></thead><tbody>';
   list.forEach(x=>{
-    const w=c.workers.find(v=>v.id===x.workerId);
+    const w=c.workers.find(v=>v.id===x.workerId), ps=passState(x,today,now);
     h+='<tr'+(x.id===psEditId?' class="rowopen"':'')+'><td dir="ltr" style="text-align:right">'+esc(x.no)+issuerHtml(x)+'</td>'+
       '<td>'+esc(x.name)+(w?'':' <span class="stag out">محذوف</span>')+'</td>'+
       '<td class="dt">'+dateTextOf(x.date)+'</td>'+
-      '<td class="mini">'+esc(timeText(x.out)||"—")+' ← '+esc(timeText(x.back)||"—")+
-        (x.actual?'<br><span class="stag ok">رجع '+esc(timeText(x.actual))+'</span>':'')+'</td>'+
+      '<td class="mini">'+esc(timeText(x.out)||"—")+' ← '+esc(timeText(x.back)||"—")+'</td>'+
+      '<td><span class="stag '+ps.c+'">'+esc(ps.t)+'</span></td>'+
       '<td class="mini">'+esc(passReasonText(x))+(x.editedAt?' <span class="stag warn" title="'+esc(editedLine(x))+'">معدّل</span>':'')+'</td>'+
       '<td class="actcell">'+(!x.actual && x.date===today?'<button class="btn sm" data-sback="'+x.id+'" title="يسجّل وقت رجوعه الآن">رجع الآن</button> ':'')+
       '<button class="btn sm" data-sopen="'+x.id+'">عرض</button> '+
@@ -5213,8 +5349,9 @@ el("passesList").addEventListener("click",async e=>{
     const t=nowHM();
     if(t<(x.out||"")){ alertBox("الوقت الآن قبل وقت خروجه — افتح السماحية واكتب وقت رجوعه."); return; }
     if(!await docRevise("passes",x,{actual:t},true)) return;
+    passBackAudit(x,"");
     if(psEditId===x.id) el("psActual").value=t;
-    renderPasses(); drawPass(); flash("سُجّل رجوع «"+(x.name||"")+"» "+timeText(t)+" ✓"); return; }
+    renderPasses(); drawPass(); flash("سُجّل رجوع «"+(x.name||"")+"» في "+timeText(t)+" ✓"); return; }
   if(d){ const x=(c.passes||[]).find(v=>v.id===d.dataset.sdel); if(!x) return;
     confirmBox("حذف سماحية خروج","تُحذف السماحية "+x.no+" («"+(x.name||"")+"»)؟\nتبقى بالمحذوفات ويمكن استعادتها.",{ok:"حذف",danger:true}).then(async go=>{
       if(!go) return;
@@ -5355,12 +5492,12 @@ function pnSyncTermNote(){
   else if(cur===t){ r.value=""; }
 }
 /* أعضاء اللجنة من الإعدادات — الترتيب من اليمين إلى اليسار */
-function committeeSeats(){
-  const st=S(), slot=parseInt(st.cmSig,10);
+function committeeSeats(w){
+  const st=setOfW(w), slot=parseInt(st.cmSig,10);
   const a=[{title:st.cmT1||"مراقب العمل", name:st.cmN1||""},
            {title:st.cmT2||"المسؤول الإداري", name:st.cmN2||""},
            {title:st.cmT3||"المدير", name:st.cmN3||""}];
-  if(slot>=1 && slot<=3) a[slot-1].sig=true;
+  if(slot>=1 && slot<=3 && cmSigOwner(st,slot)) a[slot-1].sig=true;
   return a;
 }
 function penKindName(k){
@@ -5477,7 +5614,7 @@ function initPenView(){
     '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("pnDate").value) el("pnDate").value=curDate;
-  if(!el("pnAdmin").value) el("pnAdmin").value=S().signer||"";
+  if(!el("pnAdmin").value) el("pnAdmin").value=setOfView().signer||"";
   if(!el("pnNo").value) el("pnNo").value=nextPenaltyNo();
   if(!pnKindManual) el("pnKind").value=defaultPenKind(el("pnType").value);
   pnSyncTermNote(); pnSyncKind(); pnSyncSave();
@@ -5487,6 +5624,7 @@ el("pnWorker").addEventListener("change",()=>{
   const w=pnWorkerObj();
   if(w){ const sc=sectionOf(w.sectionId), z=sc?zoneOf(sc.zoneId):null;
     el("pnSection").value = sc ? (sc.name+(z?" — "+(z.short||z.name):"")) : ""; }
+  adminFollow("pnAdmin",w);
   drawPenalty(); pnHintRender();
 });
 ["pnSection","pnDate","pnReason","pnAdmin"].forEach(id=>
@@ -5691,11 +5829,11 @@ function drawPenalty(target,k){
   drawWrapFit(ctx,el("pnReason").value||"",R-14,y,W-28,rbH,18,600);
   y+=rbH+40;
 
-  drawCommittee(ctx,L,R,W,y,CLR);
+  drawCommittee(ctx,L,R,W,y,CLR,committeeSeats(pnWorkerObj()));
 }
 /* خانات توقيع اللجنة الثلاثية — مشتركة بين العقوبة والمكافأة */
 function drawCommittee(ctx,L,R,W,y,CLR,custom){
-  const seats=custom||committeeSeats(), cw=W/3;
+  const seats=custom||committeeSeats(null), cw=W/3;
   ctx.strokeStyle=tint(CLR.purple,.60); ctx.lineWidth=1;
   seats.forEach((st,i)=>{
     const cx=R-cw*i-cw/2, x1=cx-cw/2+16, x2=cx+cw/2-16;
@@ -5831,7 +5969,7 @@ function initAchView(){
     '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("acDate").value) el("acDate").value=curDate;
-  if(!el("acAdmin").value) el("acAdmin").value=S().signer||"";
+  if(!el("acAdmin").value) el("acAdmin").value=setOfView().signer||"";
   if(!el("acNo").value) el("acNo").value=nextAchNo();
   if(!acKindManual) el("acKind").value=defaultAchKind(el("acType").value);
   acSyncKind(); acSyncSave();
@@ -5841,6 +5979,7 @@ el("acWorker").addEventListener("change",()=>{
   const w=acWorkerObj();
   if(w){ const sc=sectionOf(w.sectionId), z=sc?zoneOf(sc.zoneId):null;
     el("acSection").value = sc ? (sc.name+(z?" — "+(z.short||z.name):"")) : ""; }
+  adminFollow("acAdmin",w);
   drawAchievement(); acHintRender();
 });
 ["acSection","acDate","acReason","acAdmin"].forEach(id=>
@@ -5986,7 +6125,7 @@ function drawAchievement(target,k){
   drawWrapFit(ctx,el("acReason").value||"",R-14,y,W-28,rbH,18,600);
   y+=rbH+40;
 
-  drawCommittee(ctx,L,R,W,y,CLR);
+  drawCommittee(ctx,L,R,W,y,CLR,committeeSeats(acWorkerObj()));
 }
 function achHiRes(){ const cv=document.createElement("canvas"); drawAchievement(cv,dpiScale()); return cv; }
 el("acWord").onclick=()=>{
@@ -6206,7 +6345,7 @@ function initMatView(){
     '<option value="'+w.id+'">'+esc(workerOptionLabel(w))+'</option>').join("");
   if(keep) sel.value=keep;
   if(!el("mtFrom").value) el("mtFrom").value=curDate;
-  if(!el("mtAdmin").value) el("mtAdmin").value=S().signer||"";
+  if(!el("mtAdmin").value) el("mtAdmin").value=setOfView().signer||"";
   if(!el("mtNo").value) el("mtNo").value=nextIssueNo();
   mtRecalc(); mtSyncSave();
   renderCatalog(); renderMatItems(); renderIssues(); mtStatusRender(); drawIssue();
@@ -6215,6 +6354,7 @@ el("mtWorker").addEventListener("change",()=>{
   const w=mtWorkerObj();
   if(w){ const sc=sectionOf(w.sectionId), z=sc?zoneOf(sc.zoneId):null;
     el("mtSection").value = sc ? (sc.name+(z?" — "+(z.short||z.name):"")) : ""; }
+  adminFollow("mtAdmin",w);
   mtStatusRender(); drawIssue();
 });
 ["mtSection","mtNotes","mtAdmin"].forEach(id=>
@@ -6329,7 +6469,7 @@ function drawIssue(target,k){
     cv.width=Math.round(LV_W*k); cv.height=Math.round(H*k);
   }
   ctx.setTransform(k,0,0,k,0,0);
-  const CLR=CL(), s=S(), L=LP, R=LV_W-LP, W=LV_W-LP*2;
+  const CLR=CL(), s=setOfW(mtWorkerObj()), L=LP, R=LV_W-LP, W=LV_W-LP*2;
   const GOLD=isMono()?CLR.ink:CLR.gold;
   ctx.clearRect(0,0,LV_W,H); ctx.fillStyle="#fff"; ctx.fillRect(0,0,LV_W,H);
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
@@ -6402,7 +6542,7 @@ function drawIssue(target,k){
   drawCommittee(ctx,L,R,W,y,CLR,[
     {title:"\u062a\u0648\u0642\u064a\u0639 \u0627\u0644\u0639\u0627\u0645\u0644 \u0627\u0644\u0645\u0633\u062a\u0644\u0645", name:w?w.name:""},
     {title:"\u0623\u0645\u064a\u0646 \u0627\u0644\u0645\u062e\u0632\u0646 / \u0627\u0644\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0625\u062f\u0627\u0631\u064a", name:el("mtAdmin").value||""},
-    {title:"\u064a\u0639\u062a\u0645\u062f \u060c \u060c \u060c", name:(s.signer||"")+(s.role?" \u2014 "+s.role:""), sig:true}
+    {title:"\u064a\u0639\u062a\u0645\u062f \u060c \u060c \u060c", name:(s.signer||"")+(s.role?" \u2014 "+s.role:""), sig:sigOwner(s)}
   ]);
 }
 function issueHiRes(){ const cv=document.createElement("canvas"); drawIssue(cv,dpiScale()); return cv; }
@@ -7094,7 +7234,7 @@ el("extWord").onclick=()=>{
 };
 el("extPrint").onclick=()=>{
   if(!extGuard()) return;
-  const s2=S(), head=extHead(), rows=extRows(false), cs=extCols();
+  const s2=setOfView(), head=extHead(), rows=extRows(false), cs=extCols();
   const w=window.open("","_blank");
   if(!w){ alertBox("المتصفح منع فتح النافذة."); return; }
   const stCol=cs.findIndex(c=>c.k==="status");
@@ -7135,7 +7275,7 @@ el("extPrint").onclick=()=>{
 /* ---- الكشف الخارجي بالوورد (طولي) ---- */
 function externalDocx(){
   docReset();
-  const s2=S(), CLR=CL();
+  const s2=setOfView(), CLR=CL();
   const SOFT=isMono()?"#F2F2F2":"#F5F3F8";
   const m=receiptMedia();
   const head=extHead(), rows=extRows(false), cs=extCols();
@@ -7164,7 +7304,7 @@ function externalDocx(){
   /* خانة توقيع واحدة: المسؤول الإداري المعتمد بالإعدادات */
   const SW=Math.round(FULL*0.42), SW2=FULL-SW;
   const DOT="\u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7";
-  let sig = m.sigRid ? wImage(m.sigRid,1.45,0.47,"center") : wGap(420);
+  let sig = m.sigRid && sigOwner(s2) ? wImage(m.sigRid,1.45,0.47,"center") : wGap(420);
   sig += wPara(DOT,{align:"center",size:10,color:CLR.ink2,after:20});
   sig += wPara(s2.signer||"المسؤول الإداري",{align:"center",size:11,bold:true,color:CLR.ink,after:10});
   sig += wPara(s2.role||"",{align:"center",size:9,color:CLR.ink2,after:0});
@@ -8391,7 +8531,7 @@ function drawReportPage(rows, pageNo, pages, k){
   cv.width=Math.round(SH_W*k); cv.height=Math.round(SH_H*k);
   const ctx=cv.getContext("2d"); if(!ctx) return null;
   ctx.setTransform(k,0,0,k,0,0);
-  const CLR=CL(), st=S(), cur=st.currency||"";
+  const CLR=CL(), st=setOfView(), cur=st.currency||"";
   const L=PAD,R=SH_W-PAD,W=SH_W-PAD*2;
   ctx.fillStyle="#fff"; ctx.fillRect(0,0,SH_W,SH_H);
   ctx.direction="rtl"; ctx.textAlign="right"; ctx.textBaseline="alphabetic";
@@ -8516,7 +8656,7 @@ function drawReportPage(rows, pageNo, pages, k){
     y+=26;
     // توقيع
     const sx=L+40, ly=Math.min(SH_H-PAD-80,y+50);
-    drawSignature(ctx,sx,ly,240,44);
+    if(sigOwner(st)) drawSignature(ctx,sx,ly,240,44);
     ctx.strokeStyle=CLR.purple; ctx.lineWidth=1.5; line(ctx,sx,ly,sx+240,ly);
     ctx.fillStyle=CLR.ink2;
     fitFill(ctx,st.signer||"التوقيع",sx+120,ly+24,260,16,600,{center:true,keep:true});
@@ -9295,9 +9435,9 @@ function docHeader(title, sub, full){
 
 /* توقيع: صورة التوقيع المحفوظة إن وُجدت، ثم الاسم والصفة */
 function docSignature(media){
-  const s=S(), CLR=CL();
+  const s=setOfView(), CLR=CL();
   let out=wPara("",{after:200});
-  const sig=s.signature ? dataUrlBytes(s.signature) : null;
+  const sig=s.signature && sigOwner(s) ? dataUrlBytes(s.signature) : null;
   if(sig){
     const rid="rIdSig";
     media.push({name:"signature.png", data:sig, rid:rid});
@@ -9316,7 +9456,7 @@ const DY_FULL=11906-720*2;      /* عرض الصفحة المتاح بالضبط
 
 function dailyDocx(){
   docReset();
-  const s=S(), CLR=CL(), c=compute(curDate), rec=dayRec(curDate), media=[];
+  const s=setOfView(), CLR=CL(), c=compute(curDate), rec=dayRec(curDate), media=[];
   const SOFT=isMono()?"#F2F2F2":"#F5F3F8";
 
   /* --- الترويسة --- */
@@ -9411,7 +9551,7 @@ function dailyDocx(){
 
   /* --- التواقيع --- */
   const DOT="· · · · · · · · · · · · · · · · · ·";
-  const sig=s.signature?dataUrlBytes(s.signature):null;
+  const sig=s.signature && sigOwner(s) ? dataUrlBytes(s.signature) : null;
   let rid=null;
   if(sig){ rid="rIdSig"; media.push({name:"signature.png",data:sig,rid:rid}); }
   const sgn=(title,name,r)=>{
@@ -9753,8 +9893,8 @@ function pageBreakXml(){
 }
 
 /* تواقيع اللجنة الثلاثية للوورد — نفس ترتيب المعاينة (يمين ← يسار) */
-function committeeSigsDoc(sigRid){
-  return committeeSeats().map(x=>({title:x.title, name:x.name, rid:(x.sig?sigRid:null)}));
+function committeeSigsDoc(sigRid,w){
+  return committeeSeats(w).map(x=>({title:x.title, name:x.name, rid:(x.sig?sigRid:null)}));
 }
 
 /* ورقة كاملة: نسخة الإدارة فوق ، خط قص ، نسخة العامل تحت */
@@ -9868,7 +10008,7 @@ function penaltyCopyXml(label, sigRid, logoRid){
     date:docIssued(pnRec()), edited:editedLine(pnRec()),
     rows:rows,
     reasonLabel:"\u0648\u0635\u0641 \u0627\u0644\u0645\u062e\u0627\u0644\u0641\u0629", reason:el("pnReason").value,
-    sigs:committeeSigsDoc(sigRid),
+    sigs:committeeSigsDoc(sigRid,w),
     footer: term
       ? "\u064a\u064f\u062d\u0641\u0638 \u0641\u064a \u0645\u0644\u0641 \u0627\u0644\u0639\u0627\u0645\u0644 \u00b7 \u064a\u064f\u0639\u0645\u0644 \u0628\u0647 \u0628\u0639\u062f \u062a\u0648\u0642\u064a\u0639 \u0623\u0639\u0636\u0627\u0621 \u0627\u0644\u0644\u062c\u0646\u0629 \u0627\u0644\u062b\u0644\u0627\u062b\u0629 \u00b7 \u062a\u064f\u0637\u0648\u0649 \u0627\u0644\u062e\u062f\u0645\u0629 \u0645\u0646 \u0627\u0644\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u062b\u0628\u062a \u0623\u0639\u0644\u0627\u0647"
       : "\u064a\u064f\u062d\u0641\u0638 \u0641\u064a \u0645\u0644\u0641 \u0627\u0644\u0639\u0627\u0645\u0644 \u00b7 \u062a\u0643\u0631\u0627\u0631 \u0627\u0644\u0645\u062e\u0627\u0644\u0641\u0629 \u064a\u0633\u062a\u0648\u062c\u0628 \u0639\u0642\u0648\u0628\u0629 \u0623\u0634\u062f \u00b7 \u0644\u0627 \u064a\u064f\u0639\u0645\u0644 \u0628\u0627\u0644\u0625\u0634\u0639\u0627\u0631 \u0645\u0627 \u0644\u0645 \u064a\u062d\u0645\u0644 \u062a\u0648\u0627\u0642\u064a\u0639 \u0627\u0644\u0644\u062c\u0646\u0629 \u0627\u0644\u062b\u0644\u0627\u062b\u0629"
@@ -9901,7 +10041,7 @@ function achievementCopyXml(label, sigRid, logoRid){
        ["\u062a\u064f\u0635\u0631\u0641 \u0636\u0645\u0646 \u0631\u0627\u062a\u0628 \u0634\u0647\u0631", k==="none"?"\u0644\u0627 \u064a\u0646\u0637\u0628\u0642":monthNameOf(date)]]
     ],
     reasonLabel:"\u0648\u0635\u0641 \u0627\u0644\u0625\u0646\u062c\u0627\u0632", reason:el("acReason").value,
-    sigs:committeeSigsDoc(sigRid),
+    sigs:committeeSigsDoc(sigRid,w),
     footer:"\u064a\u064f\u062d\u0641\u0638 \u0641\u064a \u0645\u0644\u0641 \u0627\u0644\u0639\u0627\u0645\u0644 \u00b7 \u064a\u064f\u0639\u062a\u0645\u062f \u0636\u0645\u0646 \u062a\u0642\u064a\u064a\u0645 \u0627\u0644\u0623\u062f\u0627\u0621 \u00b7 \u064a\u064f\u0635\u0631\u0641 \u0627\u0644\u0645\u0628\u0644\u063a \u0645\u0639 \u0631\u0627\u062a\u0628 \u0627\u0644\u0634\u0647\u0631 \u0627\u0644\u0645\u062b\u0628\u062a \u0623\u0639\u0644\u0627\u0647"
   });
 }
@@ -9935,7 +10075,7 @@ function issueLayout(n,hasLogo,B){
           min:base+N*IROW0+320+1050};
 }
 function issueCopyXml(label,sigRid,logoRid,B,items){
-  const s=S(), CLR=CL();
+  const s=setOfW(mtWorkerObj()), CLR=CL();
   const SOFT=isMono()?"#F2F2F2":"#F5F3F8";
   const GOLD=isMono()?CLR.ink:CLR.gold;
   const n=items.length;
@@ -10026,7 +10166,7 @@ function issueCopyXml(label,sigRid,logoRid,B,items){
   b+=wTable([wRow([
     wCell(sgn({title:"\u062a\u0648\u0642\u064a\u0639 \u0627\u0644\u0639\u0627\u0645\u0644 \u0627\u0644\u0645\u0633\u062a\u0644\u0645",name:w?w.name:""}),{width:SW,raw:true,valign:"bottom"}),
     wCell(sgn({title:"\u0623\u0645\u064a\u0646 \u0627\u0644\u0645\u062e\u0632\u0646 / \u0627\u0644\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0625\u062f\u0627\u0631\u064a",name:el("mtAdmin").value||""}),{width:SW,raw:true,valign:"bottom"}),
-    wCell(sgn({title:"\u064a\u0639\u062a\u0645\u062f \u060c \u060c \u060c",name:(s.signer||"")+(s.role?" \u2014 "+s.role:""),rid:sigRid}),{width:SW3,raw:true,valign:"bottom"})
+    wCell(sgn({title:"\u064a\u0639\u062a\u0645\u062f \u060c \u060c \u060c",name:(s.signer||"")+(s.role?" \u2014 "+s.role:""),rid:sigOwner(s)?sigRid:null}),{width:SW3,raw:true,valign:"bottom"})
   ],{height:P.SIG})],{border:CLR.line,borderSize:6,grid:[SW,SW,SW3]});
   b+=wGap(80);
 
@@ -10392,15 +10532,15 @@ function lgCalendar4(L){
 }
 /* كتلة التوقيع — مرة واحدة بنهاية الجرد كله. عمودان: المسؤول الإداري والمصادقة
    (مع التوقيع المرسوم)، وخانة «توقيع العامل بالاستلام» بنطاق العامل الواحد فقط. */
-function lgSigSeats(single, name){
-  const st=S(), a=[];
+function lgSigSeats(single, name, list){
+  const st=setOfWs((list||[]).map(L=>L.w)), a=[];
   if(single) a.push({title:"توقيع العامل بالاستلام", name:name||""});
   a.push({title:st.cmT2||"المسؤول الإداري", name:st.cmN2||""});
-  a.push({title:"المصادقة", name:st.signer||"", role:st.role||"", sig:true});
+  a.push({title:"المصادقة", name:st.signer||"", role:st.role||"", sig:sigOwner(st)});
   return a;
 }
-function lgSigsHtml(single, name){
-  const st=S(), seats=lgSigSeats(single,name);
+function lgSigsHtml(single, name, list){
+  const st=S(), seats=lgSigSeats(single,name,list);
   return '<div class="sigs" style="grid-template-columns:repeat('+seats.length+',1fr)">'+seats.map(x=>
     '<div><div class="sp">'+(x.sig&&st.signature?'<img src="'+st.signature+'" alt="">':'')+'</div>'+
     '<div class="ln">'+esc(x.title)+'</div>'+esc(x.name)+(x.role?'<div class="mini">'+esc(x.role)+'</div>':'')+'</div>').join("")+
@@ -10703,7 +10843,7 @@ function renderLedger(){
       (open?'<div class="mbody">'+(L.mismatch.length?'<div class="errbox" style="margin:8px">عدّ أيام هذا العامل يختلف عن كشف الرواتب بـ: '+
         esc(L.mismatch.join("، "))+' — التصدير والطباعة موقوفان حتى يُحلّ الاختلاف.</div>':'')+
         '<div class="lg lgscreen">'+lgSheet(L,{allDays:lgAll,head:true})+
-        (one && el("lgScope").value==="worker"?lgSigsHtml(true,L.info.name):'')+'</div></div>':'')+
+        (one && el("lgScope").value==="worker"?lgSigsHtml(true,L.info.name,[L]):'')+'</div></div>':'')+
       '</div>';
   }).join("");
 }
@@ -10775,10 +10915,10 @@ el("lgPrint").onclick=()=>{
   const P=periodInfo(LG.rp), pnote=P?'<p class="pnote">'+esc(periodNoteText(P))+'</p>':'';
   let rows=(P?'<tr><td><div class="pline">'+periodLineHtml(P)+'</div></td></tr>':'')+
     list.map((L,i)=>'<tr class="lgrow'+(full&&i>0?' pb':'')+'"><td><div class="lgw'+(i===list.length-1?' last':'')+'">'+
-    lgSheet(L,{allDays:lgAll})+(single?pnote+lgSigsHtml(true,L.info.name):'')+'</div></td></tr>').join("");
+    lgSheet(L,{allDays:lgAll})+(single?pnote+lgSigsHtml(true,L.info.name,[L]):'')+'</div></td></tr>').join("");
   if(!single)
     rows+='<tr class="lgrow pb"><td><div class="h5" style="font-size:10.5pt">التغييرات خلال الشهر وخلاصة الجرد</div>'+
-      lgSummaryHtml(list, LG.from, LG.to, lgScopeRows().shown)+pnote+lgSigsHtml(false)+'</td></tr>';
+      lgSummaryHtml(list, LG.from, LG.to, lgScopeRows().shown)+pnote+lgSigsHtml(false,"",list)+'</td></tr>';
   w.document.write(PRINT_DOC_OPEN+'<title>الجرد التفصيلي</title><style>'+PRINT_BASE_CSS+
     '@page{size:A4 portrait;margin:9mm 10mm 13mm;'+printPageFootCss()+'}html,body{margin:0;padding:0;background:#fff;direction:rtl}'+
     lgCss()+
@@ -11034,8 +11174,8 @@ function lgDocCal4(L,CLR,W){
     wPara("ح حاضر · غ غائب · م متفرقة أو إجازة · · عطلة أو أوف أو خارج الخدمة · الخانة الفارغة يوم لم يُعتمد",{size:7,color:CLR.ink2,after:0});
 }
 /* التواقيع — مرة واحدة بنهاية الملف */
-function lgDocSigs(single,name,m,CLR){
-  const seats=lgSigSeats(single,name), G=lgGrid(seats.map(()=>1));
+function lgDocSigs(single,name,m,CLR,list){
+  const seats=lgSigSeats(single,name,list), G=lgGrid(seats.map(()=>1));
   const blank=wPara("",{after:0})+wGap(420);
   return wGap(200)+wTable([wRow(seats.map((x,j)=>wCell(
     (x.sig&&m.sigRid?wImage(m.sigRid,1.5,0.5,"center"):blank)+
@@ -11088,7 +11228,7 @@ function ledgerDocx(list){
   const P=periodInfo(LG.rp);
   body=wPeriodPara(P,{align:"right",after:80})+body;
   if(P) body+=wPara(periodNoteText(P),{size:7.5,color:CLR.ink2,before:80,after:0});
-  body+=lgDocSigs(single, single?list[0].info.name:"", m, CLR);
+  body+=lgDocSigs(single, single?list[0].info.name:"", m, CLR, list);
   return buildDocx(body,{media:m.media, header:head, footer:wPageFoot(),
     pgMar:{top:1300,bottom:900,right:LG_MG,left:LG_MG,header:320,footer:360}});
 }
@@ -12112,10 +12252,21 @@ async function reqLoad(){
   /* معاً، ثم الرسم في الخطوة نفسها: لا لحظة تكون فيها القائمة في الذاكرة غير ما على الشاشة */
   const [rq,nt]=await Promise.all([dbAccessRequests().then(x=>({ok:x}),e=>({err:e})), dbNotifications().then(x=>x,()=>null)]);
   if(rq.ok){ REQS=rq.ok; reqErr=""; } else reqErr=(rq.err && rq.err.message)||String(rq.err);
-  if(nt) NOTES=nt;
+  if(nt){ const rd=noteReadSet(); NOTES=nt.map(x=>Object.assign(x,{read:x.read||rd.has(String(x.id))})); }
   const first=!reqReady; reqReady=true;
   if(!first) REQS.forEach(r=>{ if(reqMine(r) && before[r.id] && before[r.id]!==r.status+"|"+r.expiresAt) reqTold(r); });
   reqSchedule(); reqRender(); bellRender();
+}
+/* «مقروء» يُحفظ على هذا الجهاز أولاً: تعليمه على الخادم (read_at) محاولة لا يُنتظر نجاحها — إن لم
+   تُجِزه السياسات بقي الإشعار مقروءاً هنا ولم يعد غير مقروء مع كل تحميل */
+function noteReadKey(){ return "nread_"+(typeof ME!=="undefined" && ME ? ME.id : ""); }
+function noteReadSet(){ try{ return new Set(JSON.parse(localStorage.getItem(noteReadKey())||"[]")); }catch(e){ return new Set(); } }
+function noteMarkRead(ids){
+  if(!ids.length) return;
+  const rd=noteReadSet(); ids.forEach(i=>rd.add(String(i)));
+  const keep=new Set(NOTES.map(x=>String(x.id)));       // ما لم يعد في آخر خمسين لا يُحفظ
+  try{ localStorage.setItem(noteReadKey(), JSON.stringify([...rd].filter(i=>keep.has(i)))); }catch(e){}
+  dbMarkRead(ids).catch(()=>{});
 }
 function reqSoon(){ clearTimeout(reqTimer); reqTimer=setTimeout(reqLoad,250); }
 /* قرار على طلبي من جهاز آخر: يصلني وأنا على أي تبويب */
@@ -12218,6 +12369,7 @@ function reqRender(){
   const done=REQS.filter(r=>r.status!=="pending" && !reqMine(r) && reqWorker(r));
   el("rqDecidePanel").classList.toggle("hidden", !allowed || !can("requests.decide"));
   el("rqAskPanel").classList.toggle("hidden", !allowed || meAllZones());
+  reqToSecFill();
   el("rqMinePanel").classList.toggle("hidden", !allowed || (meAllZones() && !mine.length));
   el("rqDonePanel").classList.toggle("hidden", !done.length);
   el("rqDecideCount").textContent=dec.length?fmtNum(dec.length)+" طلب":"";
@@ -12242,6 +12394,15 @@ function reqRender(){
   if(VISIT){ const r=REQS.find(x=>x.id===VISIT.reqId); if(!reqLive(r)) visitExpired(VISIT.reqId); }
 }
 
+/* قسم الطالب المقترح للنقل: من أقسامه هو (ما يراه)، والفراغ «يختاره من يبتّ» */
+function reqToSecFill(){
+  const sel=el("rqToSec"); if(!sel || sel.options===undefined) return;
+  const f=CF(), zi=id=>(f.zones||[]).findIndex(z=>z.id===id), cur=sel.value;
+  const secs=(f.sections||[]).slice().sort((a,b)=>(zi(a.zoneId)-zi(b.zoneId))||((Number(a.sortOrder)||0)-(Number(b.sortOrder)||0)));
+  const h='<option value="">— يختاره من يبتّ في الطلب —</option>'+secs.map(x=>{ const z=zoneOf(x.zoneId);
+    return '<option value="'+x.id+'">'+esc(x.name)+(z?" — "+esc(z.short||z.name):"")+'</option>'; }).join("");
+  if(sel.innerHTML!==h){ sel.innerHTML=h; sel.value=secs.some(x=>x.id===cur)?cur:""; }
+}
 /* ---- البتّ ---- */
 function reqFind(id){ return REQS.find(r=>r.id===id)||null; }
 /* قيد التدقيق: من طلب، ومن بتّ (كاتب القيد)، وبأي قرار، وعن أي عامل — بمنطقة العامل */
@@ -12273,15 +12434,19 @@ function dropWorkerTraces(f,id){
 }
 async function reqDecideMove(r){
   const w=reqWorker(r); if(!w || !reqCanDecide(r)) return;
-  const opts=reqMoveTargets(w);
+  let opts=reqMoveTargets(w);
+  /* قسمٌ حدّده الطالب: هو الخيار الأول والمختار — ولو لم يكن ممّا يراه من يبتّ (اسمه حينئذ لا يُعرض) */
+  if(r.toSection){ const o=opts.find(x=>x.v===r.toSection);
+    opts=[{v:r.toSection, t:(o?o.t:"القسم الذي حدّده الطالب في جهته")+" — اختيار الطالب"}].concat(opts.filter(x=>x.v!==r.toSection)); }
   if(!opts.length){ alertBox("لا قسم تراه خارج منطقة العامل — النقل يبتّه من يرى جهة الطالب."); return; }
   const v=await dlgShow({title:"نقل نهائي", ok:"انقل نهائياً", danger:true,
     message:"ينتقل «"+w.name+"» نهائياً إلى القسم المختار في جهة «"+reqWho(r.by)+"»، ويخرج من قسمه الحالي «"+sectionLabel(w)+"».\n"+
       "سجله وحضوره ووثائقه لا تُنقل ولا تُنسخ: هي باقية كما هي، ويراها من يرى جهته الجديدة.",
     fields:[{id:"rqmSec",label:"القسم الجديد",type:"select",options:opts,value:opts[0].v}]});
   if(!v) return;
-  const sec=(CF().sections||[]).find(s=>s.id===v.rqmSec); if(!sec) return;
-  const lbl=(opts.find(o=>o.v===sec.id)||{}).t||sec.name, z=workerZoneId(w)||null, from=sectionLabel(w);
+  const sec=(CF().sections||[]).find(s=>s.id===v.rqmSec) || (v.rqmSec && v.rqmSec===r.toSection ? {id:r.toSection, name:"القسم الذي حدّده الطالب"} : null);
+  if(!sec) return;
+  const lbl=((opts.find(o=>o.v===sec.id)||{}).t||sec.name).replace(/ — اختيار الطالب$/,""), z=workerZoneId(w)||null, from=sectionLabel(w);
   /* خطوتان، ولكلٍّ نتيجتها الثلاثية (db.js): القرار ثم القسم. نجح القرار وفشل النقل ← يُقال صراحة */
   try{ await dbSetRequest(r.id,{status:"moved"},"نقل «"+w.name+"» — قرار الطلب"); }
   catch(e){ await alertBox(e.message,"لم يُبتّ الطلب"); reqLoad(); return; }
@@ -12331,11 +12496,13 @@ el("rqSend").onclick=async()=>{
   if(!name){ alertBox("اكتب اسم العامل كما هو."); return; }
   if(why.length<3){ alertBox("اكتب سبب الطلب."); return; }
   if(CF().workers.some(w=>w.seq===seq)){ alertBox("العامل رقم "+fmtNum(seq)+" ضمن نطاقك — لا حاجة لطلب."); return; }
+  const to=String(el("rqToSec").value||"")||null;
   let id;
-  try{ id=await dbRequestAccess(seq,name,why,"طلب الوصول"); }
+  /* رسالة الخادم كما هي (عدم التطابق: «لا يوجد عامل بهذا الرقم والاسم.») — لا تُفصَّل ولا يُلمَّح أيّ الحقلين أخطأ */
+  try{ id=await dbRequestAccess(seq,name,why,to,"طلب الوصول"); }
   catch(e){ await alertBox(e.message,"لم يُرسل الطلب"); return; }
   if(id) try{ localStorage.setItem(reqLabelKey(String(id)), name+" — رقم الجرد "+fmtNum(seq)); }catch(e){}
-  ["rqSeq","rqName","rqReason"].forEach(i=>{ el(i).value=""; });
+  ["rqSeq","rqName","rqReason","rqToSec"].forEach(i=>{ el(i).value=""; });
   flash("أُرسل الطلب ✓ — يصلك قرار البتّ حين يُتّخذ");
   reqLoad();
 };
@@ -12364,10 +12531,10 @@ document.addEventListener("click",e=>{ if(e.target && e.target.closest && !e.tar
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") bellClose(); });
 el("bellPop").addEventListener("click",e=>{
   const n=e.target.closest("[data-bn]"), all=e.target.closest("[data-ball]");
-  if(all){ const ids=NOTES.filter(x=>!x.read).map(x=>x.id); NOTES.forEach(x=>{ x.read=true; }); bellRender(); dbMarkRead(ids).catch(()=>{}); return; }
+  if(all){ const ids=NOTES.filter(x=>!x.read).map(x=>x.id); NOTES.forEach(x=>{ x.read=true; }); bellRender(); noteMarkRead(ids); return; }
   if(n){
     const x=NOTES.find(v=>String(v.id)===n.dataset.bn);
-    if(x && !x.read){ x.read=true; dbMarkRead([x.id]).catch(()=>{}); }
+    if(x && !x.read){ x.read=true; noteMarkRead([x.id]); }
     bellClose(); bellRender();
     if(reqTabAllowed()) gotoView("requests");
   }
@@ -12593,7 +12760,7 @@ function loadDemo(){
   c.settings.address="البصرة"; c.settings.signer=c.settings.signer||"اسمك هنا";
   setDayState(curDate,c.workers[2].id,"absent"); setDayState(curDate,c.workers[7].id,"absent");
   setDayState(curDate,c.workers[11].id,"misc");
-  viewBuildings().forEach(b=>{ setZonesNotes(curDate,bldZoneIds(b),c.settings.defNote); setZonesConfirmed(curDate,bldZoneIds(b),true); });
+  viewBuildings().forEach(b=>{ setZonesNotes(curDate,bldZoneIds(b),setOfB(b.id).defNote); setZonesConfirmed(curDate,bldZoneIds(b),true); });
   bootView();
 }
 
@@ -13251,7 +13418,7 @@ el("uName").onclick=()=>{
 };
 el("uLogout").onclick=async()=>{
   /* ملاحظة أو إعداد ينتظر الإرسال يُرسل الآن، وما بالطابور يكتمل قبل الخروج */
-  flushNotes(); flushCompany();
+  flushNotes(); flushCompany(); flushBld();
   if(!await confirmBox("تسجيل الخروج","تخرج من حسابك على هذا الجهاز؟ للدخول مرة ثانية تحتاج البريد الإلكتروني وكلمة المرور.",{ok:"خروج"})) return;
   try{ await dbIdle(); }catch(e){}
   authEntered=false;   // خروج من هذه النافذة: إعادة تحميل واحدة هنا، لا ثانية من authChanged
