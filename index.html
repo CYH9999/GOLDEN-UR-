@@ -108,6 +108,28 @@ html[data-ui="dark"] .datebox input::-webkit-calendar-picker-indicator{filter:in
   border:1px solid var(--line)}
 .dbbadge::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--present);flex:none}
 .dbbadge.ok{color:var(--ink-2)}
+/* جرس الإشعارات (المرحلة ٨) */
+.bellbox{position:relative}
+.bellbtn{position:relative;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;
+  border-radius:var(--r-pill);border:1px solid var(--line);color:var(--ink-2);background:transparent}
+.bellbtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.bellbtn:hover,.bellbtn[aria-expanded="true"]{background:var(--surface-2);color:var(--ink)}
+.bcount{position:absolute;top:-5px;inset-inline-end:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:var(--absent);color:#fff;font-size:11px;font-weight:var(--fw-bold);line-height:18px;text-align:center}
+.bellpop{position:absolute;top:calc(100% + 8px);inset-inline-end:0;width:min(360px,calc(100vw - 32px));max-height:440px;overflow:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--sh-3);z-index:60;padding:var(--sp-2)}
+.bellpop .bn{display:block;width:100%;text-align:start;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);color:var(--ink)}
+.bellpop .bn+.bn{border-top:1px solid var(--line)}
+.bellpop .bn:hover{background:var(--surface-2)}
+.bellpop .bn b{display:block;font-size:var(--fs-sm);font-weight:var(--fw-medium)}
+.bellpop .bn.unread b{font-weight:var(--fw-bold)}
+.bellpop .bn.unread b::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--brand-text);
+  margin-inline-end:6px;vertical-align:middle}
+.bellpop .bn span{display:block;font-size:var(--fs-xs);color:var(--ink-2);margin-top:2px}
+.bellpop .bfoot{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3) var(--sp-1);
+  border-top:1px solid var(--line);font-size:var(--fs-xs);color:var(--ink-2)}
+.rqreason{white-space:pre-line;font-size:var(--fs-sm)}
+.rqvisit h4{margin:var(--sp-4) 0 var(--sp-2);font-size:var(--fs-sm);color:var(--ink-2)}
 .dbbadge.warn{color:var(--gold-text);border-color:var(--gold-soft);background:var(--gold-bg)}
 .dbbadge.warn::before{background:var(--gold)}
 .dbbadge.bad{color:var(--absent);border-color:var(--absent);background:var(--absent-bg)}
@@ -740,6 +762,10 @@ tr.rowneg td{background:var(--absent-bg)}
   </div>
   <div class="spacer"></div>
   <button class="btn sm ghost gsopen" id="gsOpen" title="بحث شامل: عامل، رقم وصل، كتاب (Ctrl+K)">بحث… <kbd>Ctrl+K</kbd></button>
+  <div class="bellbox hidden" id="bellBox">
+    <button class="bellbtn" id="bellBtn" type="button" title="الإشعارات" aria-label="الإشعارات" aria-haspopup="true" aria-expanded="false" aria-controls="bellPop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="bcount hidden" id="bellCount"></span></button>
+    <div class="bellpop hidden" id="bellPop" role="dialog" aria-label="الإشعارات"></div>
+  </div>
   <span class="dbbadge ok" id="dbBadge" role="status" aria-live="polite">جاهز</span>
   <div class="ubox hidden" id="uBox">
     <button class="uname" id="uName" type="button" title="حسابي: الرولات والصلاحيات"></button>
@@ -767,6 +793,7 @@ tr.rowneg td{background:var(--absent-bg)}
     <button role="tab" id="tab-trash" aria-controls="view-trash" aria-selected="false" tabindex="-1" data-view="trash" data-perm="trash.restore" title="المحذوفات"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"/><path d="M10 11v6M14 11v6"/></svg><span class="tl">المحذوفات</span></button>
     <button role="tab" id="tab-people" aria-controls="view-people" aria-selected="false" tabindex="-1" data-view="people" title="العمال والأقسام"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/></svg><span class="tl">العمال والأقسام</span></button>
     <button role="tab" id="tab-variables" aria-controls="view-variables" aria-selected="false" tabindex="-1" data-view="variables" title="حالات العمال"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="4"/><path d="M3 21a7 7 0 0 1 11-5.7"/><path d="m16 17 2 2 4-4"/></svg><span class="tl">حالات العمال</span></button>
+    <button role="tab" id="tab-requests" aria-controls="view-requests" aria-selected="false" tabindex="-1" data-view="requests" title="طلبات الوصول"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M16 7l3 3M14 9l2 2"/></svg><span class="tl">طلبات الوصول</span></button>
     <div class="tsep" role="presentation"></div>
     <button role="tab" id="tab-report" aria-controls="view-report" aria-selected="false" tabindex="-1" data-view="report" title="التقارير والرواتب"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg><span class="tl">التقارير والرواتب</span></button>
     <button role="tab" id="tab-ledger" aria-controls="view-ledger" aria-selected="false" tabindex="-1" data-view="ledger" title="الجرد التفصيلي"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span class="tl">الجرد التفصيلي</span></button>
@@ -1217,6 +1244,45 @@ tr.rowneg td{background:var(--absent-bg)}
       <div id="trList"></div>
     </div>
   </div>
+</section>
+
+<!-- ===== طلبات الوصول ===== -->
+<section id="view-requests" role="tabpanel" aria-labelledby="tab-requests" tabindex="-1" class="hidden">
+  <div class="panel hidden" id="rqVisitPanel">
+    <div class="panel-head"><h2 id="rqVisitTitle">ملف العامل</h2><span class="stag warn" id="rqVisitUntil"></span>
+      <button class="btn sm ghost" id="rqVisitClose" type="button">إغلاق</button></div>
+    <div class="panel-body rqvisit" id="rqVisit"></div>
+  </div>
+  <div class="panel hidden" id="rqDecidePanel">
+    <div class="panel-head"><h2>بانتظار بتّك</h2><span class="mini" id="rqDecideCount"></span></div>
+    <div class="panel-body">
+      <p class="hint" style="margin-top:0">طلبات من إداريين لا يرون عمالاً في مناطقك. «اطلاع ٢٤ ساعة» يفتح لطالبه ملف العامل وحضوره
+        ووثائقه للقراءة ثم يُغلق وحده؛ «نقل نهائي» ينقل العامل إلى قسم في جهة الطالب — وسجله وحضوره ووثائقه تبقى كما هي.</p>
+      <div id="rqDecide"></div>
+    </div>
+  </div>
+  <div class="panel hidden" id="rqAskPanel">
+    <div class="panel-head"><h2>طلب وصول إلى عامل في جهة أخرى</h2></div>
+    <div class="panel-body">
+      <p class="hint" style="margin-top:0">لعامل لا تراه: اكتب رقم جرده واسمه كما هما، وسبب الطلب. يبتّ فيه من يملك صلاحية البتّ على منطقته،
+        ويصلك إشعار بقراره.</p>
+      <div class="row2">
+        <label class="field"><span>رقم الجرد</span><input type="number" id="rqSeq" min="1" step="1"></label>
+        <label class="field"><span>اسم العامل</span><input type="text" id="rqName"></label>
+      </div>
+      <label class="field"><span>سبب الطلب</span><textarea id="rqReason" rows="2" placeholder="مثال: يعمل في بنايتنا منذ بداية الشهر"></textarea></label>
+      <div class="actions"><button class="btn primary" id="rqSend" type="button">إرسال الطلب</button></div>
+    </div>
+  </div>
+  <div class="panel hidden" id="rqMinePanel">
+    <div class="panel-head"><h2>طلباتي</h2></div>
+    <div class="panel-body"><div id="rqMine"></div></div>
+  </div>
+  <div class="panel hidden" id="rqDonePanel">
+    <div class="panel-head"><h2>طلبات مبتوتة</h2></div>
+    <div class="panel-body"><div id="rqDone"></div></div>
+  </div>
+  <p class="mini" id="rqState"></p>
 </section>
 
 <!-- ===== العمال والأقسام ===== -->
@@ -2360,7 +2426,7 @@ function workerInLockedMonth(w){
 }
 const AUDIT_MAX=2000;
 const AUDIT_KIND={salary:"تعديل راتب", status:"تغيير حالة", del:"حذف وثيقة", day:"تعديل يوم معتمد",
-  lock:"قفل شهر", unlock:"فتح قفل شهر", restore:"استعادة من المحذوفات"};
+  lock:"قفل شهر", unlock:"فتح قفل شهر", restore:"استعادة من المحذوفات", access:"بتّ طلب وصول"};
 const DAY_TXT={present:"حاضر", absent:"غائب", misc:"متفرقة"};
 function nowStamp(){ const d=new Date(), p=n=>String(n).padStart(2,"0");
   return todayISO()+" "+p(d.getHours())+":"+p(d.getMinutes()); }
@@ -12001,6 +12067,312 @@ el("trList").addEventListener("click",e=>{
   const b=e.target.closest("[data-trrestore]"); if(!b) return;
   const i=b.dataset.trrestore.indexOf(":"); trRestore(b.dataset.trrestore.slice(0,i),b.dataset.trrestore.slice(i+1));
 });
+/* ==================== [واجهة] طلبات الوصول والإشعارات (المرحلة ٨) ====================
+   من لا يرى منطقة عامل يطلب الوصول إليه بسبب؛ ومن يملك requests.decide على منطقة العامل نفسه يبتّ:
+   «اطلاع ٢٤ ساعة» (ملف العامل وحضوره ووثائقه للقراءة، ثم يُغلق وحده) · «نقل نهائي» (قسم في جهة الطالب؛
+   سجل العامل وحضوره ووثائقه لا تُنقل ولا تُنسخ) · «رفض». طالب الطلب لا يبتّ بطلبه: يرى «بانتظار البتّ»
+   وزر سحب. الحقيقة في access_requests وما تجيزه السياسات؛ الإشعارات للعرض وحده — لا يُبنى عليها وصول.
+   ملف الاطلاع لا يدخل حالة الشركة (VISIT وحده)، ويخرج من الذاكرة والشاشة لحظة انتهاء مدته. */
+let REQS=[], NOTES=[], reqReady=false, reqErr="", reqLiveOk=false, reqPoll=null, reqTimer=null, visitTick=null;
+let VISIT=null;                  // {reqId, until, worker, days, docs} — ملف عامل باطلاع قائم
+const visitTimers={};
+const REQ_ST={pending:"بانتظار البتّ", view:"اطلاع", moved:"نقل نهائي", rejected:"مرفوض", expired:"انتهى"};
+function reqTabAllowed(){ return can("requests.decide") || !meAllZones(); }
+function reqLive(r){ return !!r && r.status==="view" && !!r.expiresAt && Date.parse(r.expiresAt)>Date.now(); }
+/* «YYYY-MM-DD HH:MM» ← «٢٠٢٦/١٠/٠١ ١:٣٠ م» */
+function stampAr(st){ const m=/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/.exec(String(st||"")); return m ? dateSlash(m[1])+" "+timeText(m[2]) : String(st||""); }
+function isoAr(iso){ return iso ? stampAr(dbStamp(iso)) : ""; }
+function reqMine(r){ return typeof ME!=="undefined" && !!ME && r.by===ME.id; }
+function reqWorker(r){ return CF().workers.find(w=>w.id===r.workerId)||null; }
+function reqStatusText(r){
+  if(r.status==="view") return reqLive(r) ? "اطلاع حتى "+isoAr(r.expiresAt) : "انتهى الاطلاع";
+  if(r.status==="rejected" && r.decidedBy && r.decidedBy===r.by) return "مسحوب";
+  return REQ_ST[r.status]||r.status;
+}
+/* يبتّ فيه؟ الصلاحية على منطقة العامل نفسه (لا «على أي منطقة») — وطالب الطلب لا يبتّ بطلبه */
+function reqCanDecide(r){
+  if(!r || r.status!=="pending" || reqMine(r)) return false;
+  const w=reqWorker(r), z=w?workerZoneId(w):"";
+  return !!z && canZone("requests.decide", z);
+}
+/* اسم العامل في طلبات الطالب: من الذاكرة إن صار يراه، أو من ملف الاطلاع المفتوح، أو مما كتبه هو عند الطلب */
+function reqLabelKey(id){ return "areq_"+id; }
+function reqLabel(r){
+  const w=reqWorker(r); if(w) return w.name;
+  if(VISIT && VISIT.reqId===r.id && VISIT.worker) return VISIT.worker.name;
+  try{ const t=localStorage.getItem(reqLabelKey(r.id)); if(t) return t; }catch(e){}
+  return "عامل في جهة أخرى";
+}
+function reqWho(id){ return userName(id)||"اسم غير متاح"; }
+
+/* ---- التحميل والتحديث: الطلبات والإشعارات معاً، وما تغيّر من طلباتي يُقال ---- */
+async function reqLoad(){
+  if(dbLocal()) return;
+  const before={}; REQS.forEach(r=>{ before[r.id]=r.status+"|"+r.expiresAt; });
+  /* معاً، ثم الرسم في الخطوة نفسها: لا لحظة تكون فيها القائمة في الذاكرة غير ما على الشاشة */
+  const [rq,nt]=await Promise.all([dbAccessRequests().then(x=>({ok:x}),e=>({err:e})), dbNotifications().then(x=>x,()=>null)]);
+  if(rq.ok){ REQS=rq.ok; reqErr=""; } else reqErr=(rq.err && rq.err.message)||String(rq.err);
+  if(nt) NOTES=nt;
+  const first=!reqReady; reqReady=true;
+  if(!first) REQS.forEach(r=>{ if(reqMine(r) && before[r.id] && before[r.id]!==r.status+"|"+r.expiresAt) reqTold(r); });
+  reqSchedule(); reqRender(); bellRender();
+}
+function reqSoon(){ clearTimeout(reqTimer); reqTimer=setTimeout(reqLoad,250); }
+/* قرار على طلبي من جهاز آخر: يصلني وأنا على أي تبويب */
+function reqTold(r){
+  const lbl=reqLabel(r);
+  if(r.status==="view" && reqLive(r))
+    rtNotice("rq|"+r.id,r.decidedBy,n=>"منح "+n+" اطلاعاً على ملف «"+lbl+"» حتى "+isoAr(r.expiresAt)+".",[
+      ["افتح الملف",()=>{ gotoView("requests"); openVisit(r); }],["لاحقاً",()=>{}]]);
+  else if(r.status==="moved")
+    rtNotice("rq|"+r.id,r.decidedBy,n=>"نقل "+n+" «"+lbl+"» إلى جهتك.",[["حسناً",()=>{}]]);
+  else if(r.status==="rejected" && r.decidedBy!==r.by)
+    rtNotice("rq|"+r.id,r.decidedBy,n=>"رفض "+n+" طلبك عن «"+lbl+"».",[["حسناً",()=>{}]]);
+}
+function reqStart(){
+  if(dbLocal()) return;
+  reqLoad();
+  dbSubscribeRequests(()=>reqSoon(), st=>{
+    reqLiveOk = st==="SUBSCRIBED";
+    if(reqLiveOk) reqPollStop();
+    else if(st==="CHANNEL_ERROR" || st==="TIMED_OUT" || st==="CLOSED") reqPollStart();
+  });
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ visitCheck(); if(!reqLiveOk) reqLoad(); } });
+}
+/* بلا بثّ لحظي للطلبات (الجدول ليس في المنشور): قراءة كل دقيقة بدله */
+function reqPollStart(){ if(!reqPoll) reqPoll=setInterval(()=>{ if(!document.hidden) reqLoad(); },60000); }
+function reqPollStop(){ if(reqPoll){ clearInterval(reqPoll); reqPoll=null; } }
+
+/* ---- انتهاء الاطلاع أثناء الجلسة: مؤقّت لكل اطلاع قائم، وفحص عند عودة الصفحة وكل نصف دقيقة والملف مفتوح ---- */
+function reqSchedule(){
+  Object.keys(visitTimers).forEach(k=>{ clearTimeout(visitTimers[k]); delete visitTimers[k]; });
+  REQS.filter(r=>reqMine(r) && reqLive(r)).forEach(r=>{
+    visitTimers[r.id]=setTimeout(()=>visitExpired(r.id), Math.max(0,Date.parse(r.expiresAt)-Date.now())+50);
+  });
+  if(VISIT){ const r=REQS.find(x=>x.id===VISIT.reqId); if(!reqLive(r)) visitExpired(VISIT.reqId); }
+}
+function visitCheck(){ if(VISIT && Date.parse(VISIT.until)<=Date.now()) visitExpired(VISIT.reqId); }
+function visitExpired(id){
+  delete visitTimers[id];
+  if(VISIT && VISIT.reqId===id){
+    /* لا يبقى من الملف شيء على الشاشة — ولا اسمه */
+    closeVisit("انتهت مدة الاطلاع — أُغلق الملف.");
+    flash("انتهت مدة الاطلاع وأُغلق الملف");
+  }
+  reqRender();
+}
+
+/* ---- ملف العامل (اطلاع للقراءة) ---- */
+async function openVisit(r){
+  if(!reqLive(r)){ alertBox("انتهت مدة الاطلاع على هذا العامل."); reqRender(); return; }
+  const from=monthOf(addDays(monthOf(todayISO())[0],-1))[0];     // أول الشهر الماضي
+  el("rqVisitPanel").classList.remove("hidden");
+  el("rqVisitTitle").textContent="ملف العامل"; el("rqVisitUntil").textContent="";
+  el("rqVisit").innerHTML='<div class="empty"><p>يقرأ ملف العامل…</p></div>';
+  try{
+    const f=await dbVisitFile(r.workerId, from);
+    if(!reqLive(r)){ closeVisit("انتهت مدة الاطلاع قبل فتح الملف."); return; }
+    VISIT={reqId:r.id, until:r.expiresAt, from:from, worker:f.worker, days:f.days, docs:f.docs};
+    renderVisit();
+    clearInterval(visitTick); visitTick=setInterval(visitCheck,30000);
+  }catch(e){ VISIT=null; el("rqVisit").innerHTML='<div class="empty"><p>'+esc((e && e.message)||String(e))+'</p></div>'; }
+}
+function closeVisit(msg){
+  VISIT=null; clearInterval(visitTick); visitTick=null;
+  el("rqVisitUntil").textContent=""; el("rqVisitTitle").textContent="ملف العامل";
+  el("rqVisit").innerHTML=msg?'<div class="empty"><p>'+esc(msg)+'</p></div>':"";
+  el("rqVisitPanel").classList.toggle("hidden",!msg);
+}
+const VISIT_DOC={leave:"وصل إجازة",penalty:"إشعار عقوبة",achievement:"إشعار مكافأة",issue:"وصل مواد",pass:"سماحية خروج"};
+function renderVisit(){
+  const V=VISIT; if(!V) return;
+  const w=V.worker, dt=x=>x?dateSlash(x):"—";
+  el("rqVisitTitle").textContent="ملف «"+w.name+"» — رقم الجرد "+fmtNum(w.seq||"");
+  el("rqVisitUntil").textContent="اطلاع حتى "+isoAr(V.until);
+  const info=[["الاسم",w.name],["رقم الجرد",fmtNum(w.seq||"")],["اسم الأم",w.motherName||"—"],
+    ["الحالة",statusFullText(getWorkerStatus(w),w.statusChangedAt)],["المباشرة",dt(w.startDate)],["الهاتف",w.phone?fmtPhone(w.phone):"—"]];
+  let h='<p class="hint" style="margin-top:0">للقراءة فقط. الحضور كما أُشِّر في جهته، والراتب يُحسب هناك.</p>'+
+    '<div class="tblwrap tight"><table><tbody>'+info.map(x=>'<tr><th style="width:9em">'+esc(x[0])+'</th><td>'+esc(x[1])+'</td></tr>').join("")+'</tbody></table></div>';
+  const ms={}; V.days.forEach(d=>{ const k=d.date.slice(0,7); (ms[k]=ms[k]||{absent:[],misc:[]}); if(ms[k][d.state]) ms[k][d.state].push(d.date); });
+  h+='<h4>الغياب والمتفرقة المؤشَّرة منذ '+dt(V.from)+'</h4>';
+  const mk=Object.keys(ms).sort().reverse();
+  h+= mk.length ? '<div class="tblwrap tight"><table><thead><tr><th>الشهر</th><th>غياب</th><th>متفرقة</th></tr></thead><tbody>'+
+    mk.map(k=>'<tr><td>'+esc(monthNameOf(k+"-01"))+'</td><td>'+fmtNum(ms[k].absent.length)+(ms[k].absent.length?' <span class="mini">('+ms[k].absent.map(d=>fmtNum(+d.slice(8))).join("، ")+')</span>':'')+'</td>'+
+      '<td>'+fmtNum(ms[k].misc.length)+(ms[k].misc.length?' <span class="mini">('+ms[k].misc.map(d=>fmtNum(+d.slice(8))).join("، ")+')</span>':'')+'</td></tr>').join("")+'</tbody></table></div>'
+    : '<p class="mini">لا غياب ولا متفرقة مؤشَّرة.</p>';
+  h+='<h4>الوثائق</h4>';
+  h+= V.docs.length ? '<div class="tblwrap tight"><table><thead><tr><th>الوثيقة</th><th>الرقم</th><th>التاريخ</th><th>التفصيل</th></tr></thead><tbody>'+
+    V.docs.map(d=>'<tr><td>'+esc(VISIT_DOC[d.kind]||d.kind)+'</td><td dir="ltr" style="text-align:right">'+esc(d.no||"")+'</td>'+
+      '<td class="dt">'+dt(d.from||d.date)+'</td><td class="mini">'+esc(d.kind==="pass"?passReasonText(d):(d.type||d.reason||""))+'</td></tr>').join("")+'</tbody></table></div>'
+    : '<p class="mini">لا وثائق.</p>';
+  el("rqVisit").innerHTML=h;
+}
+el("rqVisitClose").onclick=()=>closeVisit("");
+
+/* ---- العرض ---- */
+function reqRender(){
+  if(!el("rqDecide") || el("rqDecide").innerHTML===undefined) return;
+  const allowed=reqTabAllowed();
+  el("rqState").textContent = reqErr ? "تعذّر تحميل طلبات الوصول: "+reqErr : "";
+  const dec=REQS.filter(reqCanDecide), mine=REQS.filter(reqMine);
+  const done=REQS.filter(r=>r.status!=="pending" && !reqMine(r) && reqWorker(r));
+  el("rqDecidePanel").classList.toggle("hidden", !allowed || !can("requests.decide"));
+  el("rqAskPanel").classList.toggle("hidden", !allowed || meAllZones());
+  el("rqMinePanel").classList.toggle("hidden", !allowed || (meAllZones() && !mine.length));
+  el("rqDonePanel").classList.toggle("hidden", !done.length);
+  el("rqDecideCount").textContent=dec.length?fmtNum(dec.length)+" طلب":"";
+  el("rqDecide").innerHTML = dec.length ? '<div class="tblwrap tight"><table><thead><tr><th>العامل</th><th>الطالب</th><th>السبب</th><th>التاريخ</th><th></th></tr></thead><tbody>'+
+    dec.map(r=>{ const w=reqWorker(r);
+      return '<tr><td>'+esc(w.name)+'<div class="mini">'+esc(sectionLabel(w))+'</div></td><td>'+esc(reqWho(r.by))+'</td>'+
+        '<td class="rqreason">'+esc(r.reason||"—")+'</td><td class="dt">'+esc(stampAr(r.createdAt))+'</td>'+
+        '<td class="actcell"><button class="btn sm" data-rqv="'+r.id+'">اطلاع ٢٤ ساعة</button> '+
+        '<button class="btn sm" data-rqm="'+r.id+'">نقل نهائي</button> '+
+        '<button class="btn sm danger" data-rqr="'+r.id+'">رفض</button></td></tr>'; }).join("")+'</tbody></table></div>'
+    : '<div class="empty"><p>لا طلبات بانتظار بتّك.</p></div>';
+  el("rqMine").innerHTML = mine.length ? '<div class="tblwrap tight"><table><thead><tr><th>العامل</th><th>السبب</th><th>طُلب</th><th>الحالة</th><th></th></tr></thead><tbody>'+
+    mine.map(r=>'<tr><td>'+esc(reqLabel(r))+'</td><td class="rqreason">'+esc(r.reason||"—")+'</td><td class="dt">'+esc(stampAr(r.createdAt))+'</td>'+
+      '<td><span class="stag '+(reqLive(r)||r.status==="moved"?"ok":(r.status==="pending"?"warn":"out"))+'">'+esc(reqStatusText(r))+'</span>'+
+        (r.decidedBy && r.decidedBy!==r.by?'<div class="mini">'+esc(reqWho(r.decidedBy))+' — '+esc(stampAr(r.decidedAt))+'</div>':'')+'</td>'+
+      '<td class="actcell">'+(r.status==="pending"?'<button class="btn sm ghost" data-rqw="'+r.id+'">سحب</button>':'')+
+        (reqLive(r)?'<button class="btn sm primary" data-rqo="'+r.id+'">افتح الملف</button>':'')+'</td></tr>').join("")+'</tbody></table></div>'
+    : '<div class="empty"><p>لم تطلب وصولاً بعد.</p></div>';
+  el("rqDone").innerHTML = done.length ? '<div class="tblwrap tight"><table><thead><tr><th>العامل</th><th>الطالب</th><th>القرار</th><th>من بتّ</th><th>متى</th></tr></thead><tbody>'+
+    done.slice(0,100).map(r=>'<tr><td>'+esc(reqLabel(r))+'</td><td>'+esc(reqWho(r.by))+'</td><td>'+esc(reqStatusText(r))+'</td>'+
+      '<td>'+esc(r.decidedBy?reqWho(r.decidedBy):"—")+'</td><td class="dt">'+esc(stampAr(r.decidedAt))+'</td></tr>').join("")+'</tbody></table></div>' : "";
+  if(VISIT){ const r=REQS.find(x=>x.id===VISIT.reqId); if(!reqLive(r)) visitExpired(VISIT.reqId); }
+}
+
+/* ---- البتّ ---- */
+function reqFind(id){ return REQS.find(r=>r.id===id)||null; }
+/* قيد التدقيق: من طلب، ومن بتّ (كاتب القيد)، وبأي قرار، وعن أي عامل — بمنطقة العامل */
+function reqAudit(r,w,after,zone){
+  audit("access","«"+w.name+"» — طلب «"+reqWho(r.by)+"»","بانتظار البتّ",after,{reason:r.reason||"", zoneId:zone||null});
+}
+async function reqDecideView(r){
+  const w=reqWorker(r); if(!w || !reqCanDecide(r)) return;
+  const ok=await confirmBox("اطلاع ٢٤ ساعة","يطّلع «"+reqWho(r.by)+"» على ملف «"+w.name+"» وحضوره ووثائقه للقراءة، ٢٤ ساعة من الآن، ثم يُغلق وحده.",{ok:"امنح الاطلاع"});
+  if(!ok) return;
+  const until=new Date(Date.now()+24*3600*1000).toISOString(), z=workerZoneId(w)||null;
+  try{ await dbSetRequest(r.id,{status:"view",expires_at:until},"اطلاع «"+reqWho(r.by)+"» على «"+w.name+"»"); }
+  catch(e){ await alertBox(e.message,"لم يُبتّ الطلب"); reqLoad(); return; }
+  reqAudit(r,w,"اطلاع ٢٤ ساعة (حتى "+isoAr(until)+")",z);
+  flash("مُنح الاطلاع حتى "+isoAr(until)+" ✓"); reqLoad();
+}
+/* أقسام «نقل نهائي»: أقسام الجهات الأخرى (جهة الطالب)، وإن لم تكن جهة أخرى فأقسام المناطق الأخرى */
+function reqMoveTargets(w){
+  const f=CF(), sc=sectionOf(w.sectionId), z=sc?zoneOf(sc.zoneId):null, bid=z?(z.buildingId||""):"";
+  const zs=new Map((f.zones||[]).map(x=>[x.id,x])), bn=id=>{ const b=(f.buildings||[]).find(x=>x.id===id); return b?(b.short||b.name):""; };
+  let list=(f.sections||[]).filter(s=>{ const zz=zs.get(s.zoneId); return zz && (zz.buildingId||"")!==bid; });
+  if(!list.length) list=(f.sections||[]).filter(s=>s.zoneId!==(sc?sc.zoneId:""));
+  return list.map(s=>{ const zz=zs.get(s.zoneId)||{}; return {v:s.id, t:[bn(zz.buildingId), zz.short||zz.name, s.name].filter(Boolean).join(" · ")}; });
+}
+/* حذف عامل وكل أثره من الذاكرة (خرج من النطاق) */
+function dropWorkerTraces(f,id){
+  f.workers=f.workers.filter(x=>x.id!==id); rtDropDocsOf(f,id);
+  Object.keys(f.days||{}).forEach(k=>{ const st=f.days[k] && f.days[k].states; if(st && st[id]) delete st[id]; });
+}
+async function reqDecideMove(r){
+  const w=reqWorker(r); if(!w || !reqCanDecide(r)) return;
+  const opts=reqMoveTargets(w);
+  if(!opts.length){ alertBox("لا قسم تراه خارج منطقة العامل — النقل يبتّه من يرى جهة الطالب."); return; }
+  const v=await dlgShow({title:"نقل نهائي", ok:"انقل نهائياً", danger:true,
+    message:"ينتقل «"+w.name+"» نهائياً إلى القسم المختار في جهة «"+reqWho(r.by)+"»، ويخرج من قسمه الحالي «"+sectionLabel(w)+"».\n"+
+      "سجله وحضوره ووثائقه لا تُنقل ولا تُنسخ: هي باقية كما هي، ويراها من يرى جهته الجديدة.",
+    fields:[{id:"rqmSec",label:"القسم الجديد",type:"select",options:opts,value:opts[0].v}]});
+  if(!v) return;
+  const sec=(CF().sections||[]).find(s=>s.id===v.rqmSec); if(!sec) return;
+  const lbl=(opts.find(o=>o.v===sec.id)||{}).t||sec.name, z=workerZoneId(w)||null, from=sectionLabel(w);
+  /* خطوتان، ولكلٍّ نتيجتها الثلاثية (db.js): القرار ثم القسم. نجح القرار وفشل النقل ← يُقال صراحة */
+  try{ await dbSetRequest(r.id,{status:"moved"},"نقل «"+w.name+"» — قرار الطلب"); }
+  catch(e){ await alertBox(e.message,"لم يُبتّ الطلب"); reqLoad(); return; }
+  let err=null;
+  try{ await dbMoveWorker(w.id,sec.id,"نقل «"+w.name+"» إلى «"+sec.name+"»"); }catch(e){ err=e; }
+  reqAudit(r,w, err ? "نقل نهائي — لم يُنقل العامل: تغيير قسمه لم يُحفظ" : "نقل نهائي إلى «"+lbl+"»", z);
+  if(err){
+    await alertBox("حُسم الطلب «نقل نهائي»، لكن نقل العامل نفسه لم يتم:\n"+err.message+
+      "\n\n«"+w.name+"» باقٍ في قسمه «"+from+"». انقله من «العمال والأقسام» بتغيير قسمه، أو راجع صلاحية «workers.manage».","النقل لم يتم");
+  }else{
+    const f=CF(); w.sectionId=sec.id; scopeDirty();
+    if(!rtSees(w)) dropWorkerTraces(f,w.id);       // خرج من نطاق من نقله: لا يبقى منه أثر
+    refresh(); renderPeople();
+    flash("نُقل «"+w.name+"» إلى «"+lbl+"» ✓");
+  }
+  reqLoad();
+}
+async function reqDecideReject(r){
+  const w=reqWorker(r); if(!w || !reqCanDecide(r)) return;
+  const v=await dlgShow({title:"رفض الطلب", ok:"ارفض", danger:true,
+    message:"يُرفض طلب «"+reqWho(r.by)+"» للوصول إلى «"+w.name+"».",
+    fields:[{id:"rqrWhy",label:"سبب الرفض (اختياري — يُكتب في سجل التدقيق)",type:"textarea"}]});
+  if(!v) return;
+  try{ await dbSetRequest(r.id,{status:"rejected"},"رفض طلب الوصول إلى «"+w.name+"»"); }
+  catch(e){ await alertBox(e.message,"لم يُبتّ الطلب"); reqLoad(); return; }
+  const why=String(v.rqrWhy||"").trim();
+  reqAudit(r,w,"رفض"+(why?" — "+why:""),workerZoneId(w)||null);
+  flash("رُفض الطلب ✓"); reqLoad();
+}
+async function reqWithdraw(r){
+  if(!reqMine(r) || r.status!=="pending") return;
+  if(!await confirmBox("سحب الطلب","يُسحب طلبك عن «"+reqLabel(r)+"»؟",{ok:"اسحب"})) return;
+  try{ await dbSetRequest(r.id,{status:"rejected"},"سحب طلب الوصول"); }
+  catch(e){ await alertBox(e.message,"لم يُسحب الطلب"); reqLoad(); return; }
+  flash("سُحب الطلب ✓"); reqLoad();
+}
+el("view-requests").addEventListener("click",e=>{
+  const t=e.target.closest("[data-rqv],[data-rqm],[data-rqr],[data-rqw],[data-rqo]"); if(!t) return;
+  const d=t.dataset, r=reqFind(d.rqv||d.rqm||d.rqr||d.rqw||d.rqo); if(!r) return;
+  if(d.rqv) reqDecideView(r); else if(d.rqm) reqDecideMove(r); else if(d.rqr) reqDecideReject(r);
+  else if(d.rqw) reqWithdraw(r); else if(d.rqo) openVisit(r);
+});
+el("rqSend").onclick=async()=>{
+  const seq=parseInt(el("rqSeq").value,10), name=String(el("rqName").value||"").trim().replace(/\s+/g," "),
+    why=String(el("rqReason").value||"").trim();
+  if(!(seq>0)){ alertBox("اكتب رقم جرد العامل."); return; }
+  if(!name){ alertBox("اكتب اسم العامل كما هو."); return; }
+  if(why.length<3){ alertBox("اكتب سبب الطلب."); return; }
+  if(CF().workers.some(w=>w.seq===seq)){ alertBox("العامل رقم "+fmtNum(seq)+" ضمن نطاقك — لا حاجة لطلب."); return; }
+  let id;
+  try{ id=await dbRequestAccess(seq,name,why,"طلب الوصول"); }
+  catch(e){ await alertBox(e.message,"لم يُرسل الطلب"); return; }
+  if(id) try{ localStorage.setItem(reqLabelKey(String(id)), name+" — رقم الجرد "+fmtNum(seq)); }catch(e){}
+  ["rqSeq","rqName","rqReason"].forEach(i=>{ el(i).value=""; });
+  flash("أُرسل الطلب ✓ — يصلك قرار البتّ حين يُتّخذ");
+  reqLoad();
+};
+
+/* ---- جرس الإشعارات: للعرض وحده ---- */
+function bellRender(){
+  const box=el("bellBox"); if(!box || !box.classList) return;
+  box.classList.toggle("hidden", !reqTabAllowed() && !NOTES.length);
+  const n=NOTES.filter(x=>!x.read).length, c=el("bellCount");
+  c.textContent=fmtNum(n); c.classList.toggle("hidden",!n);
+  el("bellBtn").setAttribute("aria-label", n?"الإشعارات: "+fmtNum(n)+" غير مقروء":"الإشعارات");
+  const pop=el("bellPop"); if(pop.classList.contains("hidden")) return;
+  pop.innerHTML = NOTES.length
+    ? NOTES.map(x=>'<button type="button" class="bn'+(x.read?'':' unread')+'" data-bn="'+esc(x.id)+'"><b>'+esc(x.title)+'</b>'+
+        (x.body?'<span>'+esc(x.body)+'</span>':'')+'<span>'+esc(stampAr(x.at))+'</span></button>').join("")+
+      (n?'<div class="bfoot"><span>'+fmtNum(n)+' غير مقروء</span><button type="button" class="btn sm ghost" data-ball="1">تعليم الكل مقروءاً</button></div>':'')
+    : '<div class="empty"><p>لا إشعارات.</p></div>';
+}
+function bellClose(){ const p=el("bellPop"); if(p && !p.classList.contains("hidden")){ p.classList.add("hidden"); el("bellBtn").setAttribute("aria-expanded","false"); } }
+el("bellBtn").onclick=()=>{
+  const p=el("bellPop"), open=p.classList.contains("hidden");
+  p.classList.toggle("hidden",!open); el("bellBtn").setAttribute("aria-expanded",open?"true":"false");
+  if(open) bellRender();
+};
+document.addEventListener("click",e=>{ if(e.target && e.target.closest && !e.target.closest("#bellBox")) bellClose(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") bellClose(); });
+el("bellPop").addEventListener("click",e=>{
+  const n=e.target.closest("[data-bn]"), all=e.target.closest("[data-ball]");
+  if(all){ const ids=NOTES.filter(x=>!x.read).map(x=>x.id); NOTES.forEach(x=>{ x.read=true; }); bellRender(); dbMarkRead(ids).catch(()=>{}); return; }
+  if(n){
+    const x=NOTES.find(v=>String(v.id)===n.dataset.bn);
+    if(x && !x.read){ x.read=true; dbMarkRead([x.id]).catch(()=>{}); }
+    bellClose(); bellRender();
+    if(reqTabAllowed()) gotoView("requests");
+  }
+});
+
 
 /* ==================== [واجهة] مركز التنبيهات (الصفحة الأولى) ====================
    كل تنبيه يقرأ من دوال الحساب نفسها (missingDays، salaryFor، buildReport) ويحمل زراً
@@ -12138,7 +12510,7 @@ document.addEventListener("keydown",e=>{
 
 function switchView(v){
   if(!viewAllowed(v)) v="daily";
-  ["home","daily","passes","leaves","penalties","achievements","materials","history","trash","people","variables","report","ledger","form","settings"].forEach(x=>
+  ["home","daily","passes","leaves","penalties","achievements","materials","history","trash","people","variables","requests","report","ledger","form","settings"].forEach(x=>
     el("view-"+x).classList.toggle("hidden",x!==v));
   const tabs=[...document.querySelectorAll(".tabs button")];
   tabs.forEach(b=>{
@@ -12152,6 +12524,7 @@ function switchView(v){
   if(v==="home") renderHome();
   if(v==="history"){ renderHistory(); renderAudit(); }
   if(v==="trash") loadTrash();
+  if(v==="requests") reqRender();
   if(v==="daily") scheduleAlerts();
   if(v==="people") renderPeople();
   if(v==="variables") renderVariables();
@@ -12466,6 +12839,8 @@ function applyPerms(){
   }
   Object.keys(PERM_LABELS).forEach(p=>document.body.classList.toggle(permClass(p),!can(p)));
   document.querySelectorAll("[data-perm]").forEach(n=>n.classList.toggle("noperm",!can(n.dataset.perm)));
+  /* طلبات الوصول: لمن يبتّ فيها، ولمن نطاقه بعض المناطق (يطلبها) */
+  const rqt=document.getElementById("tab-requests"); if(rqt) rqt.classList.toggle("noperm",!reqTabAllowed());
   /* شرح لمن لا يملك الصلاحية: يظهر له وحده بدل حقول معطّلة بلا تفسير */
   document.querySelectorAll("[data-perm-else]").forEach(n=>n.classList.toggle("noperm",can(n.dataset.permElse)));
   permSweep(document);
@@ -12485,6 +12860,7 @@ function permSweep(root){
 }
 /* التبويب المحجوب لا يُفتح من رابط أو تنبيه أو بحث */
 function viewAllowed(v){
+  if(v==="requests") return reqTabAllowed();
   const t=document.getElementById("tab-"+v);
   return !(t && t.dataset && t.dataset.perm && !can(t.dataset.perm));
 }
@@ -12894,6 +13270,7 @@ async function init(st){
   bootView();
   if(st) startView();                // الفحوص (بلا خادم) تبقى على جرد اليوم كما كانت
   if(st) rtStart();                  // التحديث اللحظي بعد أن تكتمل الحالة
+  if(st) reqStart();                 // طلبات الوصول والإشعارات — بعد التحميل، وفشلها لا يوقف شيئاً
   refreshDbState(); badge(st?"server":"local");
   dbOnWrite(onWriteStatus);
   /* شهر بدء إصلاح أشهر الـ٣١ يوماً: غيابه يغيّر رواتب أشهر مضت بصمت — يُعلن */

@@ -940,10 +940,88 @@ function dbSubscribe(onChange, onStatus) {
   return ch;
 }
 function dbUnsubscribe() {
+  if (dbReqCh) { try { sb.removeChannel(dbReqCh); } catch (e) {} dbReqCh = null; }
   if (!dbRtCh) return;
   try { sb.removeChannel(dbRtCh); } catch (e) {}
   dbRtCh = null;
 }
+/* ==================== طلبات الوصول والإشعارات (المرحلة ٨) ====================
+   الحقيقة في access_requests (و can_see_worker على الخادم)؛ notifications للعرض وحده — لا يُبنى عليها
+   قرار وصول، وإشعار فُقد أو تأخّر لا يغيّر شيئاً. الطلبات والإشعارات تُقرأ بعد التحميل، وفشلها لا
+   يوقف البرنامج. */
+const DB_REQ_COLS = "id,worker_id,requested_by,reason,status,decided_by,decided_at,expires_at,created_at";
+function dbReq(r) {
+  return { id: r.id, workerId: dbStr(r.worker_id), by: dbStr(r.requested_by), reason: dbStr(r.reason),
+    status: dbStr(r.status), decidedBy: dbStr(r.decided_by), decidedAt: r.decided_at ? dbStamp(r.decided_at) : "",
+    expiresAt: dbStr(r.expires_at), createdAt: dbStamp(r.created_at) };
+}
+async function dbAccessRequests() {
+  if (dbLocal()) return [];
+  const r = await sb.from("access_requests").select(DB_REQ_COLS).eq("company_id", DB_CID)
+    .order("created_at", { ascending: false }).limit(300);
+  if (r.error) throw dbErr(r.error, "تعذّر تحميل طلبات الوصول.");
+  const rows = r.data || [];
+  await dbLoadNames([].concat(rows.map(x => x.requested_by), rows.map(x => x.decided_by)));
+  return rows.map(dbReq);
+}
+/* الطالب لا يرى العامل فلا يعرف معرّفه: يذكر رقم الجرد والاسم، والخادم يطابقهما وينشئ الطلب باسمه
+   (بانتظار البتّ) — وعدم التطابق رسالة واحدة لا تكشف أيّ الاثنين خطأ */
+function dbRequestAccess(seq, name, reason, what) {
+  return dbWrite(what, () => sb.rpc("request_access", { cid: DB_CID, seq: Number(seq), name: String(name || ""),
+    reason: String(reason || "") }), { quiet: true });
+}
+/* البتّ (اطلاع/نقل/رفض) أو السحب: الحالة ومدة الاطلاع وحدهما — decided_by/decided_at يختمهما الخادم */
+function dbSetRequest(id, patch, what) {
+  return dbWrite(what, () => sb.from("access_requests").update(patch, { count: "exact" })
+    .eq("company_id", DB_CID).eq("id", id).select("id"), { quiet: true, expect: true });
+}
+/* «نقل نهائي»: قسم العامل وحده. سجله وحضوره ووثائقه لا تُنقل ولا تُنسخ — هي في الجداول نفسها */
+function dbMoveWorker(id, sectionId, what) {
+  dbRtMine("w|" + id);
+  return dbWrite(what, () => sb.from("workers").update({ section_id: sectionId }, { count: "exact" })
+    .eq("company_id", DB_CID).eq("id", id).select("id"), { quiet: true, expect: true });
+}
+async function dbNotifications() {
+  if (dbLocal() || !ME) return [];
+  const r = await sb.from("notifications").select("id,kind,title,body,ref_id,read_at,created_at")
+    .eq("company_id", DB_CID).eq("user_id", ME.id).order("created_at", { ascending: false }).limit(50);
+  if (r.error) throw dbErr(r.error, "تعذّر تحميل الإشعارات.");
+  return (r.data || []).map(n => ({ id: n.id, kind: dbStr(n.kind), title: dbStr(n.title), body: dbStr(n.body),
+    ref: dbStr(n.ref_id), read: !!n.read_at, at: dbStamp(n.created_at) }));
+}
+function dbMarkRead(ids) {
+  if (dbLocal() || !ids || !ids.length) return Promise.resolve(null);
+  return dbWrite("تعليم الإشعارات مقروءة", () => sb.from("notifications").update({ read_at: dbNow() }, { count: "exact" })
+    .eq("user_id", ME.id).in("id", ids), { quiet: true });
+}
+/* ملف عامل باطلاع مؤقت: يُقرأ عند فتحه (السياسات تجيزه ما دام الاطلاع قائماً) ولا يدخل حالة الشركة */
+async function dbVisitFile(workerId, from) {
+  const cid = DB_CID;
+  const w = await sb.from("workers").select("id,seq,name,mother_name,dob,phone,phone2,address,section_id,status," +
+    "status_changed_at,status_note,status_history,start_date,salary,deduct,leave_policy,off_weekdays,off_dates")
+    .eq("company_id", cid).eq("id", workerId).is("deleted_at", null).maybeSingle();
+  if (w.error) throw dbErr(w.error, "تعذّر فتح ملف العامل.");
+  if (!w.data) throw new Error("ملف العامل غير متاح — انتهى الاطلاع أو لم يُمنح.");
+  const [days, docs] = await Promise.all([
+    dbReadAll("day_states", "date,state", "حضور العامل", cid, q => q.eq("worker_id", workerId).gte("date", from).order("date")),
+    dbReadAll("documents", "id,kind,no,worker_id,zone_id,date,date_to,data,revisions", "وثائق العامل", cid,
+      q => q.eq("worker_id", workerId).is("deleted_at", null).order("date", { ascending: false }))
+  ]);
+  return { worker: dbWorker(w.data), days: days.map(d => ({ date: dbDay(d.date), state: dbStr(d.state) })),
+    docs: docs.map(d => Object.assign(dbDoc(d), { kind: d.kind })) };
+}
+/* قناة مستقلة لـaccess_requests: جدول لم يُضف إلى منشور البثّ قد يُفشل الاشتراك، فلا يمسّ قناة الجرد */
+let dbReqCh = null;
+function dbSubscribeRequests(onChange, onStatus) {
+  if (dbLocal() || !DB_CID || dbReqCh) return dbReqCh;
+  const ch = sb.channel("jard-req-" + DB_CID);
+  ch.on("postgres_changes", { event: "*", schema: "public", table: "access_requests", filter: "company_id=eq." + DB_CID },
+    p => { try { onChange(p && p.new && p.new.id ? dbReq(p.new) : null); } catch (e) { console.error(e); } });
+  ch.subscribe((st, err) => { if (onStatus) { try { onStatus(st, err); } catch (e) {} } });
+  dbReqCh = ch;
+  return ch;
+}
+
 /* صدى كتابات هذا الجهاز: كل كتابة تسجّل مفتاح سجلّها ووقته. حدثٌ كتبه المستخدم نفسه، أو حذفٌ
    (لا يحمل كاتبه) لسجل كُتب هنا للتوّ، صدى لا يُطبَّق — الذاكرة سبقته، وتطبيقه متأخراً
    يُرجع قيمة قديمة لحظةً إن تتابعت النقرات على السجل نفسه. */

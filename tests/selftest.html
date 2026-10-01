@@ -1295,6 +1295,27 @@ try{
   check("وورد: النسختان بالترتيب نفسه، و«سماحية خروج»", (dx24.indexOf("نسخة الإدارة")>0 && dx24.indexOf("نسخة العامل")>dx24.indexOf("نسخة الإدارة"))+"/"+(dx24.indexOf("سماحية خروج")>0), "true/true");
   check("«وصل جديد» على اللوحة: السماحية أولاً", w24.eval('HM_NEW.map(function(x){return x[0];}).join()'), "pass,leave,penalty,ach,issue");
   check("الجرد التفصيلي: عدّاد السماحيات بالمدة (شاشة فقط)", w24.eval('switchView("ledger"); el("lgFrom").value="2026-09-01"; el("lgTo").value="2026-09-30"; el("lgScope").value="worker"; lgTargetFill(); el("lgTarget").value="a"; runLedger(true); [].filter.call(document.querySelectorAll("#lgCards .card"),function(c){return c.textContent.indexOf("سماحيات خروج")>=0;})[0].querySelector(".v").textContent'), "1");
+  /* ---- ٢٥) طلبات الوصول ---- */
+  group("٢٥ · طلبات الوصول — من يبتّ، حالات الطلب، أقسام النقل، الجرس");
+  const w25=await boot();
+  const C25=company({id:"coR",workers:[{id:"a",name:"أحمد كاظم"},{id:"b",name:"باسم",sectionId:"s2"}]});
+  C25.buildings=[{id:"b1",name:"القديمة",short:"القديمة"},{id:"b2",name:"الجديدة",short:"الجديدة"}];
+  C25.zones=[{id:"z1",name:"داخل القديمة",short:"داخلي",buildingId:"b1"},{id:"z2",name:"داخل الجديدة",short:"داخلي",buildingId:"b2"}];
+  C25.sections=[{id:"s1",name:"قسم الإنتاج",zoneId:"z1"},{id:"s2",name:"استعلامات الجديدة",zoneId:"z2"}];
+  load(w25,stateOf([C25]));
+  const fut=new Date(Date.now()+3600e3).toISOString(), past=new Date(Date.now()-60e3).toISOString();
+  w25.__rq=[{id:"r1",workerId:"a",by:"u-x",reason:"س",status:"pending"},{id:"r2",workerId:"a",by:"local",reason:"س",status:"pending"},
+    {id:"r3",workerId:"a",by:"u-x",status:"view",expiresAt:fut},{id:"r4",workerId:"a",by:"u-x",status:"view",expiresAt:past},
+    {id:"r5",workerId:"a",by:"u-x",status:"rejected",decidedBy:"u-x"},{id:"r6",workerId:"a",by:"u-x",status:"rejected",decidedBy:"u-y"},
+    {id:"r7",workerId:"zz",by:"u-x",status:"pending"}];
+  check("يبتّ: طلب بانتظار البتّ عن عامل يملك الصلاحية على منطقته — لا طلبه هو، ولا عامل لا يراه", w25.eval('__rq.map(function(r){return reqCanDecide(r)?1:0;}).join("")'), "1000000");
+  check("حالات الطلب", w25.eval('__rq.map(reqStatusText).join("|")').replace(/حتى .*?\|/,"حتى …|"),
+    "بانتظار البتّ|بانتظار البتّ|اطلاع حتى …|انتهى الاطلاع|مسحوب|مرفوض|بانتظار البتّ");
+  check("الصلاحية على منطقة العامل، لا على أي منطقة", w25.eval('var m=ME; ME={id:"u2",name:"إداري",perms:new Set(["requests.decide"]),zones:new Set(["z2"]),allZones:false,roles:[{perms:new Set(["requests.decide"]),allZones:false,zones:new Set(["z2"])}]}; var r=[reqCanDecide(__rq[0]), reqCanDecide({id:"q",workerId:"b",by:"u-x",status:"pending"})].join(); ME=m; r'), "false,true");
+  check("أقسام النقل: أقسام الجهة الأخرى وحدها", w25.eval('reqMoveTargets(CF().workers.find(function(w){return w.id==="a";})).map(function(o){return o.t;}).join("|")'), "الجديدة · داخلي · استعلامات الجديدة");
+  check("التبويب: لمن يبتّ أو نطاقه بعض المناطق", w25.eval('var m=ME; var a=reqTabAllowed(); ME={id:"o",perms:new Set(),zones:new Set(),allZones:true,roles:[]}; var b=reqTabAllowed(); ME=m; [a,b].join()'), "true,false");
+  check("الجرس: عدد غير المقروء، والقائمة", w25.eval('NOTES=[{id:"n1",title:"طلب وصول جديد",body:"أحمد يطلب",read:false,at:"2026-10-01 09:00"},{id:"n2",title:"بُتّ طلبك",body:"",read:true,at:"2026-10-01 08:00"}]; bellRender(); el("bellBtn").click(); var r=[el("bellCount").textContent, el("bellPop").querySelectorAll(".bn").length, el("bellPop").querySelectorAll(".bn.unread").length].join(); el("bellBtn").click(); NOTES=[]; bellRender(); r'), "1,2,1");
+  check("قيد البتّ يحمل منطقة العامل", w25.eval('var n=CF().audit.length; reqAudit({by:"u-x",reason:"س"},CF().workers[0],"رفض","z1"); var a=CF().audit[CF().audit.length-1]; [a.kind,a.zoneId,a.after,a.reason].join("|")'), "access|z1|رفض|س");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});

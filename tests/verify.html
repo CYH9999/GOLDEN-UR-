@@ -581,7 +581,8 @@ try{
     const c=fx.companies[0]; c.settings.holidays=[{date:"2026-09-21",name:"عطلة رسمية"}];
     c.days["2026-09-29"].confirmed=false; c.days["2026-09-30"].confirmed=false;
     return fx; };
-  setState(wl,LFX()); wl.eval("bootView(); switchView('ledger')");
+  /* السيناريو بأيلول ٢٠٢٦، والتبويب يفتح على الشهر الجاري: المدى يُثبَّت صراحةً (كان الفحص يمرّ صدفةً في أيلول وحده) */
+  setState(wl,LFX()); wl.eval("bootView(); switchView('ledger'); el('lgFrom').value='2026-09-01'; el('lgTo').value='2026-09-30'; runLedger(false)");
   const lgRes=JSON.parse(wl.eval(`JSON.stringify((function(){
     var list=lgList(), rows=lgScopeRows().shown, T=totalsOf(rows,0), L=ledgerTotals(list);
     return {diff:ledgerVsPayroll(list,rows), mism:list.filter(function(x){return x.mismatch.length;}).length,
