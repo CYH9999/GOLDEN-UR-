@@ -129,6 +129,9 @@ html[data-ui="dark"] .datebox input::-webkit-calendar-picker-indicator{filter:in
 .bellpop .bfoot{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3) var(--sp-1);
   border-top:1px solid var(--line);font-size:var(--fs-xs);color:var(--ink-2)}
 .rqreason{white-space:pre-line;font-size:var(--fs-sm)}
+.assetbox{display:grid;gap:4px;font-size:var(--fs-sm)}
+.asrow{padding:var(--sp-2) 0;border-bottom:1px solid var(--line)}.asrow .mini[dir="ltr"]{text-align:right;word-break:break-all}
+.assetbox .ok{color:var(--present)}.assetbox .bad{color:var(--absent)}.assetbox .wait{color:var(--ink-2)}
 .inh{display:block;margin-top:3px;font-size:var(--fs-xs);color:var(--ink-2);min-height:1em}
 .inh:empty{display:none}
 .bsbld{margin-inline-start:auto;max-width:14em}
@@ -868,6 +871,7 @@ tr.rowneg td{background:var(--absent-bg)}
       </div>
     </div>
     <div class="sheetwrap">
+      <div class="notebox hidden" id="unsignedNote" role="status"></div>
       <canvas id="sheet" width="1240" height="1754"></canvas>
       <div class="actions">
         <button class="btn primary" id="dlWord">تصدير Word</button>
@@ -1734,6 +1738,9 @@ tr.rowneg td{background:var(--absent-bg)}
             <button class="btn sm danger" id="lhClear">حذف الفورمة</button>
             <span class="saved" id="lhState"></span>
           </div>
+          <h3 class="subhead">الصور في التخزين</h3>
+          <div id="assetBox" class="assetbox"></div>
+          <div class="actions"><button class="btn" id="assetMigrate" type="button">نقل الصور إلى التخزين</button></div>
           <label class="field" style="margin-top:12px"><span>تنبيه الغياب بالصفحة الأولى: أكثر من كم يوم غياب بالشهر؟ (٠ = بلا تنبيه)</span>
             <input type="number" id="setAbsAlert" min="0" max="31" step="1" style="max-width:140px"></label>
         </div>
@@ -1790,7 +1797,8 @@ tr.rowneg td{background:var(--absent-bg)}
           <select id="bsBld" class="bsbld hidden" aria-label="الجهة التي تضبطها"></select></div>
         <div class="panel-body">
           <p class="hint" style="margin-top:0">لكل بناية موقّع ورقتها ولجنتها وملاحظتها الاعتيادية: ورقة الجرد وكل وصل يقرأ إعداد جهة
-            عامله. الحقل الفارغ يرث قيمة الشركة وتظهر فيه باهتة.</p>
+            عامله. المناصب والملاحظة إن تُركت فارغة ورثت قيمة الشركة (تظهر باهتة). <b>والأسماء لا تُورَث:</b> اسمٌ لم يُحدَّد يُطبع
+            فراغاً يُوقَّع باليد.</p>
           <h3 class="subhead">التوقيع</h3>
           <div class="row2">
             <label class="field"><span>الاسم تحت التوقيع</span><input type="text" data-bk="signer"><small class="inh" data-inh="signer"></small></label>
@@ -1812,7 +1820,8 @@ tr.rowneg td{background:var(--absent-bg)}
             <label class="field"><span>الاسم</span><input type="text" data-bk="cmN3"><small class="inh" data-inh="cmN3"></small></label>
           </div>
           <label class="field"><span>التوقيع المرسوم يظهر عند</span>
-            <select data-bk="cmSig"></select></label>
+            <select data-bk="cmSig"><option value="">بلا توقيع مطبوع</option><option value="1">العضو الأول (يمين)</option>
+              <option value="2">العضو الثاني (الوسط)</option><option value="3">العضو الثالث (يسار)</option></select></label>
           <h3 class="subhead">الملاحظة الاعتيادية (ورقة الجرد)</h3>
           <label class="field"><textarea data-bk="defNote" rows="3" aria-label="الملاحظة الاعتيادية"></textarea><small class="inh" data-inh="defNote"></small></label>
         </div>
@@ -1844,6 +1853,14 @@ tr.rowneg td{background:var(--absent-bg)}
                 <option value="450">فائقة — 450 (ملف أثقل)</option>
               </select></label>
           </div>
+          <h3 class="subhead">ما ترثه الجهات</h3>
+          <p class="hint" style="margin-top:0">تُستعمل في جهة لم تضع قيمتها. الأسماء لا تُورَث: الموقّع وأسماء اللجنة تضعها كل جهة في «إعدادات الجهة».</p>
+          <div class="row3">
+            <label class="field"><span>منصب العضو الأول (يمين)</span><input type="text" id="setCmT1"></label>
+            <label class="field"><span>منصب العضو الثاني (الوسط)</span><input type="text" id="setCmT2"></label>
+            <label class="field"><span>منصب العضو الثالث (يسار)</span><input type="text" id="setCmT3"></label>
+          </div>
+          <label class="field"><span>الملاحظة الاعتيادية (ورقة الجرد)</span><textarea id="setDefNote" rows="3"></textarea></label>
           <label class="field"><span>المستند القانوني لإنهاء الخدمات</span>
             <textarea id="setTermNote" rows="3"></textarea></label>
         </div>
@@ -2441,7 +2458,7 @@ function workerInLockedMonth(w){
 const AUDIT_MAX=2000;
 const AUDIT_KIND={salary:"تعديل راتب", status:"تغيير حالة", del:"حذف وثيقة", day:"تعديل يوم معتمد",
   lock:"قفل شهر", unlock:"فتح قفل شهر", restore:"استعادة من المحذوفات", access:"بتّ طلب وصول",
-  pass_back:"رجوع من سماحية"};
+  pass_back:"رجوع من سماحية", move:"نقل نهائي"};
 const DAY_TXT={present:"حاضر", absent:"غائب", misc:"متفرقة"};
 function nowStamp(){ const d=new Date(), p=n=>String(n).padStart(2,"0");
   return todayISO()+" "+p(d.getHours())+":"+p(d.getMinutes()); }
@@ -2555,18 +2572,32 @@ function withFullScope(fn){ scopeWide++; try{ return fn(); } finally{ scopeWide-
 function scoped(){ return C()!==CF(); }
 function S(){ return C().settings; }
 /* ==== إعدادات الجهة ====
-   مفاتيح قليلة بطبيعتها للبناية (DB_BLD_KEYS في db.js): موقّع ورقة الجرد وصفته، ولجنة العقوبات
-   والإنجازات، والملاحظة الاعتيادية. ما وُجد منها في الجهة يُستعمل، وإلا فقيمة الشركة.
-   setOfB(جهة) · setOfW(عامل) — كل وصل يقرأ إعداد جهة عامله · setOfView() ورقة العرض: جهة واحدة ← إعدادها،
-   وأكثر من جهة ← قيمها إن اتّفقت وإلا قيم الشركة. ما عدا هذه المفاتيح يُقرأ من S() كما هو، ولا يُجزّأ. */
-const BLD_KEYS=["signer","role","cmT1","cmN1","cmT2","cmN2","cmT3","cmN3","cmSig","defNote"];
+   مفاتيح البناية (DB_BLD_KEYS في db.js) نوعان:
+   · وصفٌ عام يُورَث من الشركة إن لم تضعه الجهة: مناصب اللجنة (cmT1..3) والملاحظة الاعتيادية.
+   · اسمُ شخص لا يُورَث أبداً: الموقّع وصفته، وأسماء اللجنة، وخانة التوقيع المرسوم. اسمٌ لم تحدّده الجهة
+     يُطبع فراغاً يُوقَّع باليد — لا تُنسب ورقة إلى من لم يرها.
+   setOfB(جهة) · setOfW(عامل): كل وصل يقرأ إعداد جهة عامله · setOfView(): ورقة العرض — جهة واحدة ←
+   إعدادها، وأكثر من جهة ← ورقة على مستوى الشركة يوقّعها موقّع الكتب الرسمية، ولجنتها ما اتّفقت عليه الجهات
+   وإلا خانات بأسماء فارغة ومناصب موروثة. شركة بلا جهات أصلاً (بيانات قديمة) تبقى على إعداداتها كما كانت.
+   ما عدا هذه المفاتيح يُقرأ من S() كما هو، ولا يُجزّأ. */
+const BLD_INHERIT=["cmT1","cmT2","cmT3","defNote"], BLD_PERSON=["signer","role","cmN1","cmN2","cmN3","cmSig"];
+const BLD_KEYS=BLD_INHERIT.concat(BLD_PERSON);
 function bldById(id){ return id ? (CF().buildings||[]).find(b=>b.id===id)||null : null; }
 function bldOwn(b,k){ const v=b && b.settings ? b.settings[k] : null; return v!=null && String(v).trim()!=="" ? String(v) : ""; }
+function hasBuildings(){ return !!(CF().buildings||[]).length; }
 function setOfB(bid){
-  const s=S(), b=bldById(bid); if(!b) return s;
-  let r=null;
-  BLD_KEYS.forEach(k=>{ const v=bldOwn(b,k); if(v && v!==s[k]){ r=r||Object.assign({},s); r[k]=v; } });
-  return r||s;
+  const s=S(), b=bldById(bid);
+  if(!b) return hasBuildings() ? setOfCo() : s;
+  const r=Object.assign({},s);
+  BLD_INHERIT.forEach(k=>{ const v=bldOwn(b,k); if(v) r[k]=v; });
+  BLD_PERSON.forEach(k=>{ r[k]=bldOwn(b,k); });
+  if(r.cmSig==="0") r.cmSig="";
+  return r;
+}
+/* ورقة على مستوى الشركة (تجمع جهتين، أو عامل بلا جهة): موقّع الكتب الرسمية، ولجنة بلا أسماء */
+function setOfCo(){
+  const g=ltSig(), r=Object.assign({},S(),{signer:g.name||"", role:g.role||"", cmN1:"", cmN2:"", cmN3:"", cmSig:""});
+  return r;
 }
 function workerBldId(w){
   const f=CF(), sc=w ? (f.sections||[]).find(x=>x.id===w.sectionId) : null, z=sc ? (f.zones||[]).find(x=>x.id===sc.zoneId) : null;
@@ -2574,17 +2605,29 @@ function workerBldId(w){
 }
 function setOfW(w){ return setOfB(workerBldId(w)); }
 function setOfView(){
-  const bs=viewBuildings(); if(bs.length===1) return setOfB(bs[0].id);
-  const a=bs.map(b=>setOfB(b.id));            // جهات العرض متّفقة على قيمها ← قيمها، وإلا قيم الشركة
-  return a.length && a.every(x=>BLD_KEYS.every(k=>String(x[k]||"")===String(a[0][k]||""))) ? a[0] : S();
+  const bs=viewBuildings();
+  if(bs.length===1) return setOfB(bs[0].id);
+  if(!hasBuildings()) return S();
+  const r=setOfCo(), a=bs.map(b=>setOfB(b.id)), same=k=>a.length>0 && a.every(x=>String(x[k]||"")===String(a[0][k]||""));
+  [1,2,3].forEach(i=>{ if(same("cmN"+i)) r["cmN"+i]=a[0]["cmN"+i]; if(same("cmT"+i)) r["cmT"+i]=a[0]["cmT"+i]; });
+  if(same("cmSig")) r.cmSig=a[0].cmSig;
+  return r;
 }
 /* إعداد ورقة تجمع عمالاً: جهتهم إن كانت واحدة، وإلا ورقة العرض */
 function setOfWs(ws){ const ids=new Set((ws||[]).map(workerBldId)); return ids.size===1 ? setOfB([...ids][0]) : setOfView(); }
-/* التوقيع المرسوم واحد للشركة، وصاحبه موقّعها (S().signer): يُطبع في ورق جهة موقّعها هو نفسه، ولا
-   يُطبع فوق اسم غيره — توقيع حسين لا يظهر على ورق جهة موقّعها أحمد. وفي اللجنة يُطبع فوق خانتها ما
-   دامت الخانة نفسها بالاسم الذي في الشركة (لم تغيّره الجهة) */
-function sigOwner(st){ return !st || st===S() || String(st.signer||"").trim()===String(S().signer||"").trim(); }
-function cmSigOwner(st,slot){ return sigOwner(st) && (st===S() || String(st["cmN"+slot]||"")===String(S()["cmN"+slot]||"")); }
+/* التوقيع المرسوم واحد للشركة، وصاحبه الاسم المحفوظ معه (S().signer — لم يعد يُعدَّل بالإعدادات): لا يُطبع
+   إلا إذا طابق موقّعُ الجهة اسمَ صاحبه — القاعدة نفسها في الكتب والسماحية. فلا يظهر توقيع حسين على ورق جهة
+   موقّعها أحمد أو موقّعها غير محدَّد. وفي اللجنة: فوق خانة cmSig للجهة، ما لم تحمل الخانة اسم غيره */
+function sigOwnerName(){ return String(S().signer||"").trim(); }
+function sigOwner(st){
+  if(st===S()) return true;                          // شركة بلا جهات: كما كانت
+  const o=sigOwnerName(); return !!o && String(st && st.signer||"").trim()===o;
+}
+function cmSigOwner(st,slot){
+  if(!sigOwner(st)) return false;
+  if(st===S()) return true;
+  const n=String(st["cmN"+slot]||"").trim(); return !n || n===sigOwnerName();
+}
 
 /* ترحيل من النسخة القديمة (شركة واحدة بدون مناطق) */
 function ensureFields(st){
@@ -3583,6 +3626,7 @@ function drawNoteParts(c,parts,xR,yTop,maxW,boxH){
 const DPI_BASE=150;
 function dpiScale(){ return Math.max(1,(Number(S().exportDPI)||300)/DPI_BASE); }
 function drawSheet(target,k){
+  if(!target) renderUnsigned();
   const cv=target||el("sheet");
   const ctx=cv.getContext&&cv.getContext("2d"); if(!ctx)return;
   k=k||1;
@@ -4389,9 +4433,11 @@ function changeWorkerStatus(id,next,opts){
 }
 
 /* ==================== [واجهة] الإعدادات ==================== */
-/* موقّع ورقة الجرد واللجنة والملاحظة الاعتيادية ليست هنا: هي إعدادات الجهة (bsPanel تحت) */
+/* موقّع ورقة الجرد وأسماء اللجنة ليست هنا: أسماء أشخاص لا تُورَث، تضعها كل جهة (bsPanel تحت). وتبقى هنا المناصب
+   والملاحظة الاعتيادية قيماً موروثة لجهة لم تضعها */
 const setMap={ setCompany:"company", setTitle:"title", setAddress:"address",
   setMark:"mark", setNumerals:"numerals", setTermNote:"termNote",
+  setCmT1:"cmT1", setCmT2:"cmT2", setCmT3:"cmT3", setDefNote:"defNote",
   setMisc:"miscInTotal", setSecCount:"secCount", setDPI:"exportDPI",
   setPrintMode:"printMode", setLtSigner:"ltSigner", setLtRole:"ltRole" };
 /* موقّع الكتب الرسمية: مستقل عن موقّع ورقة الجرد. ما لم يُحفظ له اسم فقيمته الأولى العضو الثالث
@@ -4415,10 +4461,11 @@ function fillSettings(){
   el("accentHex").textContent=(c.accent||"#B8912E").toUpperCase();
   loadSigToPad();
   el("sigState").textContent=S().signature?"توقيع محفوظ ✓":"";
-  el("sigOwnerTxt").textContent="التوقيع المرسوم واحد للشركة، وصاحبه موقّعها «"+(S().signer||"—")+"». يُطبع على ورق كل جهة موقّعها "+
-    "هذا الاسم، ولا يُطبع فوق اسم غيره.";
+  el("sigOwnerTxt").textContent = sigOwnerName()
+    ? "التوقيع المرسوم واحد للشركة، وصاحبه «"+sigOwnerName()+"». يُطبع على ورق جهة موقّعها هذا الاسم بعينه، ولا يُطبع فوق اسم غيره."
+    : "التوقيع المرسوم بلا اسم صاحب محفوظ معه — لا يُطبع على ورق أي جهة.";
   el("uiTheme").value=uiThemePref();
-  bsRender();
+  bsRender(); assetUi();
 }
 
 /* ---- إعدادات الجهة ----
@@ -4429,7 +4476,6 @@ function bsEditable(){
   const f=CF(), zs=f.zones||[];
   return (f.buildings||[]).filter(b=>zs.some(z=>(z.buildingId||"")===b.id && canZone("structure.manage",z.id)));
 }
-const CM_SIG_TXT={"1":"العضو الأول (يمين)","2":"العضو الثاني (الوسط)","3":"العضو الثالث (يسار)","0":"بلا توقيع مطبوع"};
 function bsCur(){ const bs=bsEditable(); return bs.find(b=>b.id===bsSel)||null; }
 function bsRender(){
   const panel=el("bsPanel"); if(!panel || !panel.classList) return;
@@ -4443,14 +4489,10 @@ function bsRender(){
   if(sel.innerHTML!==opts) sel.innerHTML=opts;
   sel.value=b.id;
   el("bsTitle").textContent=bs.length<2 ? "إعدادات الجهة — "+b.name : "إعدادات الجهة";
-  const cs=panel.querySelector('select[data-bk="cmSig"]');
-  const cso='<option value="">موروث من الشركة — '+esc(CM_SIG_TXT[String(co.cmSig||"2")]||"")+'</option>'+
-    ["1","2","3","0"].map(v=>'<option value="'+v+'">'+CM_SIG_TXT[v]+'</option>').join("");
-  if(cs.innerHTML!==cso) cs.innerHTML=cso;
   panel.querySelectorAll("[data-bk]").forEach(n=>{
-    const k=n.dataset.bk;
-    if(document.activeElement!==n) n.value=bldOwn(b,k);
-    if(n.tagName!=="SELECT") n.placeholder=String(co[k]||"");
+    const k=n.dataset.bk, v=bldOwn(b,k);
+    if(document.activeElement!==n) n.value = k==="cmSig" && v==="0" ? "" : v;
+    if(n.tagName!=="SELECT") n.placeholder = BLD_INHERIT.includes(k) ? String(co[k]||"") : "";
   });
   bsInh(b);
 }
@@ -4458,12 +4500,14 @@ function bsRender(){
 function bsInh(b){
   const co=S(), st=setOfB(b.id);
   el("bsPanel").querySelectorAll("[data-inh]").forEach(n=>{
-    const k=n.dataset.inh;
-    n.textContent = bldOwn(b,k) ? "" : (String(co[k]||"").trim() ? "موروثة من الشركة" : "");
+    const k=n.dataset.inh, own=bldOwn(b,k);
+    n.textContent = own ? "" : BLD_INHERIT.includes(k) ? (String(co[k]||"").trim() ? "موروثة من الشركة" : "")
+      : k==="signer" ? "غير محدَّد — ورق هذه الجهة يخرج بخانة توقيع فارغة تُوقَّع باليد" : "";
   });
   el("bsSigNote").textContent = !co.signature ? "لا توقيع مرسوم محفوظ للشركة."
-    : sigOwner(st) ? "التوقيع المرسوم يُطبع على ورق هذه الجهة: موقّعها «"+(st.signer||"")+"» صاحبه."
-    : "التوقيع المرسوم لا يُطبع على ورق هذه الجهة: صاحبه «"+(co.signer||"")+"» لا «"+(st.signer||"")+"». تُوقَّع أوراقها باليد.";
+    : !st.signer ? "التوقيع المرسوم لا يُطبع: موقّع هذه الجهة غير محدَّد."
+    : sigOwner(st) ? "التوقيع المرسوم يُطبع على ورق هذه الجهة: موقّعها «"+st.signer+"» صاحبه."
+    : "التوقيع المرسوم لا يُطبع على ورق هذه الجهة: صاحبه «"+sigOwnerName()+"» لا «"+st.signer+"». تُوقَّع أوراقها باليد.";
 }
 function bsSave(){
   const b=bsPend; bsPend=null; bsTimer=null; if(!b) return;
@@ -4480,6 +4524,24 @@ el("bsPanel").addEventListener("input",e=>{
   if(bsPend && bsPend!==b) flushBld();
   bsPend=b; clearTimeout(bsTimer); bsTimer=setTimeout(bsSave,600);
   sigCache.src=null; redrawSheets(); refresh();
+});
+/* ورقة جرد جهة بلا موقّع: بيانٌ فوقها (لا على الورقة) ورابط إلى إعداداتها */
+function renderUnsigned(){
+  const n=el("unsignedNote"); if(!n || !n.classList) return;
+  const bs=viewBuildings(), b=bs.length===1 ? bldById(bs[0].id) : null, miss=!!b && !bldOwn(b,"signer");
+  n.classList.toggle("hidden",!miss);
+  if(!miss){ n.innerHTML=""; return; }
+  const can=bsEditable().some(x=>x.id===b.id);
+  const h='<b>موقّع هذه البناية غير محدَّد.</b> ورقة جرد «'+esc(b.name)+'» وأوراقها تخرج بخانة توقيع فارغة تُوقَّع باليد. '+
+    (can ? '<button type="button" class="btn sm" id="unsignedGo">إعدادات البناية</button>'
+         : '<span class="mini">يحدّده من يملك «المناطق والأقسام» على مناطقها.</span>');
+  if(n.innerHTML!==h) n.innerHTML=h;
+}
+el("unsignedNote").addEventListener("click",e=>{
+  if(!e.target.closest("#unsignedGo")) return;
+  const bs=viewBuildings(); if(bs.length!==1) return;
+  flushBld(); bsSel=bs[0].id; switchView("settings"); bsRender();
+  const f=el("bsPanel").querySelector('[data-bk="signer"]'); if(f && f.focus){ el("bsPanel").scrollIntoView({block:"start"}); f.focus(); }
 });
 Object.keys(setMap).forEach(id=>{
   el(id).addEventListener("input",()=>{
@@ -4542,14 +4604,22 @@ function sigEnd(){
   sigDrawing=false;
   if(sigDirty){ saveSignature(); sigDirty=false; }
 }
+/* التوقيع يُرفع إلى التخزين بعد توقّف الرسم لا مع كل خط — والذاكرة لا تتغيّر إلا بعد رفعه والتحقق منه */
+let sigUpTimer=null;
 function saveSignature(){
   const cv=el("sigPad"); if(!cv.toDataURL)return;
   sigLoadGen++;                       // أي تحميل متأخر ما عاد يرسم فوق ما رسمه المستخدم
   const trimmed=trimSig(cv);
-  S().signature=trimmed||"";
-  sigCache.src=null;
-  el("sigState").textContent=S().signature?"توقيع محفوظ ✓":"";
-  saveCompany("التوقيع"); redrawSheets();
+  if(dbLocal()){ S().signature=trimmed||""; sigCache.src=null; el("sigState").textContent=S().signature?"توقيع محفوظ ✓":"";
+    saveCompany("التوقيع"); redrawSheets(); return; }
+  if(!trimmed) return;
+  el("sigState").textContent="يُرفع…";
+  clearTimeout(sigUpTimer);
+  sigUpTimer=setTimeout(async()=>{
+    const ok=await assetSave("signature",trimmed,"التوقيع");
+    el("sigState").textContent=ok?"توقيع محفوظ ✓":"لم يُحفظ";
+    if(!ok) loadSigToPad();
+  },900);
 }
 /* قص الفراغ حول التوقيع حتى يطلع مضبوط بالورقة */
 function trimSig(cv){
@@ -4596,8 +4666,8 @@ function loadSigToPad(){
 })();
 el("sigClear").onclick=()=>{
   const cv=el("sigPad"), c=sigCtx(); if(c) c.clearRect(0,0,cv.width,cv.height);
-  sigLoadGen++;
-  S().signature=""; sigCache.src=null;
+  sigLoadGen++; clearTimeout(sigUpTimer);
+  assetClear("signature"); sigCache.src=null;
   el("sigState").textContent=""; saveCompany("حذف التوقيع"); redrawSheets();
 };
 
@@ -4621,13 +4691,12 @@ function setLogoFromDataUrl(src, co){
     cv.height=Math.max(1,Math.round((im.height||1)*r));
     const cx=cv.getContext&&cv.getContext("2d"); if(!cx) return;
     cx.drawImage(im,0,0,cv.width,cv.height);
-    const st=co.settings;
-    st.logo=cv.toDataURL("image/png"); st.logoW=cv.width; st.logoH=cv.height;
-    logoCache.src=null; saveCompany("الشعار");
+    const d=cv.toDataURL("image/png"), wh={logoW:cv.width, logoH:cv.height};
     if(co!==C()) return;
-    fillLogoPrev(); redrawSheets();
+    assetSave("logo",d,"الشعار",wh).then(ok=>{ if(!ok) return;
+      logoCache.src=null; fillLogoPrev(); redrawSheets();
     el("logoState").textContent="\u0627\u0646\u062d\u0641\u0638 \u0627\u0644\u0634\u0639\u0627\u0631 \u2713";
-    setTimeout(()=>el("logoState").textContent="",2200);
+    setTimeout(()=>el("logoState").textContent="",2200); });
   };
   im.onerror=()=>alertBox("\u062a\u0639\u0630\u0651\u0631 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0635\u0648\u0631\u0629.");
   im.src=src;
@@ -4641,11 +4710,134 @@ el("setLogoFile").addEventListener("change",e=>{
   e.target.value="";
 });
 el("logoClear").onclick=()=>{
-  const st=S(); st.logo=""; st.logoW=0; st.logoH=0;
+  const st=S(); assetClear("logo"); st.logoW=0; st.logoH=0;
   logoCache.src=null; saveCompany("حذف الشعار"); fillLogoPrev();
   redrawSheets();
   el("logoState").textContent="";
 };
+
+/* ==================== الصور في التخزين (المرحلة ٩) ====================
+   الشعار والفورمة والتوقيع المرسوم ملفات في حاوية assets، ومساراتها في الإعدادات ({نوع}Url ونسخته {نوع}Ver).
+   تُقرأ بعد التحميل برابط موقَّع يُولَّد عندها، وتبقى في ذاكرة الجلسة data URL — النصّ نفسه الذي كان في صف
+   الشركة، فكل الرسم والطباعة والوورد وبصمة توقيع الكتب كما كانت. صورةٌ لها مسار ولم تصل الذاكرة (تُحمَّل،
+   أو تعذّر تحميلها) توقف كل طباعة وتصدير برسالة، وتُعاد قراءتها برابط جديد — لا تخرج ورقة بلا فورمة أو توقيع.
+   في الفحص (dbLocal) تبقى الصور في الإعدادات كما كانت. */
+const ASSET_LBL={logo:"الشعار", letterhead:"الفورمة", signature:"التوقيع المرسوم"};
+const ASSET_CACHE={};          // «مسار|نسخة» ← data URL: ذاكرة الجلسة
+const ASSET_ST={};             // نوع ← {state:"loading"|"ok"|"error", key, err, p}
+function assetKey(k){ const st=CF().settings; return st[k+"Url"] ? st[k+"Url"]+"|"+(st[k+"Ver"]||"") : ""; }
+function assetMissing(){ return DB_ASSETS.filter(k=>{ const key=assetKey(k); return key && !(ASSET_CACHE[key] && CF().settings[k]===ASSET_CACHE[key]); }); }
+function assetPut(k,d){
+  CF().settings[k]=d;
+  if(k==="signature"){ sigCache.src=null; if(currentView()==="settings") loadSigToPad(); }
+  if(k==="logo") logoCache.src=null;
+  redrawSheets(); fillLogoPrev(); fillLhPrev(); if(lfInited) lfPaintBg(); assetUi();
+}
+/* قراءة صورة من التخزين برابط موقَّع جديد — كل محاولة رابطها */
+function assetLoad(k){
+  const key=assetKey(k); if(!key) return Promise.resolve(true);
+  if(ASSET_CACHE[key]){ if(CF().settings[k]!==ASSET_CACHE[key]) assetPut(k,ASSET_CACHE[key]); return Promise.resolve(true); }
+  const cur=ASSET_ST[k]; if(cur && cur.state==="loading" && cur.key===key) return cur.p;
+  const co=CF(), st=co.settings;
+  const p=dbAssetRead(st[k+"Url"], st[k+"Ver"]).then(r=>{
+    const d=dbBytesDataUrl(r.bytes, r.mime);
+    ASSET_CACHE[key]=d; ASSET_ST[k]={state:"ok", key:key};
+    if(CF()===co && assetKey(k)===key) assetPut(k,d);
+    return true;
+  }, e=>{ ASSET_ST[k]={state:"error", key:key, err:(e && e.message)||String(e)}; assetUi(); return false; });
+  ASSET_ST[k]={state:"loading", key:key, p:p}; assetUi();
+  return p;
+}
+function assetsLoad(){ if(dbLocal()) return; DB_ASSETS.forEach(k=>{ if(assetKey(k)) assetLoad(k); }); assetUi(); }
+/* رفع صورة جديدة (الشعار، الفورمة، التوقيع): إلى مسارها الثابت، ثم قراءتها ومقارنتها — والذاكرة والإعدادات لا
+   تتغيّر إلا بعد ذلك */
+async function assetSave(k,d,what,extra){
+  const st=CF().settings;
+  if(dbLocal()){ st[k]=d; Object.assign(st,extra||{}); saveCompany(what); return true; }
+  try{
+    const r=await dbAssetUpload(k,d);
+    if(!r.same) throw new Error("الصورة المقروءة من التخزين لا تطابق المرفوعة.");
+    const key=r.path+"|"+r.ver; ASSET_CACHE[key]=d; ASSET_ST[k]={state:"ok", key:key};
+    st[k]=d; st[k+"Url"]=r.path; st[k+"Ver"]=r.ver; Object.assign(st,extra||{});
+    saveCompany(what); assetUi(); return true;
+  }catch(e){ await alertBox((e && e.message)||String(e),"لم يُحفظ "+ASSET_LBL[k]); assetUi(); return false; }
+}
+/* حذف صورة: تُترك بلا مسار (الملف يبقى بمساره الثابت فيُستبدل عند الرفع التالي — لا حذف من الحاوية) */
+function assetClear(k){ const st=CF().settings; st[k]=""; delete st[k+"Url"]; delete st[k+"Ver"]; delete ASSET_ST[k]; assetUi(); }
+function assetUi(){
+  const box=el("assetBox"); if(!box || box.innerHTML===undefined) return;
+  const st=CF().settings;
+  const line=k=>{ const s=ASSET_ST[k]||{}, kb=v=>fmtNum(Math.round(v/1024))+" ك.ب";
+    let t, c;
+    if(st[k+"Url"]){
+      if(assetMissing().indexOf(k)<0){ t="في التخزين ✓"; c="ok"; }
+      else if(s.state==="error"){ t="في التخزين — تعذّر تحميلها: "+s.err; c="bad"; }
+      else { t="في التخزين — تُحمَّل…"; c="wait"; }
+    } else if(st[k]){ t="في صف الشركة (لم تُنقل بعد) · "+kb(String(st[k]).length); c="wait"; }
+    else { t="لا صورة"; c="wait"; }
+    return '<div><b>'+esc(ASSET_LBL[k])+':</b> <span class="'+c+'">'+esc(t)+'</span></div>'; };
+  const h=DB_ASSETS.map(line).join("");
+  if(box.innerHTML!==h) box.innerHTML=h;
+  const mb=el("assetMigrate"); if(mb && mb.classList) mb.classList.toggle("hidden", dbLocal() || !DB_ASSETS.some(k=>st[k] && !st[k+"Url"]));
+}
+/* كل طباعة وتصدير: صورة لها مسار ولم تصل الذاكرة ← لا ورقة. تُعاد قراءتها برابط جديد ويُطلب الضغط ثانيةً
+   (نافذة الطباعة لا تُفتح إلا بنقرة المستخدم نفسها) */
+const ASSET_OUT="#dlWord,#printBtn,#dlPng,#psPrint,#psWord,#psPng,#lvWord,#lvPrint,#lvPng,#pnWord,#pnPrint,#pnPng,"+
+  "#acWord,#acPrint,#acPng,#mtWord,#mtPrint,#mtPng,#dirWord,#dirPrint,#varWord,#varPrint,#rpWord,#rpPdf,#lgWord,#lgPrint,"+
+  "#lfPrint,#lfWord,#extWord,#extPrint";
+document.addEventListener("click",e=>{
+  const t=e.target && e.target.closest && e.target.closest(ASSET_OUT); if(!t) return;
+  const miss=assetMissing(); if(!miss.length) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  assetBlock(miss);
+},true);
+async function assetBlock(miss){
+  const names=ks=>ks.map(k=>"«"+ASSET_LBL[k]+"»").join(" و");
+  flash("تُحمَّل "+names(miss)+" من التخزين…");
+  const ok=await Promise.all(miss.map(k=>{ const s=ASSET_ST[k]; if(s && s.state==="error") delete ASSET_ST[k]; return assetLoad(k); }));
+  const bad=miss.filter((k,i)=>!ok[i]);
+  if(!bad.length){ alertBox("وصل "+names(miss)+" من التخزين. اضغط زر الطباعة أو التصدير مرة ثانية.","جاهز"); return; }
+  alertBox("تعذّر تحميل "+names(bad)+" من التخزين:\n"+(ASSET_ST[bad[0]]||{}).err+
+    "\n\nلم تُطبع الورقة ولم تُصدَّر — لا تخرج ورقة بلا فورمة أو بلا توقيع. تحقّق من الاتصال ثم أعد المحاولة.","الطباعة موقوفة");
+}
+/* نقل الصور من صف الشركة إلى التخزين: لكل صورة — رفعها، ثم قراءتها من التخزين ومقارنتها بالأصل بايتاً ببايت
+   (وبصمتها SHA-256، ونصّها data URL كما كان حرفاً بحرف). ما طابق وحده يأخذ مساره ويُحذف من الصف؛ وما لم يطابق
+   يبقى في الصف كما هو. والتقرير بالبصمات وحجم الإعدادات قبل وبعد يُقال، ويُكتب قيداً في سجل التدقيق. */
+async function assetMigrate(){
+  const co=CF(), st=co.settings, todo=DB_ASSETS.filter(k=>st[k] && !st[k+"Url"]);
+  if(!todo.length || dbLocal()) return;
+  if(!await confirmBox("نقل الصور إلى التخزين","تُرفع "+todo.map(k=>"«"+ASSET_LBL[k]+"»").join(" و")+" إلى التخزين، ثم تُقرأ منه وتُقارن "+
+    "بالأصل بايتاً ببايت. ما طابق وحده يُحذف من صف الشركة؛ وما لم يطابق يبقى فيه كما هو.\n\n"+
+    "إن أردت حجم الصف على الخادم قبل النقل فقِسه الآن: select pg_column_size(settings) from companies;",{ok:"ابدأ النقل"})) return;
+  const before=dbCompanyRowSize(co), rows=[];
+  for(const k of todo){
+    try{
+      const orig=st[k], p=dbDataUrlParts(orig), sha0=await dbSha256(p.bytes), r=await dbAssetUpload(k,orig);
+      rows.push({k:k, ok:r.same && r.sha===sha0 && r.shaBack===sha0, size:p.bytes.length, mime:p.mime, sha0:sha0, sha1:r.shaBack, path:r.path, ver:r.ver});
+    }catch(e){ rows.push({k:k, ok:false, err:(e && e.message)||String(e)}); }
+  }
+  const done=rows.filter(r=>r.ok);
+  done.forEach(r=>{ st[r.k+"Url"]=r.path; st[r.k+"Ver"]=r.ver; const key=r.path+"|"+r.ver; ASSET_CACHE[key]=st[r.k]; ASSET_ST[r.k]={state:"ok", key:key}; });
+  let wrote=!done.length;
+  if(done.length){
+    clearTimeout(companyTimer); companyTimer=null;
+    wrote=!!await dbSaveCompany(co,"نقل الصور إلى التخزين");
+    if(!wrote) done.forEach(r=>{ delete st[r.k+"Url"]; delete st[r.k+"Ver"]; r.ok=false; r.err="لم يُكتب مسارها في صف الشركة — بقيت فيه كما كانت."; });
+  }
+  const after=dbCompanyRowSize(co), kb=v=>fmtNum((v/1024).toFixed(1))+" ك.ب";
+  const sum=rows.map(r=>ASSET_LBL[r.k]+": "+(r.ok?"مطابقة · "+r.size+" بايت · sha256 "+r.sha0.slice(0,16):"لم تُنقل — "+(r.err||"لا تطابق"))).join(" ؛ ");
+  if(rows.some(r=>r.ok)) audit("assets","نقل الصور إلى التخزين","إعدادات الشركة ≈ "+kb(before),"≈ "+kb(after),{reason:sum});
+  const h='<p>'+(rows.every(r=>r.ok)?"نُقلت الصور كلها وطابقت أصلها بايتاً ببايت.":"لم يُنقل بعضها — ما لم يطابق بقي في صف الشركة كما هو.")+'</p>'+
+    rows.map(r=>'<div class="asrow"><div><b>'+esc(ASSET_LBL[r.k])+'</b>'+(r.size!=null?' · '+fmtNum(r.size)+' بايت':'')+' '+
+      (r.ok?'<span class="stag ok">مطابقة ✓</span>':'<span class="stag out" style="white-space:normal">'+esc(r.err||"لا تطابق")+'</span>')+'</div>'+
+      (r.path?'<div class="mini" dir="ltr">'+esc(r.path)+'</div>':'')+
+      (r.sha0?'<div class="mini" dir="ltr">SHA-256 '+esc(r.sha0.slice(0,20))+'… → '+esc((r.sha1||"").slice(0,20))+'…</div>':'')+'</div>').join("")+
+    '<p class="hint">حجم إعدادات الشركة كما تُكتب (JSON): قبل '+kb(before)+' ← بعد '+kb(after)+'. الرقم الدقيق على الخادم: '+
+    '<span dir="ltr">select pg_column_size(settings) from companies;</span></p>';
+  assetUi();
+  dlgShow({title:"نقل الصور إلى التخزين", html:h, ok:"إغلاق", noCancel:true});
+}
+el("assetMigrate").onclick=()=>{ assetMigrate(); };
 
 /* ==================== [واجهة] الشركات ==================== */
 function renderCompanies(){
@@ -11416,7 +11608,7 @@ function lfUnnest(root){
 const LF_SIG_LBL={def:"موقّع الكتب", inv:"موقّع ورقة الجرد", cm1:"اللجنة (١)", cm2:"اللجنة (٢)", cm3:"اللجنة (٣)",
   manual:"اسم يُكتب يدوياً", none:"بلا توقيع — يوقَّع بخط اليد بعد الطباعة"};
 function lfSigOpts(){
-  const s=S();
+  const s=setOfView();
   return { def:ltSig(), inv:{name:s.signer||"",role:s.role||""},
     cm1:{name:s.cmN1||"",role:s.cmT1||""}, cm2:{name:s.cmN2||"",role:s.cmT2||""}, cm3:{name:s.cmN3||"",role:s.cmT3||""} };
 }
@@ -11975,10 +12167,10 @@ function setLetterheadFromDataUrl(src, co, rawJpeg){
       cx.fillStyle="#fff"; cx.fillRect(0,0,cv.width,cv.height); cx.drawImage(im,0,0,cv.width,cv.height);
       out=cv.toDataURL("image/jpeg",0.9);
     }
-    co.settings.letterhead=out; saveCompany("الفورمة");
     if(co!==C()) return;
-    fillLhPrev(); if(lfInited) lfPaintBg();
-    lhState(off?"انحفظت ✓ — تنبيه: أبعادها ليست بنسبة A4 فستُمطّ على الصفحة":"انحفظت الفورمة ✓");
+    assetSave("letterhead",out,"الفورمة").then(ok=>{ if(!ok) return;
+      fillLhPrev(); if(lfInited) lfPaintBg();
+      lhState(off?"انحفظت ✓ — تنبيه: أبعادها ليست بنسبة A4 فستُمطّ على الصفحة":"انحفظت الفورمة ✓"); });
   };
   im.onerror=()=>alertBox("تعذّر قراءة الصورة.");
   im.src=src;
@@ -11995,8 +12187,9 @@ el("lhDefault").onclick=()=>{
   const co=C();
   confirmBox("الفورمة الافتراضية","تُستبدل فورمة هذه الشركة بالفورمة الافتراضية المرفقة بالبرنامج؟",{ok:"استبدال"}).then(y=>{
     if(!y) return;
-    co.settings.letterhead=letterheadDefault(); saveCompany("الفورمة الافتراضية");
-    if(co===C()){ fillLhPrev(); if(lfInited) lfPaintBg(); lhState("رجعت الفورمة الافتراضية ✓"); }
+    if(co!==C()) return;
+    assetSave("letterhead",letterheadDefault(),"الفورمة الافتراضية").then(ok=>{ if(!ok) return;
+      fillLhPrev(); if(lfInited) lfPaintBg(); lhState("رجعت الفورمة الافتراضية ✓"); });
   });
 };
 el("lhClear").onclick=()=>{
@@ -12004,8 +12197,9 @@ el("lhClear").onclick=()=>{
   if(!co.settings.letterhead){ lhState("ماكو فورمة محفوظة."); return; }
   confirmBox("حذف الفورمة","تُحذف فورمة «"+(co.settings.company||co.name)+"»؟ الكتب تبقى، وتُطبع بلا خلفية حتى ترفع فورمة جديدة.",{ok:"حذف",danger:true}).then(y=>{
     if(!y) return;
-    co.settings.letterhead=""; saveCompany("حذف الفورمة");
-    if(co===C()){ fillLhPrev(); if(lfInited) lfPaintBg(); lhState("انحذفت الفورمة"); }
+    if(co!==C()) return;
+    assetClear("letterhead"); saveCompany("حذف الفورمة");
+    fillLhPrev(); if(lfInited) lfPaintBg(); lhState("انحذفت الفورمة");
   });
 };
 /* ==================== [واجهة] قفل الشهر بكشف الرواتب ==================== */
@@ -12257,8 +12451,7 @@ async function reqLoad(){
   if(!first) REQS.forEach(r=>{ if(reqMine(r) && before[r.id] && before[r.id]!==r.status+"|"+r.expiresAt) reqTold(r); });
   reqSchedule(); reqRender(); bellRender();
 }
-/* «مقروء» يُحفظ على هذا الجهاز أولاً: تعليمه على الخادم (read_at) محاولة لا يُنتظر نجاحها — إن لم
-   تُجِزه السياسات بقي الإشعار مقروءاً هنا ولم يعد غير مقروء مع كل تحميل */
+/* «مقروء» يُحفظ على هذا الجهاز وحده: الواجهة لا تكتب في notifications شيئاً (يكتبها حُرّاس الخادم) */
 function noteReadKey(){ return "nread_"+(typeof ME!=="undefined" && ME ? ME.id : ""); }
 function noteReadSet(){ try{ return new Set(JSON.parse(localStorage.getItem(noteReadKey())||"[]")); }catch(e){ return new Set(); } }
 function noteMarkRead(ids){
@@ -12266,7 +12459,6 @@ function noteMarkRead(ids){
   const rd=noteReadSet(); ids.forEach(i=>rd.add(String(i)));
   const keep=new Set(NOTES.map(x=>String(x.id)));       // ما لم يعد في آخر خمسين لا يُحفظ
   try{ localStorage.setItem(noteReadKey(), JSON.stringify([...rd].filter(i=>keep.has(i)))); }catch(e){}
-  dbMarkRead(ids).catch(()=>{});
 }
 function reqSoon(){ clearTimeout(reqTimer); reqTimer=setTimeout(reqLoad,250); }
 /* قرار على طلبي من جهاز آخر: يصلني وأنا على أي تبويب */
@@ -12432,37 +12624,41 @@ function dropWorkerTraces(f,id){
   f.workers=f.workers.filter(x=>x.id!==id); rtDropDocsOf(f,id);
   Object.keys(f.days||{}).forEach(k=>{ const st=f.days[k] && f.days[k].states; if(st && st[id]) delete st[id]; });
 }
+/* «نقل نهائي» عملية واحدة على الخادم: القرار (status=moved مع القسم) يحمله حارس access_requests فينقل العامل
+   ويكتب قيد move — معاً أو لا شيء. القسم: ما حدّده الطالب، وإلا يختاره من يبتّ في التحديث نفسه.
+   بعده يُقرأ قسم العامل: إن بقي في قسمه قيل «حُسم الطلب لكن النقل لم يتم» — لا مسار له اليوم، وبقاؤه حارس */
 async function reqDecideMove(r){
   const w=reqWorker(r); if(!w || !reqCanDecide(r)) return;
-  let opts=reqMoveTargets(w);
-  /* قسمٌ حدّده الطالب: هو الخيار الأول والمختار — ولو لم يكن ممّا يراه من يبتّ (اسمه حينئذ لا يُعرض) */
-  if(r.toSection){ const o=opts.find(x=>x.v===r.toSection);
-    opts=[{v:r.toSection, t:(o?o.t:"القسم الذي حدّده الطالب في جهته")+" — اختيار الطالب"}].concat(opts.filter(x=>x.v!==r.toSection)); }
-  if(!opts.length){ alertBox("لا قسم تراه خارج منطقة العامل — النقل يبتّه من يرى جهة الطالب."); return; }
-  const v=await dlgShow({title:"نقل نهائي", ok:"انقل نهائياً", danger:true,
-    message:"ينتقل «"+w.name+"» نهائياً إلى القسم المختار في جهة «"+reqWho(r.by)+"»، ويخرج من قسمه الحالي «"+sectionLabel(w)+"».\n"+
-      "سجله وحضوره ووثائقه لا تُنقل ولا تُنسخ: هي باقية كما هي، ويراها من يرى جهته الجديدة.",
-    fields:[{id:"rqmSec",label:"القسم الجديد",type:"select",options:opts,value:opts[0].v}]});
-  if(!v) return;
-  const sec=(CF().sections||[]).find(s=>s.id===v.rqmSec) || (v.rqmSec && v.rqmSec===r.toSection ? {id:r.toSection, name:"القسم الذي حدّده الطالب"} : null);
-  if(!sec) return;
-  const lbl=((opts.find(o=>o.v===sec.id)||{}).t||sec.name).replace(/ — اختيار الطالب$/,""), z=workerZoneId(w)||null, from=sectionLabel(w);
-  /* خطوتان، ولكلٍّ نتيجتها الثلاثية (db.js): القرار ثم القسم. نجح القرار وفشل النقل ← يُقال صراحة */
-  try{ await dbSetRequest(r.id,{status:"moved"},"نقل «"+w.name+"» — قرار الطلب"); }
-  catch(e){ await alertBox(e.message,"لم يُبتّ الطلب"); reqLoad(); return; }
-  let err=null;
-  try{ await dbMoveWorker(w.id,sec.id,"نقل «"+w.name+"» إلى «"+sec.name+"»"); }catch(e){ err=e; }
-  reqAudit(r,w, err ? "نقل نهائي — لم يُنقل العامل: تغيير قسمه لم يُحفظ" : "نقل نهائي إلى «"+lbl+"»", z);
-  if(err){
-    await alertBox("حُسم الطلب «نقل نهائي»، لكن نقل العامل نفسه لم يتم:\n"+err.message+
-      "\n\n«"+w.name+"» باقٍ في قسمه «"+from+"». انقله من «العمال والأقسام» بتغيير قسمه، أو راجع صلاحية «workers.manage».","النقل لم يتم");
+  const from=sectionLabel(w), note="سجله وحضوره ووثائقه لا تُنقل ولا تُنسخ: هي باقية كما هي، ويراها من يرى جهته الجديدة.";
+  let target=r.toSection||"", lbl="";
+  if(target){
+    const o=reqMoveTargets(w).find(x=>x.v===target), sc=(CF().sections||[]).find(x=>x.id===target);
+    lbl=o ? o.t : sc ? sc.name : "القسم الذي حدّده الطالب في جهته";
+    if(!await confirmBox("نقل نهائي","ينتقل «"+w.name+"» نهائياً إلى «"+lbl+"» — القسم الذي حدّده «"+reqWho(r.by)+"» في طلبه — "+
+      "ويخرج من قسمه الحالي «"+from+"».\n"+note,{ok:"انقل نهائياً",danger:true})) return;
   }else{
-    const f=CF(); w.sectionId=sec.id; scopeDirty();
-    if(!rtSees(w)) dropWorkerTraces(f,w.id);       // خرج من نطاق من نقله: لا يبقى منه أثر
-    refresh(); renderPeople();
-    flash("نُقل «"+w.name+"» إلى «"+lbl+"» ✓");
+    const opts=reqMoveTargets(w);
+    if(!opts.length){ alertBox("لا قسم تراه خارج منطقة العامل — النقل يبتّه من يرى جهة الطالب."); return; }
+    const v=await dlgShow({title:"نقل نهائي", ok:"انقل نهائياً", danger:true,
+      message:"ينتقل «"+w.name+"» نهائياً إلى القسم المختار في جهة «"+reqWho(r.by)+"»، ويخرج من قسمه الحالي «"+from+"».\n"+note,
+      fields:[{id:"rqmSec",label:"القسم الجديد",type:"select",options:opts,value:opts[0].v}]});
+    if(!v || !v.rqmSec) return;
+    target=v.rqmSec; lbl=(opts.find(o=>o.v===target)||{}).t||"";
   }
-  reqLoad();
+  const patch={status:"moved"}; if(!r.toSection) patch.to_section_id=target;
+  dbRtMine("w|"+w.id);                       // تعديل العامل الذي يصل لحظياً صدى قرارنا
+  try{ await dbSetRequest(r.id,patch,"نقل «"+w.name+"» نهائياً"); }
+  catch(e){ await alertBox(e.message,"لم يُبتّ الطلب"); reqLoad(); return; }
+  let now=null; try{ now=await dbWorkerSection(w.id); }catch(e){ now=undefined; }
+  if(now && now.sectionId!==target){
+    await alertBox("حُسم الطلب «نقل نهائي»، لكن نقل العامل نفسه لم يتم: الخادم يُبقيه في قسمه.\n\n"+
+      "«"+w.name+"» باقٍ في قسمه «"+from+"». القرار والنقل يُفترض أن يكونا معاً على الخادم — راجع مالك النظام.","النقل لم يتم");
+    reqLoad(); return;
+  }
+  const f=CF(); w.sectionId=target; scopeDirty();
+  if(!rtSees(w)) dropWorkerTraces(f,w.id);       // خرج من نطاق من نقله: لا يبقى منه أثر
+  refresh(); renderPeople();
+  flash("نُقل «"+w.name+"» إلى «"+lbl+"» ✓"); reqLoad();
 }
 async function reqDecideReject(r){
   const w=reqWorker(r); if(!w || !reqCanDecide(r)) return;
@@ -12852,6 +13048,7 @@ function bootView(){
   el("coSelect").value=state.active;
   renderCompanies(); fillSettings(); refresh();
   const fv=document.getElementById("view-form"); if(fv && !fv.classList.contains("hidden")) lfInit();
+  assetsLoad();                    // الصور من التخزين (من ذاكرة الجلسة إن قُرئت)
   applyPerms(); renderScopeBar();
 }
 
@@ -13233,6 +13430,17 @@ function rtShow(){
   box.classList.remove("hidden");
 }
 /* الرسم: ما مسّته التغييرات وحده، وتبويب فيه تعديل مفتوح لا يُعاد رسمه تحت يد المستخدم */
+/* إعدادات جهة أو اسمها عدّلها غيري: تُطبَّق بمكانها ويُعاد رسم ما يقرؤها. وتعديلي المعلّق على الجهة نفسها
+   يبقى (يُرسل بعد لحظة فيكتب فوقها). إدراج جهة أو حذفها: إعادة تحميل */
+function bldLive(c){
+  if(!c || c.mine || !stateLoaded) return;
+  const b=(CF().buildings||[]).find(x=>x.id===c.id);
+  if(c.ev!=="UPDATE" || !b || !c.building){ resyncFromServer(); return; }
+  if(bsPend===b) return;
+  b.name=c.building.name; b.short=c.building.short; b.sortOrder=c.building.sortOrder; b.settings=c.building.settings;
+  sigCache.src=null; redrawSheets(); refresh();
+  if(currentView()==="settings") bsRender();
+}
 function rtFlush(){
   const d=rtD; rtD=rtFresh();
   if(d.resync){ resyncFromServer(); return; }
@@ -13438,6 +13646,7 @@ async function init(st){
   if(st) startView();                // الفحوص (بلا خادم) تبقى على جرد اليوم كما كانت
   if(st) rtStart();                  // التحديث اللحظي بعد أن تكتمل الحالة
   if(st) reqStart();                 // طلبات الوصول والإشعارات — بعد التحميل، وفشلها لا يوقف شيئاً
+  if(st) dbSubscribeBuildings(bldLive);   // إعدادات الجهات لحظياً
   refreshDbState(); badge(st?"server":"local");
   dbOnWrite(onWriteStatus);
   /* شهر بدء إصلاح أشهر الـ٣١ يوماً: غيابه يغيّر رواتب أشهر مضت بصمت — يُعلن */

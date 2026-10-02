@@ -794,6 +794,8 @@ function dbCanon(v) {
 function dbCompanyRow(c) {
   const settings = Object.assign({}, c.settings || {});
   delete settings.holidays;
+  /* صورة لها مسار في التخزين لا تُكتب في الصف: الذاكرة تحملها data URL للرسم وحده (المرحلة ٩) */
+  DB_ASSETS.forEach(k => { if (settings[k + "Url"]) delete settings[k]; });
   return { name: c.name, theme: c.theme, accent: c.accent, settings: settings };
 }
 function dbSaveCompany(c, what) {
@@ -802,6 +804,73 @@ function dbSaveCompany(c, what) {
   return dbFire(what, () => sb.from("companies").update(row, { count: "exact" }).eq("id", DB_CID).select("id"), { expect: true })
     .then(d => { if (d) DB_CO_LAST = key; return d; });
 }
+
+/* ==================== الصور في التخزين (المرحلة ٩) ====================
+   الشعار والفورمة والتوقيع المرسوم في حاوية assets الخاصة (قراءتها لكل مسجَّل، والرفع لمن يملك
+   company.settings). المسار ثابت لا طابع زمني فيه: company/<company_id>/<النوع>.<الامتداد> — الملف يُستبدل
+   بمكانه فلا تتراكم نسخ مهجورة. وفي companies.settings المسار ({نوع}Url) ونسخته ({نوع}Ver) لا رابط موقَّع:
+   الرابط يُولَّد عند كل قراءة (وينتهي)، ونسخته معامل على الرابط (cacheNonce) يُبطل ذاكرة المتصفح بعد الاستبدال.
+   الصورة تُقرأ بايتاتها كما رُفعت، وتُعاد data URL بنوعها نفسه — فهي في الذاكرة النصُّ نفسه الذي كان في الصف. */
+const DB_ASSETS = ["logo", "letterhead", "signature"];
+const DB_ASSET_BUCKET = "assets";
+const DB_ASSET_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+function dbAssetPath(kind, mime) { return "company/" + DB_CID + "/" + kind + "." + (DB_ASSET_EXT[mime] || "bin"); }
+/* data URL ← {mime, bytes} — base64 وحده (الصور كلها كذلك) */
+function dbDataUrlParts(d) {
+  const m = /^data:([^;,]+)(;[^,]*)?;base64,(.*)$/.exec(String(d || ""));
+  if (!m) throw new Error("الصورة ليست بصيغة data URL مقروءة.");
+  const bin = atob(m[3]), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return { mime: m[1], bytes: out };
+}
+function dbBytesDataUrl(bytes, mime) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return "data:" + mime + ";base64," + btoa(bin);
+}
+async function dbSha256(bytes) {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(h, b => b.toString(16).padStart(2, "0")).join("");
+}
+function dbSameBytes(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+function dbStorageErr(e, what) {
+  const raw = String((e && (e.message || e.error)) || e || "");
+  if (/failed to fetch|networkerror|network request failed|load failed|fetch failed|timeout|aborted/i.test(raw))
+    return new Error("تعذّر الاتصال بالتخزين — " + what + ".");
+  if (/row-level security|unauthorized|not authorized|permission|403/i.test(raw))
+    return new Error("التخزين رفض " + what + ": لا تملك صلاحية «company.settings».");
+  return new Error("تعذّر " + what + (raw ? " (" + raw + ")" : "") + ".");
+}
+/* قراءة صورة: رابط موقَّع يُولَّد الآن (لا يُخزَّن)، بنسختها معاملاً عليه → {mime, bytes} */
+async function dbAssetRead(path, ver) {
+  const st = sb.storage.from(DB_ASSET_BUCKET);
+  const s = await st.createSignedUrl(path, 600, ver != null && ver !== "" ? { cacheNonce: String(ver) } : undefined);
+  if (s.error || !s.data) throw dbStorageErr(s.error, "قراءة الصورة من التخزين");
+  let r;
+  try { r = await fetch(s.data.signedUrl); } catch (e) { throw dbStorageErr(e, "قراءة الصورة من التخزين"); }
+  if (!r.ok) throw dbStorageErr({ message: "HTTP " + r.status }, "قراءة الصورة من التخزين");
+  const mime = String(r.headers.get("content-type") || "").split(";")[0].trim();
+  return { mime: mime, bytes: new Uint8Array(await r.arrayBuffer()) };
+}
+/* رفع صورة إلى مسارها الثابت (يُستبدل بمكانه)، ثم قراءتها من التخزين ومقارنتها بايتاً ببايت.
+   ← {path, ver, mime, size, sha} — ولا يُحلّ إلا إذا طابق المقروءُ المرفوعَ تماماً */
+async function dbAssetUpload(kind, dataUrl) {
+  const p = dbDataUrlParts(dataUrl), path = dbAssetPath(kind, p.mime), ver = String(Date.now());
+  const up = await sb.storage.from(DB_ASSET_BUCKET).upload(path, p.bytes, { contentType: p.mime, upsert: true, cacheControl: "3600" });
+  if (up.error) throw dbStorageErr(up.error, "رفع الصورة إلى التخزين");
+  const back = await dbAssetRead(path, ver);
+  const shaUp = await dbSha256(p.bytes), shaBack = await dbSha256(back.bytes);
+  if (!dbSameBytes(p.bytes, back.bytes) || back.mime !== p.mime)
+    throw new Error("الصورة المقروءة من التخزين لا تطابق المرفوعة (" + p.bytes.length + " ← " + back.bytes.length + " بايت) — لم يُعتمد الرفع.");
+  return { path: path, ver: ver, mime: p.mime, size: p.bytes.length, sha: shaUp, shaBack: shaBack,
+    same: dbBytesDataUrl(back.bytes, back.mime) === dataUrl };
+}
+/* حجم settings كما يُكتب في صف الشركة (بايتات UTF-8 للـ JSON) — تقدير، لا pg_column_size */
+function dbCompanyRowSize(c) { return new TextEncoder().encode(JSON.stringify(dbCompanyRow(c).settings)).length; }
 
 /* ---- إعدادات الجهة (buildings.settings): مفاتيح قليلة هي بطبيعتها للبناية — موقّع ورقة الجرد،
    ولجنة العقوبات والإنجازات، والملاحظة الاعتيادية. ما وُجد منها في الجهة يُستعمل وإلا فقيمة الشركة؛
@@ -817,6 +886,7 @@ function dbBldSettings(o) {
 function dbSaveBuildingSettings(id, settings, what) {
   const row = { settings: dbBldSettings(settings) }, key = dbCanon(row);
   if (DB_BLD_LAST[id] === key) return Promise.resolve(null);   // لا تغيير — لا كتابة
+  dbRtMine("b|" + id);
   return dbFire(what, () => sb.from("buildings").update(row, { count: "exact" }).eq("company_id", DB_CID).eq("id", id).select("id"),
     { expect: true }).then(d => { if (d) DB_BLD_LAST[id] = key; return d; });
 }
@@ -962,6 +1032,7 @@ function dbSubscribe(onChange, onStatus) {
 }
 function dbUnsubscribe() {
   if (dbReqCh) { try { sb.removeChannel(dbReqCh); } catch (e) {} dbReqCh = null; }
+  if (dbBldCh) { try { sb.removeChannel(dbBldCh); } catch (e) {} dbBldCh = null; }
   if (!dbRtCh) return;
   try { sb.removeChannel(dbRtCh); } catch (e) {}
   dbRtCh = null;
@@ -993,16 +1064,18 @@ function dbRequestAccess(seq, name, reason, toSection, what) {
   return dbWrite(what, () => sb.rpc("request_access", { cid: DB_CID, p_seq: Number(seq), p_name: String(name || ""),
     p_reason: String(reason || ""), p_to_section: toSection || null }), { quiet: true });
 }
-/* البتّ (اطلاع/نقل/رفض) أو السحب: الحالة ومدة الاطلاع وحدهما — decided_by/decided_at يختمهما الخادم */
+/* البتّ (اطلاع/نقل/رفض) أو السحب: الحالة ومدة الاطلاع (والقسم عند النقل) — decided_by/decided_at يختمهما
+   الخادم. «نقل نهائي» عملية واحدة على الخادم: حارس access_requests عند moved يتحقق من الصلاحية على منطقة
+   العامل ومن القسم، وينقل العامل، ويكتب قيد move — معاً أو لا شيء. الواجهة لا تكتب في workers ولا قيداً */
 function dbSetRequest(id, patch, what) {
   return dbWrite(what, () => sb.from("access_requests").update(patch, { count: "exact" })
     .eq("company_id", DB_CID).eq("id", id).select("id"), { quiet: true, expect: true });
 }
-/* «نقل نهائي»: قسم العامل وحده. سجله وحضوره ووثائقه لا تُنقل ولا تُنسخ — هي في الجداول نفسها */
-function dbMoveWorker(id, sectionId, what) {
-  dbRtMine("w|" + id);
-  return dbWrite(what, () => sb.from("workers").update({ section_id: sectionId }, { count: "exact" })
-    .eq("company_id", DB_CID).eq("id", id).select("id"), { quiet: true, expect: true });
+/* قسم العامل كما على الخادم الآن — null إن لم يعد يُرى (نُقل خارج النطاق). حارسٌ بعد «نقل نهائي» */
+async function dbWorkerSection(id) {
+  const r = await sb.from("workers").select("id,section_id").eq("company_id", DB_CID).eq("id", id).maybeSingle();
+  if (r.error) throw dbErr(r.error, "تعذّرت قراءة قسم العامل.");
+  return r.data ? { sectionId: dbStr(r.data.section_id) } : null;
 }
 async function dbNotifications() {
   if (dbLocal() || !ME) return [];
@@ -1012,11 +1085,8 @@ async function dbNotifications() {
   return (r.data || []).map(n => ({ id: n.id, kind: dbStr(n.kind), title: dbStr(n.title), body: dbStr(n.body),
     ref: dbStr(n.ref_id), read: !!n.read_at, at: dbStamp(n.created_at) }));
 }
-function dbMarkRead(ids) {
-  if (dbLocal() || !ids || !ids.length) return Promise.resolve(null);
-  return dbWrite("تعليم الإشعارات مقروءة", () => sb.from("notifications").update({ read_at: dbNow() }, { count: "exact" })
-    .eq("user_id", ME.id).in("id", ids), { quiet: true });
-}
+/* لا كتابة في notifications من الواجهة أصلاً: يكتبها حُرّاس الخادم وحدهم (حين يُنشأ طلب، وحين يُبتّ).
+   «مقروء» يُحفظ في متصفح المستخدم (index.html) */
 /* ملف عامل باطلاع مؤقت: يُقرأ عند فتحه (السياسات تجيزه ما دام الاطلاع قائماً) ولا يدخل حالة الشركة */
 async function dbVisitFile(workerId, from) {
   const cid = DB_CID;
@@ -1042,6 +1112,27 @@ function dbSubscribeRequests(onChange, onStatus) {
     p => { try { onChange(p && p.new && p.new.id ? dbReq(p.new) : null); } catch (e) { console.error(e); } });
   ch.subscribe((st, err) => { if (onStatus) { try { onStatus(st, err); } catch (e) {} } });
   dbReqCh = ch;
+  return ch;
+}
+
+/* قناة الجهات (buildings): جدول صغير نادر التغيّر — إعدادات جهة عدّلها غيري تصلني لحظياً. قناة مستقلة:
+   رفض الاشتراك فيها لا يمسّ قناة الجرد. onChange({ev, id, building|null, mine}) */
+let dbBldCh = null;
+function dbSubscribeBuildings(onChange, onStatus) {
+  if (dbLocal() || !DB_CID || dbBldCh) return dbBldCh;
+  const ch = sb.channel("jard-bld-" + DB_CID);
+  ch.on("postgres_changes", { event: "*", schema: "public", table: "buildings", filter: "company_id=eq." + DB_CID }, p => {
+    try {
+      const ev = p && p.eventType, row = (ev === "DELETE" ? p.old : p.new) || {};
+      if (!row.id || (row.company_id && row.company_id !== DB_CID)) return;
+      const st = dbBldSettings(row.settings), mine = dbRtRecent("b|" + row.id);
+      if (ev !== "DELETE" && !mine) DB_BLD_LAST[row.id] = dbCanon({ settings: st });
+      onChange({ ev: ev, id: row.id, mine: mine, building: ev === "DELETE" ? null :
+        { id: row.id, name: dbStr(row.name), short: dbStr(row.short), sortOrder: Number(row.sort_order) || 0, settings: st } });
+    } catch (e) { console.error(e); }
+  });
+  ch.subscribe((st, err) => { if (onStatus) { try { onStatus(st, err); } catch (e) {} } });
+  dbBldCh = ch;
   return ch;
 }
 
