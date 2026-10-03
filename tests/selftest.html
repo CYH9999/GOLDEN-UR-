@@ -1120,10 +1120,10 @@ try{
   const w19e=await boot();
   w19e.__rows=Object.assign({},ROWS17,{sections:ROWS17.sections.filter(x=>x.id!=="sNi"),workers:ROWS17.workers.filter(x=>x.id!=="c"),dayStates:[],documents:[]});
   w19e.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; bootView(); switchView("home");');
-  check("جهة بلا أقسام ولا عمال: «لم تُعبّأ بعد» وزر «إضافة أول قسم» — لا رقم ولا صفر",
-    w19e.eval('(function(){var c=document.querySelectorAll("#hmBlds .hcard")[1]; return [c.classList.contains("blank"), c.textContent.indexOf("لم تُعبّأ بعد")>=0, !!c.querySelector(\'[data-first="sec"]\'), c.querySelectorAll(".big,.facts").length, /[٠0]/.test(c.textContent)].join(",");})()'),
-    "true,true,true,0,false");
-  w19e.eval('document.querySelector(\'#hmBlds [data-first="sec"]\').click();');
+  check("جهة بلا أقسام ولا عمال: «لم تُعبّأ بعد» وخطوات تعبئتها (أولها الموقّع بزرّه) — لا رقم ولا صفر",
+    w19e.eval('(function(){var c=document.querySelectorAll("#hmBlds .hcard")[1]; return [c.classList.contains("blank"), c.textContent.indexOf("لم تُعبّأ بعد")>=0, (c.querySelector("[data-setup]")||{}).getAttribute?c.querySelector("[data-setup]").getAttribute("data-setup"):"", c.querySelectorAll(".big,.facts").length, /[٠0]/.test(c.textContent)].join(",");})()'),
+    "true,true,sig,0,false");
+  w19e.eval('CF().buildings.find(function(b){return b.id==="bN";}).settings={signer:"أحمد"}; renderHome(); document.querySelector(\'#hmBlds [data-setup="sec"]\').click();');
   check("«إضافة أول قسم»: تبويب الأقسام على الجهة الفارغة ومنطقتها مختارة", w19e.eval('[currentView(), scopeBld, el("secZone").value].join(",")'), "people,bN,zNi");
   /* نموذج إضافة العامل: القسم إلزامي — لا خيار فارغ، والنطاق بلا أقسام يقود لإضافة قسم */
   w19e.eval('setScope("bO","people");');
@@ -1374,6 +1374,26 @@ try{
     'var r=dbCompanyRow(c).settings; JSON.stringify([("logo" in r), r.logoUrl, r.letterhead, r.signature, c.settings.logo])'), JSON.stringify([false,"company/c/logo.png","data:image/jpeg;base64,BB","","data:image/png;base64,AA"]));
   check("المقارنة بايتاً ببايت", w27.eval('[dbSameBytes(new Uint8Array([1,2,3]),new Uint8Array([1,2,3])), dbSameBytes(new Uint8Array([1,2,3]),new Uint8Array([1,2,4])), dbSameBytes(new Uint8Array([1,2]),new Uint8Array([1,2,3]))].join()'), "true,false,false");
   check("الفحص المحلي: الصور في الإعدادات كما كانت، ولا زر نقل", w27.eval('switchView("settings"); fillSettings(); [assetMissing().length, el("assetMigrate").classList.contains("hidden"), el("assetBox").textContent.indexOf("الفورمة: في صف الشركة")>=0].join()'), "0,true,true");
+  /* ---- ٢٨) صاحب التوقيع، وخيارات موقّع الكتاب، وخطوات تعبئة الجهة ---- */
+  group("٢٨ · صاحب التوقيع بالتطبيع، وخيار لكل جهة في موقّع الكتاب، وخطوات تعبئة جهة فارغة");
+  const w28=await boot();
+  const C28=company({id:"coT",workers:[{id:"a",name:"عامل القديمة"}]});
+  C28.buildings=[{id:"b1",name:"البناية القديمة",short:"القديمة",settings:{signer:"حُسين  علي",role:"المسؤول الإداري",cmN1:"كريم"}},{id:"b2",name:"البناية الجديدة",short:"الجديدة",settings:{}}];
+  C28.zones=[{id:"z1",name:"داخل القديمة",short:"داخلي",buildingId:"b1"},{id:"z2",name:"داخل الجديدة",short:"داخلي",buildingId:"b2"}];
+  C28.sections=[{id:"s1",name:"قسم الإنتاج",zoneId:"z1"}];
+  load(w28,stateOf([C28]));
+  check("التطبيع (norm_ar): الهمزات، ى، ة، التشكيل والتطويل، المسافات — و«عبدالقادر» غير «عبد القادر»", w28.eval('[sameName("أحمد","احمد"),sameName("إسراء","اسراء"),sameName("آمنة","امنه"),sameName("مؤمن","مومن"),sameName("رئيس","رييس"),'+
+    'sameName("ليلى","ليلي"),sameName("مُحَمَّد","محمد"),sameName("حـسـين","حسين"),sameName("  علي   حسن ","علي حسن"),sameName("عبدالقادر","عبد القادر"),sameName("","")].join()'),
+    "true,true,true,true,true,true,true,true,true,false,false");
+  check("صاحب التوقيع: قبل أن يُكتب اسمه = موقّع الشركة المحفوظ، وبعده الحقل — والمطابقة مطبَّعة", w28.eval('S().signer="حسين علي"; S().signature="data:image/png;base64,AAAA"; var a=[sigOwnerName(), sigOwner(setOfB("b1"))]; '+
+    'S().sigOwner="حسين علي عبدالقادر"; var b=[sigOwnerName(), sigOwner(setOfB("b1"))]; delete S().sigOwner; JSON.stringify([a,b])'), JSON.stringify([["حسين علي",true],["حسين علي عبدالقادر",false]]));
+  check("موقّع الكتاب: خيار لكل جهة لها موقّع (لا للجهة بلا موقّع)، ولجنة كل جهة بأسمائها — ثابتة أياً كان العرض", w28.eval('var a=Object.keys(lfSigOpts()); setScope("b1"); var b=Object.keys(lfSigOpts()); setScope(""); '+
+    'JSON.stringify([a, a.join()===b.join(), lfSigOpts()["b:b1"].lbl, lfSigOpts()["c:b1:1"].lbl])'), JSON.stringify([["def","b:b1","c:b1:1"],true,"موقّع البناية القديمة","لجنة البناية القديمة (1)"]));
+  check("كتاب صدر بخيار لم يعد في القائمة: يبقى ظاهراً «كما صدر»", w28.eval('switchView("form"); lfInit(); lfSigSet({by:"inv",name:"حسين علي",role:"المسؤول الإداري",img:""}); [el("lfSigBy").value, el("lfSigBy").selectedOptions[0].textContent].join("|")'),
+    "inv|موقّع ورقة الجرد — كما صدر");
+  check("خطوات تعبئة جهة فارغة بترتيبها: الموقّع، ثم الأقسام، ثم العمال — والتالية وحدها بزرّها", w28.eval('JSON.stringify([setupSteps("b2").map(function(x){return x.k+":"+x.done;}), setupSteps("b1").map(function(x){return x.done;})]) + "|" + '+
+    '(function(){ var d=document.createElement("div"); d.innerHTML=setupHtml("b2"); return [].map.call(d.querySelectorAll("li"),function(li){return li.className+(li.querySelector("[data-setup]")?"*":"");}).join(","); })()'),
+    JSON.stringify([["sig:false","sec:false","worker:false"],[true,true,true]])+"|next*,,");
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});

@@ -805,6 +805,76 @@ function dbSaveCompany(c, what) {
     .then(d => { if (d) DB_CO_LAST = key; return d; });
 }
 
+/* ==================== المستخدمون والرولات (المرحلة ١٠) ====================
+   الإيميل وآخر دخول من دالة الخادم list_users (لمن يملك users.manage وحده) — auth.users لا يُقرأ من العميل.
+   إنشاء الحسابات وتصفير كلمات المرور ليسا من هنا: يحتاجان مفتاح الخدمة، ولا يُوضع في صفحة. والحُرّاس على الخادم
+   (آخر من يملك users.manage، تعطيل النفس، الرول الأساسي) يرفضون برسائل عربية تُعرض كما هي (quiet: المستدعي يعرضها). */
+function dbAdminErr(e, fallback) {
+  const raw = String((e && (e.message || e.msg)) || e || "");
+  return /[\u0600-\u06FF]/.test(raw) ? new Error(raw) : dbErr(e, fallback);
+}
+async function dbUsersAdmin() {
+  if (dbLocal()) {
+    const roles = (ME ? ME.roles : []).map(r => ({ id: r.id, name: r.name, color: r.color, perms: Array.from(r.perms),
+      allZones: r.allZones, isSystem: r.isSystem, sortOrder: r.sortOrder, zones: Array.from(r.zones) }));
+    return { users: ME ? [{ id: ME.id, name: ME.name, email: ME.email, active: true, lastSignIn: "", createdAt: "" }] : [],
+      roles: roles, links: roles.map(r => ({ userId: ME.id, roleId: r.id })) };
+  }
+  let u, r, z, ur;
+  try {
+    [u, r, z, ur] = await Promise.all([
+      sb.rpc("list_users"),
+      sb.from("roles").select("id,company_id,name,color,perms,all_zones,is_system,sort_order").eq("company_id", DB_CID),
+      sb.from("role_zones").select("role_id,zone_id"),
+      sb.from("user_roles").select("user_id,role_id")
+    ]);
+  } catch (e) { throw dbErr(e, "تعذّر تحميل المستخدمين."); }
+  if (u.error) throw dbAdminErr(u.error, "تعذّر تحميل المستخدمين.");
+  [r, z, ur].forEach(x => { if (x.error) throw dbAdminErr(x.error, "تعذّر تحميل الرولات."); });
+  const ids = new Set((r.data || []).map(x => x.id)), zonesOf = {};
+  (z.data || []).forEach(x => { if (ids.has(x.role_id)) (zonesOf[x.role_id] = zonesOf[x.role_id] || []).push(x.zone_id); });
+  const roles = (r.data || []).map(x => ({ id: x.id, name: dbStr(x.name), color: dbStr(x.color), perms: Array.isArray(x.perms) ? x.perms.slice() : [],
+    allZones: x.all_zones === true, isSystem: x.is_system === true, sortOrder: Number(x.sort_order) || 0, zones: zonesOf[x.id] || [] }))
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || DB_AR.compare(a.name, b.name));
+  const users = (Array.isArray(u.data) ? u.data : []).map(x => ({ id: x.id, name: dbStr(x.full_name), email: dbStr(x.email),
+    active: x.active !== false, lastSignIn: x.last_sign_in_at ? dbStamp(x.last_sign_in_at) : "", createdAt: x.created_at ? dbStamp(x.created_at) : "" }))
+    .sort((a, b) => DB_AR.compare(a.name || a.email, b.name || b.email));
+  const links = (ur.data || []).filter(x => ids.has(x.role_id)).map(x => ({ userId: x.user_id, roleId: x.role_id }));
+  return { users: users, roles: roles, links: links };
+}
+function dbAdminWrite(what, fn, opts) {
+  return dbWrite(what, fn, Object.assign({ quiet: true }, opts || {})).catch(e => { throw dbAdminErr(e.cause || e, e.message); });
+}
+function dbGrantRole(userId, roleId) {
+  return dbAdminWrite("إضافة رول", () => sb.from("user_roles").insert({ user_id: userId, role_id: roleId }, { count: "exact" }), { local: { count: 1 } });
+}
+function dbRevokeRole(userId, roleId) {
+  return dbAdminWrite("إزالة رول", () => sb.from("user_roles").delete({ count: "exact" }).eq("user_id", userId).eq("role_id", roleId), { expect: true });
+}
+function dbSetUserActive(userId, active) {
+  return dbAdminWrite(active ? "تفعيل الحساب" : "تعطيل الحساب", () => sb.from("profiles").update({ active: !!active }, { count: "exact" })
+    .eq("id", userId), { expect: true });
+}
+/* حفظ رول: صفّه، ثم فرق نطاقه (إضافة المناطق الجديدة وحذف المُزالة) — كلٌّ بطلبه ونتيجته */
+async function dbSaveRole(role, isNew, prevZones) {
+  const row = { name: role.name, color: role.color || null, perms: role.perms.slice(), all_zones: !!role.allZones };
+  if (isNew) await dbAdminWrite("إنشاء الرول", () => sb.from("roles").insert(Object.assign({ id: role.id, company_id: DB_CID, is_system: false,
+    sort_order: Number(role.sortOrder) || 0 }, row), { count: "exact" }), { local: { count: 1 } });
+  else await dbAdminWrite("تعديل الرول", () => sb.from("roles").update(row, { count: "exact" }).eq("company_id", DB_CID).eq("id", role.id).select("id"), { expect: true });
+  const before = new Set(prevZones || []), after = new Set(role.zones || []);
+  const add = [...after].filter(z => !before.has(z)), del = [...before].filter(z => !after.has(z));
+  if (add.length) await dbAdminWrite("نطاق الرول", () => sb.from("role_zones").insert(add.map(z => ({ role_id: role.id, zone_id: z })), { count: "exact" }), { local: { count: add.length } });
+  if (del.length) await dbAdminWrite("نطاق الرول", () => sb.from("role_zones").delete({ count: "exact" }).eq("role_id", role.id).in("zone_id", del), { expect: true });
+}
+function dbDeleteRole(id) {
+  return dbAdminWrite("حذف الرول", () => sb.from("roles").delete({ count: "exact" }).eq("company_id", DB_CID).eq("id", id), { expect: true });
+}
+function dbLinkZone(roleIds, zoneId) {
+  if (!roleIds.length) return Promise.resolve(null);
+  return dbAdminWrite("ربط المنطقة بنطاق رول", () => sb.from("role_zones").insert(roleIds.map(r => ({ role_id: r, zone_id: zoneId })), { count: "exact" }),
+    { local: { count: roleIds.length } });
+}
+
 /* ==================== الصور في التخزين (المرحلة ٩) ====================
    الشعار والفورمة والتوقيع المرسوم في حاوية assets الخاصة (قراءتها لكل مسجَّل، والرفع لمن يملك
    company.settings). المسار ثابت لا طابع زمني فيه: company/<company_id>/<النوع>.<الامتداد> — الملف يُستبدل

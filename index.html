@@ -129,6 +129,25 @@ html[data-ui="dark"] .datebox input::-webkit-calendar-picker-indicator{filter:in
 .bellpop .bfoot{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3) var(--sp-1);
   border-top:1px solid var(--line);font-size:var(--fs-xs);color:var(--ink-2)}
 .rqreason{white-space:pre-line;font-size:var(--fs-sm)}
+.rchip{display:inline-flex;align-items:center;gap:5px;padding:2px 4px 2px 9px;margin:2px;border:1px solid var(--line);border-radius:var(--r-pill);
+  font-size:var(--fs-xs);background:var(--panel);white-space:nowrap}
+.rchip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.rchip button{border:0;background:none;color:var(--ink-2);cursor:pointer;font-size:14px;line-height:1;padding:0 4px;border-radius:50%}
+.rchip button:hover{background:var(--absent-bg);color:var(--absent)}
+#usList .uscell select{width:auto!important;min-width:7em;max-width:12em;display:inline-block;padding:2px 6px;font-size:var(--fs-xs);vertical-align:middle}
+.rocard{border:1px solid var(--line);border-radius:var(--r-md);padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-2)}
+.rocard .rohead{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.rocard .rohead b{font-size:var(--fs-md,15px)}
+.rocard .roperm{font-size:var(--fs-xs);color:var(--ink-2);margin-top:4px;line-height:1.8}
+.roeditor{border:1px solid var(--brand);border-radius:var(--r-md);padding:var(--sp-3);margin-bottom:var(--sp-3);background:var(--brand-lite)}
+.rogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px var(--sp-3);margin:var(--sp-1) 0 var(--sp-2)}
+.rogrid label{display:flex;gap:6px;align-items:flex-start;font-size:var(--fs-sm)}
+.setup{margin:var(--sp-2) auto 0;padding:0;list-style:none;display:grid;gap:6px;max-width:34em;text-align:start;counter-reset:st}
+.setup li{counter-increment:st;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;border:1px solid var(--line);border-radius:var(--r-sm);font-size:var(--fs-sm)}
+.setup li::before{content:counter(st);display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--line);color:var(--ink-2);font-weight:700;font-size:12px}
+.setup li.done::before{content:"✓";background:var(--present-bg);color:var(--present)}
+.setup li.next{border-color:var(--brand);background:var(--brand-lite)}
+.setup li.next::before{background:var(--brand);color:#fff}
 .assetbox{display:grid;gap:4px;font-size:var(--fs-sm)}
 .asrow{padding:var(--sp-2) 0;border-bottom:1px solid var(--line)}.asrow .mini[dir="ltr"]{text-align:right;word-break:break-all}
 .assetbox .ok{color:var(--present)}.assetbox .bad{color:var(--absent)}.assetbox .wait{color:var(--ink-2)}
@@ -652,6 +671,7 @@ tr.rowneg td{background:var(--absent-bg)}
 .hcard.blank .el b{color:var(--ink)}
 .hcard.blank .en{margin:0 0 var(--sp-4);font-size:var(--fs-sm);color:var(--ink-3);max-width:44ch}
 .hcard.blank .act{position:relative;z-index:1;align-self:flex-start;margin-top:auto}
+.hcard .setup{position:relative;z-index:1;margin:var(--sp-2) 0 0;max-width:none}
 .hm-all{margin-top:var(--sp-3);text-align:end}
 .hm-all button{font-size:var(--fs-sm);font-weight:var(--fw-bold);color:var(--brand-text);padding:var(--sp-1) 0}
 .hm-all button:hover{text-decoration:underline;text-underline-offset:4px}
@@ -803,6 +823,7 @@ tr.rowneg td{background:var(--absent-bg)}
     <button role="tab" id="tab-people" aria-controls="view-people" aria-selected="false" tabindex="-1" data-view="people" title="العمال والأقسام"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/></svg><span class="tl">العمال والأقسام</span></button>
     <button role="tab" id="tab-variables" aria-controls="view-variables" aria-selected="false" tabindex="-1" data-view="variables" title="حالات العمال"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="4"/><path d="M3 21a7 7 0 0 1 11-5.7"/><path d="m16 17 2 2 4-4"/></svg><span class="tl">حالات العمال</span></button>
     <button role="tab" id="tab-requests" aria-controls="view-requests" aria-selected="false" tabindex="-1" data-view="requests" title="طلبات الوصول"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M16 7l3 3M14 9l2 2"/></svg><span class="tl">طلبات الوصول</span></button>
+    <button role="tab" id="tab-users" aria-controls="view-users" aria-selected="false" tabindex="-1" data-view="users" data-perm="users.manage" title="المستخدمون والرولات"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.6a3 3 0 0 1 0 6.8M18 14.2c1.9.7 3 2.7 3 5.8"/></svg><span class="tl">المستخدمون</span></button>
     <div class="tsep" role="presentation"></div>
     <button role="tab" id="tab-report" aria-controls="view-report" aria-selected="false" tabindex="-1" data-view="report" title="التقارير والرواتب"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg><span class="tl">التقارير والرواتب</span></button>
     <button role="tab" id="tab-ledger" aria-controls="view-ledger" aria-selected="false" tabindex="-1" data-view="ledger" title="الجرد التفصيلي"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span class="tl">الجرد التفصيلي</span></button>
@@ -1297,6 +1318,28 @@ tr.rowneg td{background:var(--absent-bg)}
   <p class="mini" id="rqState"></p>
 </section>
 
+<!-- ===== المستخدمون والرولات (users.manage) ===== -->
+<section id="view-users" role="tabpanel" aria-labelledby="tab-users" tabindex="-1" class="hidden">
+  <div class="panel">
+    <div class="panel-head"><h2>المستخدمون</h2><button class="btn sm ghost" id="usReload" type="button" title="قراءة القائمة من الخادم ثانية">تحديث</button></div>
+    <div class="panel-body">
+      <p class="notebox" style="margin-top:0"><b>إنشاء الحسابات وتصفير كلمات المرور من لوحة سوبابيس (Authentication)، لا من البرنامج.</b>
+        هنا تُدار رولات كل مستخدم وتفعيل حسابه. الحساب الجديد يظهر هنا بعد إنشائه هناك، ولا يرى شيئاً حتى يُعطى رولاً.</p>
+      <div id="usList"></div>
+      <p class="mini" id="usState"></p>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h2>الرولات</h2><button class="btn sm primary" id="roNew" type="button">رول جديد</button></div>
+    <div class="panel-body">
+      <p class="hint" style="margin-top:0">الرول صلاحيات ونطاق: الصلاحية تسري في مناطق نطاقه وحدها. والمنطقة الجديدة لا يراها أحد (إلا من نطاقه
+        «كل المناطق») حتى تُضاف إلى نطاق رول.</p>
+      <div id="roEditor" class="roeditor hidden"></div>
+      <div id="roList"></div>
+    </div>
+  </div>
+</section>
+
 <!-- ===== العمال والأقسام ===== -->
 <section id="view-people" role="tabpanel" aria-labelledby="tab-people" tabindex="-1" class="hidden">
   <div class="split" style="grid-template-columns:1fr 1fr">
@@ -1313,6 +1356,8 @@ tr.rowneg td{background:var(--absent-bg)}
             <label class="field"><span>اللون</span><span class="ci"><input type="color" id="zColor" value="#4B2E83"></span></label>
           </div>
           <button class="btn primary" id="addZone">إضافة منطقة</button>
+          <p class="hint">المنطقة الجديدة لا يراها أحد — إلا من نطاقه «كل المناطق» — حتى تُضاف إلى نطاق رول. بعد إضافتها يُعرض ربطها
+            على من يملك «المستخدمون والرولات».</p>
           </div>
           <div id="zoneList" style="margin-top:14px"></div>
         </div>
@@ -1749,7 +1794,8 @@ tr.rowneg td{background:var(--absent-bg)}
       <div class="panel">
         <div class="panel-head"><h2>التوقيع المرسوم</h2></div>
         <div class="panel-body">
-          <p class="hint" style="margin-top:0" id="sigOwnerTxt"></p>
+          <label class="field" style="margin-top:0"><span>صاحب هذا التوقيع (اسمه كما يُكتب تحت توقيعه)</span><input type="text" id="setSigOwner"></label>
+          <p class="hint" id="sigOwnerTxt"></p>
           <span class="fieldlbl">ارسم التوقيع بالماوس داخل المربّع</span>
           <div class="sigwrap">
             <canvas id="sigPad" width="640" height="220"></canvas>
@@ -2615,18 +2661,27 @@ function setOfView(){
 }
 /* إعداد ورقة تجمع عمالاً: جهتهم إن كانت واحدة، وإلا ورقة العرض */
 function setOfWs(ws){ const ids=new Set((ws||[]).map(workerBldId)); return ids.size===1 ? setOfB([...ids][0]) : setOfView(); }
-/* التوقيع المرسوم واحد للشركة، وصاحبه الاسم المحفوظ معه (S().signer — لم يعد يُعدَّل بالإعدادات): لا يُطبع
-   إلا إذا طابق موقّعُ الجهة اسمَ صاحبه — القاعدة نفسها في الكتب والسماحية. فلا يظهر توقيع حسين على ورق جهة
-   موقّعها أحمد أو موقّعها غير محدَّد. وفي اللجنة: فوق خانة cmSig للجهة، ما لم تحمل الخانة اسم غيره */
-function sigOwnerName(){ return String(S().signer||"").trim(); }
+/* تطبيع الأسماء للمقارنة — بقواعد norm_ar على الخادم نفسها: الهمزات (أ إ آ ٱ ← ا، ؤ ← و، ئ ← ي)، ى ← ي،
+   ة ← ه، حذف التشكيل والتطويل، دمج المسافات المتكرّرة وتقليم الطرفين. «عبدالقادر» و«عبد القادر» يبقيان اسمين */
+function normAr(t){
+  return String(t==null?"":t).replace(/[\u0623\u0625\u0622\u0671]/g,"\u0627").replace(/\u0624/g,"\u0648").replace(/\u0626/g,"\u064A")
+    .replace(/\u0649/g,"\u064A").replace(/\u0629/g,"\u0647").replace(/[\u064B-\u065F\u0670\u0640]/g,"")
+    .replace(/\s+/g," ").trim();
+}
+function sameName(a,b){ const x=normAr(a); return !!x && x===normAr(b); }
+/* التوقيع المرسوم واحد للشركة، وصاحبه من يُسمّى بجانبه في الإعدادات (sigOwner؛ وقبل أن يُكتب: اسم موقّع الشركة
+   المحفوظ معه). لا يُطبع إلا إذا طابق موقّعُ الجهة اسمَ صاحبه بعد التطبيع — القاعدة نفسها في الكتب والسماحية.
+   وفي اللجنة: فوق خانة cmSig للجهة، ما لم تحمل الخانة اسم غيره. وعدم المطابقة لا يُسكت عنه: بيانٌ في إعدادات
+   الجهة بالاسمين */
+function sigOwnerName(){ const s=S(); return String(s.sigOwner!=null ? s.sigOwner : (s.signer||"")).trim(); }
 function sigOwner(st){
   if(st===S()) return true;                          // شركة بلا جهات: كما كانت
-  const o=sigOwnerName(); return !!o && String(st && st.signer||"").trim()===o;
+  return sameName(st && st.signer, sigOwnerName());
 }
 function cmSigOwner(st,slot){
   if(!sigOwner(st)) return false;
   if(st===S()) return true;
-  const n=String(st["cmN"+slot]||"").trim(); return !n || n===sigOwnerName();
+  const n=String(st["cmN"+slot]||"").trim(); return !n || sameName(n, sigOwnerName());
 }
 
 /* ترحيل من النسخة القديمة (شركة واحدة بدون مناطق) */
@@ -3190,6 +3245,13 @@ function renderTally(){
 function renderRoster(){
   const host=el("roster"), c=C();
   if(c.workers.length===0){
+    /* جهة واحدة بالعرض لم تُعبّأ: خطوات التعبئة بترتيبها (الموقّع، الأقسام، العمال) */
+    const vb=viewBuildings(), b1=vb.length===1 && bldById(vb[0].id) ? vb[0] : null;
+    if(b1 && !window.__JARD_TEST__){
+      host.innerHTML='<div class="empty setupbox"><h3>«'+esc(b1.name)+'» لم تُعبّأ بعد</h3>'+
+        '<p>تُعبّأ مرة واحدة بهذا الترتيب، وبعدها كل يوم تؤشّر الغياب وتعتمد اليوم.</p>'+setupHtml(b1.id)+'</div>';
+      return;
+    }
     /* البيانات الوهمية للتجربة المحلية فقط — على الخادم كانت ستُضاف لبيانات الشركة الحقيقية */
     const demoOk=!!window.__JARD_TEST__;
     host.innerHTML='<div class="empty"><h3>'+(demoOk?'ماكو عمال مسجلين بهذه الشركة':'ماكو عمال مسجلين بعد')+'</h3>'+
@@ -3399,6 +3461,11 @@ function renderDayStatus(){
     const b=bs.find(x=>x.id===t.dataset.nb); t.readOnly=locked||!canNoteBld(b); });
   const multi=rec.blds.length>1;
   const ad=document.getElementById("allPresent"), cd=document.getElementById("confirmDay");
+  /* عرض بلا عمال (جهة لم تُعبّأ): لا تأشير ولا اعتماد ولا «غير معتمد» — خطوات التعبئة مكانها بكشف العمال */
+  if(!C().workers.length){
+    [ad,cd].forEach(b=>{ if(b && b.classList) b.classList.add("hidden"); });
+    box.className="daystat hidden"; box.textContent=""; return;
+  }
   if(ad && ad.classList) ad.classList.toggle("hidden",multi||!(one&&canMarkBld(one)));
   if(cd && cd.classList) cd.classList.toggle("hidden",multi||!(one&&canConfirmBld(one)));
   let cls, msg;
@@ -4014,11 +4081,9 @@ el("addZone").onclick=()=>{
   /* منطقة جديدة لا يراها إلا من نطاقه كل المناطق حتى تُضاف لنطاق رول: إن حُفظت ولم يرها كاتبها
      فتلك حالة ثالثة لا رفض — تُقال بعد الحفظ لا قبله */
   dbInsertZone(z,sib.length+1,zoneWhat(z,"إضافة المنطقة")).then(ok=>{
-    if(ok && !seesZone(z.id)){
-      alertBox("حُفظت المنطقة «"+n+"» على الخادم، لكنها لا تظهر في نطاقك: لا يراها إلا من نطاقه كل المناطق، "+
-        "حتى يضيفها مالك النظام لنطاق رول (مثل رولك) — وبعدها تظهر لك بعد إعادة التحميل.\n\nلا تُعِد إضافتها: الإضافة تمّت.","حُفظت خارج نطاقك");
-      refresh(); renderPeople();
-    }
+    if(!ok) return;
+    if(!seesZone(z.id)){ refresh(); renderPeople(); }
+    zoneScopeOffer(z);
   });
   el("zName").value=""; el("zShort").value="";
   el("zColor").value=ZONE_COLORS[(c.zones.length)%ZONE_COLORS.length];
@@ -4437,7 +4502,7 @@ function changeWorkerStatus(id,next,opts){
    والملاحظة الاعتيادية قيماً موروثة لجهة لم تضعها */
 const setMap={ setCompany:"company", setTitle:"title", setAddress:"address",
   setMark:"mark", setNumerals:"numerals", setTermNote:"termNote",
-  setCmT1:"cmT1", setCmT2:"cmT2", setCmT3:"cmT3", setDefNote:"defNote",
+  setCmT1:"cmT1", setCmT2:"cmT2", setCmT3:"cmT3", setDefNote:"defNote", setSigOwner:"sigOwner",
   setMisc:"miscInTotal", setSecCount:"secCount", setDPI:"exportDPI",
   setPrintMode:"printMode", setLtSigner:"ltSigner", setLtRole:"ltRole" };
 /* موقّع الكتب الرسمية: مستقل عن موقّع ورقة الجرد. ما لم يُحفظ له اسم فقيمته الأولى العضو الثالث
@@ -4461,13 +4526,23 @@ function fillSettings(){
   el("accentHex").textContent=(c.accent||"#B8912E").toUpperCase();
   loadSigToPad();
   el("sigState").textContent=S().signature?"توقيع محفوظ ✓":"";
-  el("sigOwnerTxt").textContent = sigOwnerName()
-    ? "التوقيع المرسوم واحد للشركة، وصاحبه «"+sigOwnerName()+"». يُطبع على ورق جهة موقّعها هذا الاسم بعينه، ولا يُطبع فوق اسم غيره."
-    : "التوقيع المرسوم بلا اسم صاحب محفوظ معه — لا يُطبع على ورق أي جهة.";
+  el("setSigOwner").value=sigOwnerName();
+  sigOwnerUi();
   el("uiTheme").value=uiThemePref();
   bsRender(); assetUi();
 }
 
+/* لمن يُطبع التوقيع المرسوم: الجهات التي يطابق موقّعُها صاحبَه، والتي لا يطابق (بالاسمين) */
+function sigOwnerUi(){
+  const n=el("sigOwnerTxt"); if(!n || n.textContent===undefined) return;
+  const o=sigOwnerName(), bs=hasBuildings() ? (CF().buildings||[]) : [];
+  if(!o){ n.textContent="بلا صاحب مسمّى — التوقيع المرسوم لا يُطبع على ورق أي جهة."; return; }
+  const yes=bs.filter(b=>sigOwner(setOfB(b.id))), no=bs.filter(b=>!sigOwner(setOfB(b.id)));
+  n.textContent="يُطبع على ورق جهة موقّعها «"+o+"» (بعد تطبيع الهمزات والتشكيل والمسافات)."+
+    (yes.length?" يُطبع الآن على: "+yes.map(b=>b.name).join("، ")+".":"")+
+    (no.length?" ولا يُطبع على: "+no.map(b=>{ const g=setOfB(b.id).signer; return b.name+(g?" (موقّعها «"+g+"»)":" (بلا موقّع)"); }).join("، ")+".":"");
+}
+el("setSigOwner").addEventListener("input",()=>{ sigOwnerUi(); sigCache.src=null; redrawSheets(); if(currentView()==="settings") bsRender(); });
 /* ---- إعدادات الجهة ----
    الجهات التي يضبطها المستخدم: ما يملك «المناطق والأقسام» على منطقة منها (b_edit على الخادم).
    من يرى أكثر من جهة يختار أيّها من قائمة بعنوان اللوحة. الفارغ يرث قيمة الشركة. */
@@ -4507,7 +4582,10 @@ function bsInh(b){
   el("bsSigNote").textContent = !co.signature ? "لا توقيع مرسوم محفوظ للشركة."
     : !st.signer ? "التوقيع المرسوم لا يُطبع: موقّع هذه الجهة غير محدَّد."
     : sigOwner(st) ? "التوقيع المرسوم يُطبع على ورق هذه الجهة: موقّعها «"+st.signer+"» صاحبه."
-    : "التوقيع المرسوم لا يُطبع على ورق هذه الجهة: صاحبه «"+sigOwnerName()+"» لا «"+st.signer+"». تُوقَّع أوراقها باليد.";
+    : !sigOwnerName() ? "التوقيع المرسوم بلا صاحب مسمّى في إعدادات الشركة — فلا يُطبع."
+    : "التوقيع المرسوم يخصّ «"+sigOwnerName()+"»، وموقّع هذه الجهة «"+st.signer+"» — فلن يُطبع على ورقها. "+
+      "إن كانا الشخص نفسه فوحّد كتابة الاسم في الموضعين.";
+  sigOwnerUi();
 }
 function bsSave(){
   const b=bsPend; bsPend=null; bsTimer=null; if(!b) return;
@@ -5601,7 +5679,7 @@ function drawPass(target,k){
    توقيع حسين تحت اسم مجيز آخر */
 function passSeats(p){
   p=p||psForm();
-  const s=S(), own=!!(s.signature && p.approver && p.approver===String(s.signer||"").trim());
+  const s=S(), own=!!(s.signature && sameName(p.approver, sigOwnerName()));
   return [
     {title:"توقيع العامل", name:""},
     p.reason==="تكليف من موظف"
@@ -11605,12 +11683,23 @@ function lfUnnest(root){
    صورة التوقيع المرسوم لمن رسمه (موقّع ورقة الجرد): تظهر فقط إذا كان اسم الموقّع اسمَه، والكتاب
    يحفظ بصمتها لا الصورة. إن رُسم توقيع غيرها بعد صدور الكتاب طُبع بلا صورة — لا يُطبع على كتاب
    توقيع لم يصدر به. */
-const LF_SIG_LBL={def:"موقّع الكتب", inv:"موقّع ورقة الجرد", cm1:"اللجنة (١)", cm2:"اللجنة (٢)", cm3:"اللجنة (٣)",
+const LF_SIG_LBL={def:"موقّع الكتب الرسمية", inv:"موقّع ورقة الجرد", cm1:"اللجنة (١)", cm2:"اللجنة (٢)", cm3:"اللجنة (٣)",
   manual:"اسم يُكتب يدوياً", none:"بلا توقيع — يوقَّع بخط اليد بعد الطباعة"};
+/* خيارات الموقّع ثابتة المعنى أياً كانت الجهة المعروضة: موقّع الكتب الرسمية، ثم موقّع كل جهة يراها المستخدم
+   (جهة بلا موقّع لا خيار لها)، ثم من سُمّي من لجنة كل جهة، ثم اسم يدوي، ثم بلا توقيع. ومن يرى جهة واحدة لا يُعرض
+   عليه إلا موقّعها ولجنتها. شركة بلا جهات (بيانات قديمة): خياراتها كما كانت */
 function lfSigOpts(){
-  const s=setOfView();
-  return { def:ltSig(), inv:{name:s.signer||"",role:s.role||""},
-    cm1:{name:s.cmN1||"",role:s.cmT1||""}, cm2:{name:s.cmN2||"",role:s.cmT2||""}, cm3:{name:s.cmN3||"",role:s.cmT3||""} };
+  const o={def:Object.assign({lbl:LF_SIG_LBL.def},ltSig())};
+  if(!hasBuildings()){
+    const s=S(); o.inv={lbl:LF_SIG_LBL.inv, name:s.signer||"", role:s.role||""};
+    [1,2,3].forEach(i=>{ o["cm"+i]={lbl:LF_SIG_LBL["cm"+i], name:s["cmN"+i]||"", role:s["cmT"+i]||""}; });
+    return o;
+  }
+  const bs=scopeBuildings(), many=bs.length>1;
+  bs.forEach(b=>{ const s=setOfB(b.id); if(s.signer) o["b:"+b.id]={lbl:"موقّع "+b.name, name:s.signer, role:s.role||""}; });
+  bs.forEach(b=>{ const s=setOfB(b.id);
+    [1,2,3].forEach(i=>{ const n=s["cmN"+i]; if(n) o["c:"+b.id+":"+i]={lbl:"لجنة "+(many?b.name+" ":"")+"("+fmtNum(i)+")", name:n, role:s["cmT"+i]||""}; }); });
+  return o;
 }
 function lfSigKey(src){
   if(!src) return "";
@@ -11618,8 +11707,8 @@ function lfSigKey(src){
   return src.length+"-"+h.toString(16);
 }
 function lfSigImgFor(name){
-  const s=S(), n=String(name||"").trim();
-  return (s.signature && n && n===String(s.signer||"").trim()) ? lfSigKey(s.signature) : "";
+  const s=S();
+  return (s.signature && sameName(name, sigOwnerName())) ? lfSigKey(s.signature) : "";
 }
 function lfSigImgOk(g){ return !!(g && g.by!=="none" && g.img && S().signature && lfSigKey(S().signature)===g.img); }
 /* بصمة صورة التوقيع التي يصدر بها الكتاب · كتاب حُفظ قبل تثبيت الموقّع (للتنبيه على الشاشة) ·
@@ -11635,14 +11724,20 @@ function lfSigCur(){
 }
 function lfSigFill(){
   const sel=el("lfSigBy"); if(!sel||sel.innerHTML===undefined) return;
-  const cur=sel.value||"def", o=lfSigOpts();
-  sel.innerHTML=Object.keys(LF_SIG_LBL).map(k=>{
-    const v=o[k], t=LF_SIG_LBL[k]+(v?": "+(v.name||"بلا اسم")+(v.role?" — "+v.role:""):"");
-    return '<option value="'+k+'">'+esc(t)+'</option>'; }).join("");
-  sel.value=cur;
+  const cur=sel.value||"def", o=lfSigOpts(), opt=(k,t)=>'<option value="'+esc(k)+'">'+esc(t)+'</option>';
+  sel.innerHTML=Object.keys(o).map(k=>{ const v=o[k]; return opt(k, v.lbl+": "+(v.name||"بلا اسم")+(v.role?" — "+v.role:"")); }).join("")+
+    opt("manual",LF_SIG_LBL.manual)+opt("none",LF_SIG_LBL.none);
+  lfSigEnsure(cur);
+}
+/* كتاب صدر بخيار لم يعد في القائمة (موقّع جهة غُيّر، أو مفاتيح ما قبل الجهات): يبقى خياره ظاهراً كما صدر */
+function lfSigEnsure(by){
+  const sel=el("lfSigBy"); if(!sel || !sel.options) return;
+  if(![].some.call(sel.options,x=>x.value===by)){ const op=document.createElement("option"); op.value=by;
+    op.textContent=(LF_SIG_LBL[by]||"موقّع")+" — كما صدر"; sel.appendChild(op); }
+  sel.value=by;
 }
 function lfSigSet(g){
-  el("lfSigBy").value=g.by||"def"; el("lfSigName").value=g.name||""; el("lfSigRole").value=g.role||"";
+  lfSigEnsure(g.by||"def"); el("lfSigName").value=g.name||""; el("lfSigRole").value=g.role||"";
   lfSigImg=g.img||""; lfSigLegacy=!!g.legacy; lfSigUi();
 }
 /* اختيار من القائمة: الاسم والصفة من الإعدادات الآن، ويبقيان قابلين للتعديل */
@@ -12737,6 +12832,189 @@ el("bellPop").addEventListener("click",e=>{
 });
 
 
+/* ==================== [واجهة] المستخدمون والرولات (المرحلة ١٠) ====================
+   لمن يملك users.manage. الحسابات تُنشأ وكلمات المرور تُصفَّر من لوحة سوبابيس؛ هنا رولات كل مستخدم وتفعيله، والرولات
+   بصلاحياتها ونطاقها. حُرّاس الخادم يرفضون ما يقفل النظام على صاحبه (آخر ارتباط أو حساب أو رول يملك users.manage،
+   تعطيل النفس، حذف رول أساسي) — ورسالتهم تُعرض كما هي، لا تمنعها الواجهة صامتة. والرول بلا نطاق لا يُحفظ. */
+let US=null, usErr="", usBusy=false, roEdit=null;
+const PERM_KEYS=Object.keys(PERM_LABELS);
+async function usLoad(){
+  if(usBusy) return;
+  usBusy=true; usErr=""; if(!US) usRender();
+  try{ US=await dbUsersAdmin(); }catch(e){ usErr=(e&&e.message)||String(e); }
+  usBusy=false; usRender();
+}
+function usRole(id){ return (US && US.roles.find(r=>r.id===id)) || null; }
+function usRolesOf(uid){ return US ? US.links.filter(l=>l.userId===uid).map(l=>usRole(l.roleId)).filter(Boolean) : []; }
+function usUser(id){ return (US && US.users.find(u=>u.id===id)) || null; }
+function usName(u){ return u ? (u.name||u.email||"مستخدم") : "مستخدم"; }
+function roChip(r,rm){
+  return '<span class="rchip"><i style="background:'+esc(r.color||"#888")+'"></i>'+esc(r.name)+
+    (rm?'<button type="button" data-urm="'+esc(rm)+'" title="إزالة الرول" aria-label="إزالة «'+esc(r.name)+'»">×</button>':'')+'</span>';
+}
+function roScopeText(r){
+  if(r.allZones) return "كل المناطق";
+  if(!r.zones.length) return "بلا نطاق — لا يرى شيئاً";
+  const zs=CF().zones||[], bs=CF().buildings||[];
+  return r.zones.map(id=>{ const z=zs.find(x=>x.id===id); if(!z) return "منطقة لا تراها";
+    const b=bs.find(x=>x.id===z.buildingId); return (b?(b.short||b.name)+" · ":"")+(z.short||z.name); }).join("، ");
+}
+function usRender(){
+  const box=el("usList"); if(!box || box.innerHTML===undefined) return;
+  el("usState").textContent = usErr ? "تعذّر التحميل: "+usErr : (usBusy && US) ? "يقرأ من الخادم…" : "";
+  if(!US){ box.innerHTML=usErr?"":'<div class="empty"><p>يقرأ المستخدمين من الخادم…</p></div>'; el("roList").innerHTML=""; return; }
+  const me=typeof ME!=="undefined" && ME ? ME.id : "";
+  box.innerHTML='<div class="tblwrap tight"><table><thead><tr><th>الاسم</th><th>الإيميل</th><th>الرولات</th><th>آخر دخول</th><th>الحساب</th></tr></thead><tbody>'+
+    US.users.map(u=>{ const rs=usRolesOf(u.id), free=US.roles.filter(r=>!rs.includes(r));
+      return '<tr data-uid="'+esc(u.id)+'"><td>'+esc(u.name||"—")+(u.id===me?' <span class="stag in">أنت</span>':'')+'</td>'+
+        '<td dir="ltr" style="text-align:right" class="mini">'+esc(u.email||"—")+'</td>'+
+        '<td class="uscell">'+(rs.length?rs.map(r=>roChip(r,u.id+"|"+r.id)).join(""):'<span class="mini">بلا رول — لا يرى شيئاً</span>')+
+          (free.length?' <select data-uadd="'+esc(u.id)+'" aria-label="إضافة رول لـ'+esc(usName(u))+'"><option value="">+ رول</option>'+
+            free.map(r=>'<option value="'+esc(r.id)+'">'+esc(r.name)+'</option>').join("")+'</select>':'')+'</td>'+
+        '<td class="dt mini">'+(u.lastSignIn?esc(stampAr(u.lastSignIn)):"لم يدخل بعد")+'</td>'+
+        '<td class="actcell"><span class="stag '+(u.active?"ok":"out")+'">'+(u.active?"مفعّل":"معطّل")+'</span> '+
+          '<button type="button" class="btn sm'+(u.active?' ghost':'')+'" data-uact="'+esc(u.id)+'">'+(u.active?"تعطيل":"تفعيل")+'</button></td></tr>'; }).join("")+
+    '</tbody></table></div>';
+  const cnt=id=>US.links.filter(l=>l.roleId===id).length;
+  el("roList").innerHTML=US.roles.map(r=>'<div class="rocard" data-rid="'+esc(r.id)+'"><div class="rohead">'+roChip(r)+(r.isSystem?' <span class="stag soon">أساسي</span>':'')+
+      '<span class="mini">'+esc(roScopeText(r))+' · '+fmtNum(cnt(r.id))+' مستخدم</span><span style="flex:1"></span>'+
+      '<button type="button" class="btn sm" data-redit="'+esc(r.id)+'">تعديل</button> <button type="button" class="btn sm danger" data-rdel="'+esc(r.id)+'">حذف</button></div>'+
+      '<div class="roperm">'+(r.perms.length?r.perms.map(p=>esc(PERM_LABELS[p]||p)).join(" · "):"اطلاع وحده — بلا صلاحية تعديل")+'</div></div>').join("")||
+    '<div class="empty"><p>لا رولات.</p></div>';
+}
+/* تغيّر يمسّ المستخدم الحالي (رولاته أو نطاقها): هويته وما يراه يُقرآن من جديد */
+async function meReload(){
+  try{ const ses=await dbSession(); if(ses && ses.user) await dbLoadMe(ses.user); }catch(e){ return; }
+  applyPerms(); scopeDirty(); renderScopeBar(); await resyncFromServer();
+  if(currentView()==="users" && !can("users.manage")) switchView("daily");
+}
+async function usAfter(mine){ await usLoad(); if(mine) await meReload(); }
+el("usReload").onclick=()=>usLoad();
+el("view-users").addEventListener("change",async e=>{
+  const sel=e.target.closest("[data-uadd]"); if(!sel || !sel.value) return;
+  const uid=sel.dataset.uadd, r=usRole(sel.value), u=usUser(uid); sel.disabled=true;
+  try{ await dbGrantRole(uid,r.id); flash("أُضيف «"+r.name+"» إلى «"+usName(u)+"» ✓"); }
+  catch(err){ await alertBox(err.message,"لم يُضف الرول"); }
+  await usAfter(!!ME && uid===ME.id);
+});
+el("view-users").addEventListener("click",async e=>{
+  const rm=e.target.closest("[data-urm]"), act=e.target.closest("[data-uact]"), ed=e.target.closest("[data-redit]"), del=e.target.closest("[data-rdel]");
+  if(rm){
+    const k=rm.dataset.urm.split("|"), u=usUser(k[0]), r=usRole(k[1]); if(!u || !r) return;
+    const last=usRolesOf(u.id).length===1;
+    if(!await confirmBox("إزالة رول","تُزال «"+r.name+"» من «"+usName(u)+"»؟"+(last?"\nويبقى بلا رول — لا يرى شيئاً.":""),{ok:"أزِل",danger:true})) return;
+    try{ await dbRevokeRole(u.id,r.id); flash("أُزيلت «"+r.name+"» ✓"); }catch(err){ await alertBox(err.message,"لم يُزل الرول"); }
+    await usAfter(!!ME && u.id===ME.id); return;
+  }
+  if(act){
+    const u=usUser(act.dataset.uact); if(!u) return;
+    if(u.active && !await confirmBox("تعطيل الحساب","يُعطَّل حساب «"+usName(u)+"»: لا يدخل ولا يرى شيئاً حتى يُعاد تفعيله. رولاته تبقى كما هي.",{ok:"عطّل",danger:true})) return;
+    try{ await dbSetUserActive(u.id,!u.active); flash((u.active?"عُطّل":"فُعّل")+" حساب «"+usName(u)+"» ✓"); }
+    catch(err){ await alertBox(err.message,u.active?"لم يُعطَّل الحساب":"لم يُفعَّل الحساب"); }
+    await usAfter(false); return;
+  }
+  if(ed){ roOpen(usRole(ed.dataset.redit)); return; }
+  if(del){
+    const r=usRole(del.dataset.rdel); if(!r) return;
+    const n=US.links.filter(l=>l.roleId===r.id).length;
+    if(!await confirmBox("حذف رول","يُحذف الرول «"+r.name+"»"+(n?" ويُزال من "+fmtNum(n)+" مستخدم":"")+"؟",{ok:"احذف",danger:true})) return;
+    try{ await dbDeleteRole(r.id); flash("حُذف الرول ✓"); if(roEdit && roEdit.id===r.id){ roEdit=null; roRender(); } }
+    catch(err){ await alertBox(err.code==="23503"?"الرول مرتبط بمستخدمين أو مناطق والخادم لا يحذفه معها — أزله عنهم أولاً.":err.message,"لم يُحذف الرول"); }
+    await usAfter(!!ME && ME.roles.some(x=>x.id===r.id)); return;
+  }
+});
+/* ---- محرّر الرول: اسم، لون، الصلاحيات الإحدى عشرة، والنطاق (كل المناطق أو مناطق بعينها) ---- */
+el("roNew").onclick=()=>roOpen(null);
+function roOpen(r){
+  const n=US ? US.roles.length : 0;
+  roEdit = r ? {isNew:false, id:r.id, name:r.name, color:r.color||"#4B2E83", perms:new Set(r.perms), allZones:r.allZones, zones:new Set(r.zones),
+      prevZones:r.zones.slice(), isSystem:r.isSystem, sortOrder:r.sortOrder}
+    : {isNew:true, id:newId(), name:"", color:ZONE_COLORS[n%ZONE_COLORS.length], perms:new Set(), allZones:false, zones:new Set(), prevZones:[],
+      isSystem:false, sortOrder:(US?Math.max(0,...US.roles.map(x=>x.sortOrder)):0)+1};
+  roRender();
+  const box=el("roEditor"); if(box.scrollIntoView) box.scrollIntoView({block:"start"});
+  const f=el("roName"); if(f && f.focus) f.focus();
+}
+function roRender(){
+  const e=roEdit, box=el("roEditor"); if(!box || !box.classList) return;
+  box.classList.toggle("hidden",!e); if(!e){ box.innerHTML=""; return; }
+  const zs=CF().zones||[], bs=CF().buildings||[];
+  const groups=bs.map(b=>({name:b.name, zones:zs.filter(z=>z.buildingId===b.id)})).concat([{name:"", zones:zs.filter(z=>!bs.some(b=>b.id===z.buildingId))}]).filter(g=>g.zones.length);
+  const unseen=[...e.zones].filter(id=>!zs.some(z=>z.id===id));
+  box.innerHTML='<h3 class="subhead" style="margin-top:0">'+(e.isNew?"رول جديد":"تعديل «"+esc(e.name)+"»")+(e.isSystem?' <span class="stag soon">أساسي</span>':'')+'</h3>'+
+    '<div class="row2"><label class="field"><span>الاسم</span><input type="text" id="roName" value="'+esc(e.name)+'"></label>'+
+    '<label class="field"><span>اللون</span><input type="color" id="roColor" value="'+esc(e.color)+'"></label></div>'+
+    '<span class="fieldlbl">الصلاحيات</span><div class="rogrid">'+PERM_KEYS.map(p=>'<label><input type="checkbox" data-rperm="'+p+'"'+(e.perms.has(p)?" checked":"")+'>'+
+      '<span>'+esc(PERM_LABELS[p])+'</span></label>').join("")+'</div>'+
+    '<span class="fieldlbl">النطاق</span><div class="rogrid"><label><input type="checkbox" id="roAll"'+(e.allZones?" checked":"")+'><span><b>كل المناطق</b> — ومنها ما يُضاف لاحقاً</span></label></div>'+
+    groups.map(g=>(g.name?'<div class="mini" style="margin-top:4px">'+esc(g.name)+'</div>':'')+'<div class="rogrid">'+g.zones.map(z=>'<label><input type="checkbox" data-rzone="'+esc(z.id)+'"'+
+      (e.zones.has(z.id)?" checked":"")+(e.allZones?" disabled":"")+'><span>'+esc(z.name)+'</span></label>').join("")+'</div>').join("")+
+    (unseen.length?'<p class="mini">وفي نطاقه '+fmtNum(unseen.length)+' منطقة لا تراها — تبقى كما هي.</p>':'')+
+    '<p class="hint" id="roWarn"></p>'+
+    '<div class="actions"><button class="btn primary" id="roSave" type="button">حفظ الرول</button><button class="btn ghost" id="roCancel" type="button">إلغاء</button></div>';
+  roWarn();
+}
+function roWarn(){
+  const w=el("roWarn"); if(!w || !roEdit) return;
+  w.textContent = (!roEdit.allZones && !roEdit.zones.size)
+    ? "بلا «كل المناطق» وبلا أي منطقة لا يرى هذا الرول شيئاً ولا يفعل شيئاً — لا يُحفظ هكذا." : "";
+}
+el("roEditor").addEventListener("change",e=>{
+  if(!roEdit) return;
+  const p=e.target.closest("[data-rperm]"), z=e.target.closest("[data-rzone]");
+  if(p){ if(p.checked) roEdit.perms.add(p.dataset.rperm); else roEdit.perms.delete(p.dataset.rperm); }
+  else if(z){ if(z.checked) roEdit.zones.add(z.dataset.rzone); else roEdit.zones.delete(z.dataset.rzone); roWarn(); }
+  else if(e.target.id==="roAll"){ roEdit.allZones=e.target.checked; roEdit.name=el("roName").value; roEdit.color=el("roColor").value; roRender(); }
+});
+el("roEditor").addEventListener("input",e=>{
+  if(!roEdit) return;
+  if(e.target.id==="roName") roEdit.name=e.target.value; else if(e.target.id==="roColor") roEdit.color=e.target.value;
+});
+el("roEditor").addEventListener("click",async e=>{
+  if(e.target.closest("#roCancel")){ roEdit=null; roRender(); return; }
+  if(!e.target.closest("#roSave") || !roEdit) return;
+  const r=roEdit; r.name=String(el("roName").value||"").trim(); r.color=el("roColor").value;
+  if(!r.name){ alertBox("اكتب اسم الرول."); return; }
+  if(!r.allZones && !r.zones.size){ alertBox("رولٌ بلا «كل المناطق» وبلا أي منطقة لا يرى شيئاً ولا يفعل شيئاً. اختر مناطق نطاقه، أو «كل المناطق».","الرول بلا نطاق"); return; }
+  const mine=!!ME && ME.roles.some(x=>x.id===r.id);
+  try{ await dbSaveRole({id:r.id, name:r.name, color:r.color, perms:PERM_KEYS.filter(p=>r.perms.has(p)), allZones:r.allZones, zones:[...r.zones], sortOrder:r.sortOrder}, r.isNew, r.prevZones); }
+  catch(err){
+    await alertBox(err.message,"لم يُحفظ الرول");
+    await usLoad();
+    const now=usRole(r.id); if(now && roEdit===r){ r.isNew=false; r.prevZones=now.zones.slice(); }   // حُفظ صفّه وتعثّر نطاقه: يُكمَل تعديلاً
+    return;
+  }
+  roEdit=null; roRender(); flash("حُفظ الرول «"+r.name+"» ✓");
+  await usAfter(mine);
+});
+/* منطقة جديدة لا يراها أحد (إلا من نطاقه كل المناطق) حتى تُضاف إلى نطاق رول: بعد إضافتها يُعرض ربطها فوراً على من
+   يملك users.manage، ويُقال لغيره من يربطها */
+async function zoneScopeOffer(z){
+  if(!can("users.manage") || dbLocal()){
+    if(!seesZone(z.id)) alertBox("حُفظت المنطقة «"+z.name+"» على الخادم، لكنها لا تظهر في نطاقك: لا يراها إلا من نطاقه كل المناطق، "+
+      "حتى تُضاف إلى نطاق رول (مثل رولك) — يضيفها من يملك «المستخدمون والرولات»، وبعدها تظهر لك بعد إعادة التحميل.\n\nلا تُعِد إضافتها: الإضافة تمّت.","حُفظت خارج نطاقك");
+    else if(!dbLocal()) alertBox("حُفظت المنطقة «"+z.name+"». لا يراها إلا من نطاقه «كل المناطق» حتى تُضاف إلى نطاق رول — "+
+      "يضيفها من يملك «المستخدمون والرولات».","منطقة جديدة");
+    return;
+  }
+  let data; try{ data=await dbUsersAdmin(); }
+  catch(e){ alertBox("حُفظت المنطقة «"+z.name+"»، لكن تعذّر تحميل الرولات لربطها: "+e.message+"\n\nاربطها من «المستخدمون» ← الرولات.","منطقة جديدة"); return; }
+  const cand=data.roles.filter(r=>!r.allZones), allz=data.roles.filter(r=>r.allZones);
+  if(!cand.length){ flash("حُفظت المنطقة ✓ — يراها من نطاقه كل المناطق"); return; }
+  const sibs=new Set((CF().zones||[]).filter(x=>x.id!==z.id && (x.buildingId||"")===(z.buildingId||"")).map(x=>x.id));
+  const pick=new Set(cand.filter(r=>r.zones.some(id=>sibs.has(id))).map(r=>r.id));
+  const html='<p class="hint" style="margin-top:0">المنطقة «'+esc(z.name)+'» لا يراها أحد حتى تُضاف إلى نطاق رول'+
+    (allz.length?' — إلا '+allz.map(r=>"«"+esc(r.name)+"»").join(" و")+' (نطاقها كل المناطق)':'')+'. اختر الرولات التي تشملها:</p>'+
+    '<div class="rogrid">'+cand.map(r=>'<label><input type="checkbox" data-zlink="'+esc(r.id)+'"'+(pick.has(r.id)?" checked":"")+'>'+roChip(r)+'</label>').join("")+'</div>';
+  const v=await dlgShow({title:"ربط المنطقة الجديدة بنطاق رول", html:html, ok:"اربط", cancel:"لاحقاً",
+    onOpen:()=>{ el("dlgBody").onchange=ev=>{ const c=ev.target.closest("[data-zlink]"); if(c){ if(c.checked) pick.add(c.dataset.zlink); else pick.delete(c.dataset.zlink); } }; }});
+  el("dlgBody").onchange=null;
+  if(!v || !pick.size) return;
+  try{ await dbLinkZone([...pick], z.id); }catch(e){ await alertBox(e.message,"لم تُربط المنطقة"); return; }
+  flash("رُبطت المنطقة «"+z.name+"» بـ"+fmtNum(pick.size)+" رول ✓");
+  if(ME && ME.roles.some(r=>pick.has(r.id))) await meReload();
+}
+
 /* ==================== [واجهة] مركز التنبيهات (الصفحة الأولى) ====================
    كل تنبيه يقرأ من دوال الحساب نفسها (missingDays، salaryFor، buildReport) ويحمل زراً
    إلى مكانه. يُحسب بعد توقّف التحديث (٣٠٠ مللي ثانية) لا مع كل نقرة. */
@@ -12873,7 +13151,7 @@ document.addEventListener("keydown",e=>{
 
 function switchView(v){
   if(!viewAllowed(v)) v="daily";
-  ["home","daily","passes","leaves","penalties","achievements","materials","history","trash","people","variables","requests","report","ledger","form","settings"].forEach(x=>
+  ["home","daily","passes","leaves","penalties","achievements","materials","history","trash","people","variables","requests","users","report","ledger","form","settings"].forEach(x=>
     el("view-"+x).classList.toggle("hidden",x!==v));
   const tabs=[...document.querySelectorAll(".tabs button")];
   tabs.forEach(b=>{
@@ -12888,6 +13166,7 @@ function switchView(v){
   if(v==="history"){ renderHistory(); renderAudit(); }
   if(v==="trash") loadTrash();
   if(v==="requests") reqRender();
+  if(v==="users") usLoad();
   if(v==="daily") scheduleAlerts();
   if(v==="people") renderPeople();
   if(v==="variables") renderVariables();
@@ -13531,7 +13810,8 @@ function renderHome(){
       /* جهة لم تُعبّأ: تبدو مقصودة — سطر يقول حالها وزر الخطوة الأولى، لا أصفار */
       const line=x.secs ? 'فيها '+fmtNum(x.secs)+(x.secs===1?' قسم':' أقسام')+' ولا عمال بعد.'
                          : '<b>لم تُعبّأ بعد.</b> لا أقسام فيها ولا عمال.';
-      const act=!x.secs ? (x.canSec?'<button type="button" class="btn sm act" data-first="sec" data-bld="'+esc(b.id)+'">إضافة أول قسم</button>'
+      const act=bldById(b.id) ? setupHtml(b.id)
+        : !x.secs ? (x.canSec?'<button type="button" class="btn sm act" data-first="sec" data-bld="'+esc(b.id)+'">إضافة أول قسم</button>'
                                    :'<p class="hint act">تُضاف أقسامها بصلاحية «المناطق والأقسام».</p>')
                         : (x.canW?'<button type="button" class="btn sm act" data-first="worker" data-bld="'+esc(b.id)+'">إضافة أول عامل</button>'
                                  :'<p class="hint act">يُضاف عمالها بصلاحية «العمال».</p>');
@@ -13567,6 +13847,33 @@ const HM_NEW=[["pass","سماحية خروج","passes","psNew","psWorker"],["lea
   ["penalty","إشعار عقوبة","penalties","pnNew","pnWorker"],["ach","إشعار مكافأة","achievements","acNew","acWorker"],
   ["issue","وصل صرف مواد","materials","mtNew","mtWorker"]];
 /* دخول جهة من اللوحة: من يرى أكثر من جهة يختارها (ويُحفظ اختياره)، ومن يرى واحدة يدخلها */
+/* تعبئة جهة لأول مرة — بهذا الترتيب لا بغيره: موقّعها في إعداداتها، ثم أقسامها، ثم عمالها. كل خطوة بحالها، والخطوة
+   التالية وحدها بزرّها لمن يملكها (ولغيره: من يضبطها) */
+function setupSteps(bid){
+  const f=CF(), b=bldById(bid), zs=(f.zones||[]).filter(z=>(z.buildingId||"")===(bid||"")).map(z=>z.id);
+  const secIds=(f.sections||[]).filter(x=>zs.includes(x.zoneId)).map(x=>x.id);
+  const ws=(f.workers||[]).filter(w=>secIds.includes(w.sectionId)).length, sig=b ? bldOwn(b,"signer") : "";
+  return [
+    {k:"sig", t:"موقّع البناية", done:!!sig, now:sig?"«"+sig+"»":"غير محدَّد", can:bsEditable().some(x=>x.id===bid), btn:"إعدادات البناية", who:"«المناطق والأقسام» عليها"},
+    {k:"sec", t:"الأقسام", done:secIds.length>0, now:secIds.length?fmtNum(secIds.length):"لا أقسام", can:zs.some(z=>canZone("structure.manage",z)), btn:"إضافة قسم", who:"«المناطق والأقسام» عليها"},
+    {k:"worker", t:"العمال", done:ws>0, now:ws?fmtNum(ws):"لا عمال", can:zs.some(z=>canZone("workers.manage",z)), btn:"إضافة عامل", who:"«العمال» عليها"}];
+}
+function setupHtml(bid){
+  const st=setupSteps(bid), next=st.find(x=>!x.done);
+  return '<ol class="setup">'+st.map(x=>'<li class="'+(x.done?"done":(x===next?"next":""))+'"><b>'+x.t+'</b> — '+esc(x.now)+
+    (x===next ? (x.can?' <button type="button" class="btn sm primary" data-setup="'+x.k+'" data-bld="'+esc(bid)+'">'+x.btn+'</button>'
+                      :' <span class="mini">يضبطه من يملك '+x.who+'.</span>') : '')+'</li>').join("")+'</ol>';
+}
+document.addEventListener("click",e=>{
+  const t=e.target && e.target.closest && e.target.closest("[data-setup]"); if(!t) return;
+  const k=t.getAttribute("data-setup"), bid=t.getAttribute("data-bld")||"";
+  if(k==="sig"){ flushBld(); bsSel=bid; switchView("settings"); bsRender();
+    const f=el("bsPanel").querySelector('[data-bk="signer"]'); try{ el("bsPanel").scrollIntoView({block:"start"}); f.focus(); }catch(_){} return; }
+  enterBuilding(bid,"people");
+  if(k==="sec"){ const z=(C().zones||[]).find(x=>(x.buildingId||"")===bid); if(z) el("secZone").value=z.id; }
+  const f=el(k==="sec"?"secName":"wName");
+  try{ f.scrollIntoView({block:"center"}); f.focus(); }catch(_){}
+});
 function enterBuilding(bid,view){
   if(homeBuildings().length>1) setScope(bid,view||"daily");
   else switchView(view||"daily");
