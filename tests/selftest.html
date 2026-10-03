@@ -155,6 +155,15 @@ function boot(){
   });
 }
 const tick=ms=>new Promise(r=>setTimeout(r,ms||8));
+/* «اليوم» داخل إطار الفحص يُثبَّت صراحةً: فحصٌ بياناته على تواريخ ثابتة لا يقرأ ساعة الجهاز.
+   الساعة تجري من اليوم المثبَّت (todayISO وnowHM وmonthRange كلها تتفق عليه). يُعاد اليوم المثبَّت. */
+function pinToday(w,iso){
+  w.eval('(function(){ var R=window.__RealDate||Date; window.__RealDate=R; var off=new R("'+iso+'T09:30:00").getTime()-R.now();'+
+    ' function D(){ if(!(this instanceof D)) return new R(R.now()+off).toString(); var a=[].slice.call(arguments);'+
+    ' return a.length ? new (Function.prototype.bind.apply(R,[null].concat(a)))() : new R(R.now()+off); }'+
+    ' D.prototype=R.prototype; D.now=function(){ return R.now()+off; }; D.UTC=R.UTC; D.parse=R.parse; window.Date=D; })()');
+  return w.eval("todayISO()");
+}
 async function dlgWait(w){
   for(let i=0;i<250;i++){ const b=w.document.getElementById("dlgBack");
     if(b && !b.classList.contains("hidden")) return true; await tick(5); }
@@ -246,7 +255,7 @@ function serverRows(c){
   put("issue",c.issues,["from","to"]); put("letter",c.letters,["date"]);
   const iso=st=>{ const m=/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(st||""); return m?new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]).toISOString():null; };
   return { company:{id:c.id,name:c.name,theme:c.theme,accent:c.accent,settings:settings},
-    /* كما فعل الخادم: جهة البيانات المنقولة مُلئت بإعدادات الشركة (المفاتيح العشرة) */
+    /* كما فعل الخادم: جهة البيانات المنقولة مُلئت بإعدادات الشركة (المفاتيح العشرة الأولى؛ العنوان أُضيف بعدها فيرث) */
     buildings:bld.map((b,i)=>({id:b.id,name:b.name,short:b.short||null,sort_order:i+1,
       settings:b.settings||(c.buildings?{}:["signer","role","cmT1","cmN1","cmT2","cmN2","cmT3","cmN3","cmSig","defNote"].reduce((a,k)=>(a[k]=settings[k],a),{}))})),
     zones:zones, sections:c.sections.map(s=>({id:s.id,zone_id:s.zoneId,name:s.name})), workers:workers,
@@ -618,6 +627,9 @@ try{
   /* ---- ١٢) سطر بيان المدة ---- */
   group("١٢ · سطر بيان المدة (أيلول ٢٠٢٦: ٤ جُمع + عطلة رسمية)");
   const w12=await boot();
+  /* المدة أيلول كاملاً وقد مضى: «اليوم» مثبَّت بعده. بغير التثبيت كانت أيام أيلول التي لم تحلّ بعد
+     تُعدّ «لم يحلّ» حين يُشغَّل الفحص داخل أيلول، فيسقط السطر — أو يمرّ لأن الساعة صادفت ما بعده */
+  pinToday(w12,"2026-10-03");
   const HOL=[{date:"2026-09-10",name:"عيد الغدير"}];
   load(w12,stateOf([company({settings:{holidays:HOL},workers:[{id:"a",name:"أحمد"},{id:"b",name:"باسم"}]})]));
   const per=()=>JSON.parse(w12.eval('JSON.stringify((function(){ RP=buildReport("2026-09-01","2026-09-30"); applyPaySort(); var P=periodInfo(RP);'+
@@ -636,6 +648,13 @@ try{
   check("غير المعتمد يظهر صراحة بأرقام أيامه", q.line, "أيام المدة 30 · راحة أسبوعية 4 (الجمعة) · عطل رسمية 1 (عيد الغدير) · أيام العمل 25 · المعتمد 23 · غير معتمد 2 (5 و12)");
   check("المعادلة: المدة = راحة + عطل + عمل، والعمل = معتمد + غير معتمد + لم يحلّ",
     q.P.periodDays===q.P.weekly+q.P.official.length+q.P.work && q.P.work===q.P.confirmed+q.P.missing.length+q.P.pending, true);
+  /* واليوم داخل المدة (٨ أيلول): يوم ٥ مضى بلا اعتماد فهو «غير معتمد»، ويوم ١٢ لم يأتِ بعد فهو «لم تحلّ بعد» —
+     يُفحص قصداً بيوم مثبَّت، لا بما تصادفه ساعة الجهاز */
+  pinToday(w12,"2026-09-08");
+  const q8=per();
+  check("اليوم ٨ أيلول: الماضي غير المعتمد غير المستقبل", [q8.P.missing.length, q8.P.pending, q8.line.indexOf("غير معتمد 1 (5)")>0, q8.line.indexOf("لم تحلّ بعد 1")>0].join(","), "1,1,true,true");
+  check("اليوم ٨ أيلول: المعادلة قائمة", q8.P.periodDays===q8.P.weekly+q8.P.official.length+q8.P.work && q8.P.work===q8.P.confirmed+q8.P.missing.length+q8.P.pending, true);
+  pinToday(w12,"2026-10-03");
   /* الشاشة والوورد والرسم والجرد التفصيلي */
   w12.eval('switchView("report"); el("rpFrom").value="2026-09-01"; el("rpTo").value="2026-09-30"; runReport(true);');
   check("الشاشة: السطر فوق البطاقات", w12.eval('el("rpPeriod").textContent'), q.line);
@@ -719,8 +738,9 @@ try{
   check("الترحيل متكرر بلا أثر: فورمة محذوفة لا ترجع", w14.eval('state.companies[1].settings.letterhead'), "");
   check("الترحيل متكرر بلا أثر: فورمة الشركة الأولى كما هي", w14.eval('state.companies[0].settings.letterhead===letterheadDefault()'), true);
   /* مسوّدة: حفظ، ترقيم «ك»، تعديل، حفظ ثانٍ */
-  /* الحفظ ينتظر رقم الكتاب من الخادم (هنا عدّاد الفحص) — فيُنتظر */
-  await w14.eval('switchView("form"); el("lfTo").value="مديرية التربية"; el("lfSubject").value="تأييد"; el("lfTitle").value="كتاب ١"; lfApplyTpl("gov");'+
+  /* الحفظ ينتظر رقم الكتاب من الخادم (هنا عدّاد الفحص) — فيُنتظر.
+     سنة العدد من تاريخ الكتاب، وتاريخه يُثبَّت صراحةً (كان يأخذ اليوم فيسقط الفحص في غير ٢٠٢٦) */
+  await w14.eval('switchView("form"); el("lfDate").value="2026-09-20"; el("lfTo").value="مديرية التربية"; el("lfSubject").value="تأييد"; el("lfTitle").value="كتاب ١"; lfApplyTpl("gov");'+
     'el("lfEditor").querySelectorAll("p")[3].innerHTML="نص <b>عريض</b> <script>x()<\/script><span onclick=y()>و</span>"; lfSave();');
   let LT1=J('C().letters[0]');
   check("أول كتاب يأخذ العدد ك-السنة-001", LT1.no, "ك-2026-001");
@@ -731,7 +751,7 @@ try{
   await w14.eval('el("lfTo").value="مديرية الصحة"; lfSave();');
   LT1=J('C().letters[0]');
   check("إعادة الحفظ تعدّل الكتاب نفسه (لا نسخة ثانية)", w14.eval('C().letters.length')+" / "+LT1.to+" / "+(LT1.editedAt?"معدّل":"—"), "1 / مديرية الصحة / معدّل");
-  await w14.eval('lfReset(); lfSave();');
+  await w14.eval('lfReset(); el("lfDate").value="2026-09-21"; lfSave();');
   check("كتاب جديد يأخذ العدد التالي", w14.eval('C().letters[1].no'), "ك-2026-002");
   /* الحفظ والاستعادة */
   const lfBefore=w14.eval('JSON.stringify({l:C().letters, h:S().letterhead})');
@@ -771,8 +791,9 @@ try{
   /* ---- ١٥) المجموعة أ: قفل الشهر، سجل التدقيق، التنبيهات، البحث الشامل ---- */
   group("١٥ · قفل الشهر وسجل التدقيق والتنبيهات والبحث الشامل");
   const w15=await boot();
-  /* الشهر السابق لليوم الحقيقي: منتهٍ دائماً فيُقفل، وثابت النتيجة بأي يوم يُشغَّل فيه الفحص */
-  const T0_15=new Date(), PM_15=new Date(T0_15.getFullYear(),T0_15.getMonth()-1,1), PY_15=PM_15.getFullYear(), PMO_15=PM_15.getMonth()+1;
+  /* الشهر السابق لليوم: منتهٍ فيُقفل. «اليوم» مثبَّت (٣ تشرين الأول ٢٠٢٦) لا ساعة الجهاز —
+     كان مشتقاً منها فتتغيّر بيانات الفحص كل شهر، وسقوطٌ في شهرٍ لا يُعاد في الذي يليه */
+  const T0_15=new Date(pinToday(w15,"2026-10-03")+"T12:00:00"), PM_15=new Date(T0_15.getFullYear(),T0_15.getMonth()-1,1), PY_15=PM_15.getFullYear(), PMO_15=PM_15.getMonth()+1;
   const pm_15=PY_15+"-"+String(PMO_15).padStart(2,"0"), pDay_15=d=>pm_15+"-"+String(d).padStart(2,"0");
   /* يوم عمل من الشهر السابق (ليس جمعة) */
   let wd_15=10; while(new Date(PY_15,PMO_15-1,wd_15).getDay()===5) wd_15++;
@@ -1075,6 +1096,9 @@ try{
   group("١٩ · لوحة البداية — بطاقة لكل جهة بأرقامها، والدخول، والاختيار المحفوظ، والجهة الفارغة");
   const w19=await boot();
   w19.__rows=Object.assign({},ROWS17,{documents:[]});
+  /* بيانات اللوحة على أيلول ٢٠٢٦، وأرقام البطاقات «اليوم»: اليوم مثبَّت داخل أيلول (١٥) وفيه غياب.
+     قبل التثبيت كانت البطاقات تُقارَن بيومٍ بلا بيانات (كل شيء حاضر وصفر غياب) فتمرّ لغير ما تدّعيه */
+  pinToday(w19,"2026-09-15");
   w19.eval('state=ensureFields(dbBuildState(__rows)); curDate="2026-09-15"; scopeBld=""; try{localStorage.removeItem(scopeChoiceKey());}catch(e){} bootView();');
   const W19=x=>w19.eval(x), J19=x=>JSON.parse(w19.eval("JSON.stringify("+x+")"));
   W19('switchView("home");');
@@ -1083,10 +1107,10 @@ try{
   const st19=J19('homeBuildings().map(function(b){ var x=homeStats(b); return [x.present,x.active,x.absent]; })');
   const ex19=J19('homeBuildings().map(function(b){ return withScope(b.id,function(){ var t=todayISO(), x=compute(t); return [x.attendance, C().workers.filter(function(w){return isActiveWorker(w)&&inService(w,t);}).length, x.absent]; }); })');
   check("أرقام كل بطاقة = الجرد نفسه داخل جهتها (الحاضرون، المستمرون، الغياب)", JSON.stringify(st19), JSON.stringify(ex19));
+  check("…وهي أرقام يومٍ فيه غياب، لا يومٍ فارغ", JSON.stringify(st19), "[[1,2,1],[0,1,1]]");
   /* القديمة معتمدة كل أيلول، والجديدة ١–١٠ فقط (يوم ١٢ مناطقها مختلفة الاعتماد — لا يُعدّ معتمداً) */
-  const t19=W19('todayISO()');
-  check("آخر يوم معتمد لكل جهة (والمعتمد جزئياً لا يُعدّ)", JSON.stringify(J19('homeBuildings().map(function(b){ return homeStats(b).last; })')),
-    JSON.stringify([t19<"2026-09-30"?t19:"2026-09-30","2026-09-10"]));
+  check("آخر يوم معتمد لكل جهة حتى اليوم (والمعتمد جزئياً لا يُعدّ)", JSON.stringify(J19('homeBuildings().map(function(b){ return homeStats(b).last; })')),
+    JSON.stringify(["2026-09-15","2026-09-10"]));
   check("الرقم الكبير رقم الحاضرين، وتحته «من N مستمر»", W19('(function(){var c=document.querySelector("#hmBlds .hcard"); return c.querySelector(".big .v").textContent+"|"+c.querySelector(".big .of").textContent;})()'),
     W19('fmtNum(homeStats(homeBuildings()[0]).present)+"|من "+fmtNum(homeStats(homeBuildings()[0]).active)+" مستمر"'));
   check("بلا شعار: عنوان نصي وحده بلا صورة ولا مربع", W19('el("hmId").classList.contains("nologo")+","+document.querySelectorAll("#hmId img").length+","+el("hmTitle").textContent'), "true,0,شركة الفحص");
@@ -1102,7 +1126,7 @@ try{
   W19('el("homeBtn").click();');
   check("العودة للوحة: البطاقة المختارة معلَّمة والوصول السريع عليها", W19('document.querySelector("#hmBlds .hcard.cur .hgo").textContent+"|"+el("hmQuick").querySelector(".qon b").textContent'), "البناية الجديدة|البناية الجديدة");
   W19('document.querySelector(\'#hmQuick [data-q="report"]\').click();');
-  check("«كشف الرواتب» من الوصول السريع: كشف الشهر الحالي للجهة المختارة", W19('[currentView(), el("rpFrom").value===monthRange(0)[0], RP && RP.rows.map(function(r){return r.id;}).join("+")].join(",")'), "report,true,c");
+  check("«كشف الرواتب» من الوصول السريع: كشف الشهر الحالي للجهة المختارة", W19('[currentView(), el("rpFrom").value, el("rpTo").value, RP && RP.rows.map(function(r){return r.id;}).join("+")].join(",")'), "report,2026-09-01,2026-09-30,c");
   /* الفتح القادم: الاختيار المحفوظ يُستعاد وتُفتح اللوحة */
   W19('scopeBld=""; scopeDirty(); bootView(); switchView("daily"); startView();');
   check("الفتح القادم لمن يرى جهتين: اللوحة، على اختياره المحفوظ", W19('currentView()+","+scopeBld'), "home,bN");
@@ -1330,8 +1354,8 @@ try{
   w26.eval('S().signer="حسين"; S().role="المسؤول الإداري"; S().cmN2="حسين"; S().signature="data:image/png;base64,AAAA"; S().ltSigner="فهد صبري"; S().ltRole="المدير"; '+
     'CF().buildings[0].settings={signer:"حسين",role:"المسؤول الإداري",cmT1:S().cmT1,cmT2:S().cmT2,cmT3:S().cmT3,cmSig:"2",defNote:S().defNote};');
   const W26=id=>'CF().workers.find(function(x){return x.id==="'+id+'";})';
-  check("db.js: المفاتيح العشرة وحدها، والفارغ غياب", w26.eval('JSON.stringify(dbBldSettings({signer:"أ",salary:5,cmN1:"  ",theme:"#000",cmSig:"3",defNote:"ن",x:{a:1}}))'),
-    JSON.stringify({signer:"أ",cmSig:"3",defNote:"ن"}));
+  check("db.js: المفاتيح الإحدى عشرة وحدها (والعنوان منها)، والفارغ غياب", w26.eval('JSON.stringify(dbBldSettings({signer:"أ",salary:5,cmN1:"  ",theme:"#000",cmSig:"3",defNote:"ن",address:"ع",x:{a:1}}))'),
+    JSON.stringify({signer:"أ",cmSig:"3",defNote:"ن",address:"ع"}));
   check("جهة مُلئت بقيم الشركة: ورقها كما كان (حسين بتوقيعه، والتوقيع على العضو الثاني)", w26.eval('var s=setOfW('+W26("a")+'); [s.signer,s.role,sigOwner(s),committeeSeats('+W26("a")+').map(function(x){return x.sig?1:0;}).join("")].join("|")'),
     "حسين|المسؤول الإداري|true|010");
   check("جهة لها قيمها: تُستعمل، والمنصب يرث، وما ليس من مفاتيحها لا يُجزّأ", w26.eval('var s=setOfW('+W26("b")+'); '+
@@ -1352,6 +1376,24 @@ try{
     'CF().buildings.forEach(function(b){ b.settings.cmN1="سالم"; }); var v2=setOfView(); CF().buildings.forEach(function(b){ delete b.settings.cmN1; }); '+
     '[v.cmN2, v.cmT2===S().cmT2, v.cmSig, v2.cmN1].join("|")'), "|true||سالم");
   check("الملاحظة الاعتيادية لجهتها، والموروثة لجهة لم تضعها", w26.eval('[setOfB("b2").defNote, setOfB("b3").defNote===S().defNote].join("|")'), "ملاحظة الجديدة|true");
+  /* العنوان (المفتاح الحادي عشر): يُورَث كالمناصب — ما وُجد يُستعمل، والفارغ عنوان الشركة */
+  w26.eval('S().address="البصرة — المقرّ"; CF().buildings[1].settings.address="البصرة — الجبيلة"; var P=CanvasRenderingContext2D.prototype;'+
+    ' if(!P.__f26){ P.__f26=P.fillText; P.fillText=function(t){ if(window.__T26) __T26.push(String(t)); return P.__f26.apply(this,arguments); }; }');
+  const ADR26=b=>{ w26.eval('setScope("'+b+'"); switchView("daily"); window.__T26=[]; drawSheet();');
+    const sheet=w26.eval('var t=__T26.join("\\n"); window.__T26=null; t'), z=unzipStored(new Uint8Array(w26.eval("Array.from(dailyDocx())"))),
+      x=Object.keys(z).filter(k=>/\.xml$/.test(k)).map(k=>z[k]).join(""), a=w26.eval('setOfView().address');
+    return [b||"الكل", a, sheet.indexOf(a)>=0, x.indexOf(a)>=0, sheet.indexOf("البصرة — "+(a.indexOf("الجبيلة")>0?"المقرّ":"الجبيلة"))<0].join("/"); };
+  check("العنوان في ترويسة ورقة الجرد («الموقع») وWord: الجديدة بعنوانها، والثالثة بلا عنوان ترث، و«الكل» بعنوان الشركة",
+    [ADR26("b2"),ADR26("b3"),ADR26("")].join(" · "),
+    "b2/البصرة — الجبيلة/true/true/true · b3/البصرة — المقرّ/true/true/true · الكل/البصرة — المقرّ/true/true/true");
+  check("اللوحة: من يرى جهة واحدة يرى عنوانها (أو الموروث إن لم تضعه)، ومن يرى أكثر يرى عنوان الشركة", w26.eval('switchView("home"); var me=ME, hd=function(){ renderHome(); var a=document.querySelector("#hmId .addr"); return a?a.textContent:""; };'+
+    ' var all=hd(); var r={id:"r-a",companyId:"coB",name:"إداري",color:"#000",perms:new Set(["structure.manage"]),allZones:false,zones:new Set(["z2"]),isSystem:false,sortOrder:9};'+
+    ' ME={id:"t-a",email:"",name:"أحمد",active:true,perms:new Set(["structure.manage"]),zones:new Set(["z2"]),allZones:false,zoneNames:{},roles:[r]}; scopeDirty(); var one=hd();'+
+    ' ME.zones=new Set(["z3"]); r.zones=new Set(["z3"]); scopeDirty(); var inh=hd(); ME=me; scopeDirty(); renderHome(); JSON.stringify([all,one,inh])'),
+    JSON.stringify(["البصرة — المقرّ","البصرة — الجبيلة","البصرة — المقرّ"]));
+  check("لوحة الجهة: حقل العنوان فارغاً بعنوان الشركة باهتاً «موروثة من الشركة»، وتحته أين يظهر", w26.eval('switchView("settings"); fillSettings(); el("bsBld").value="b3"; el("bsBld").dispatchEvent(new Event("change"));'+
+    ' var q=el("bsPanel").querySelector("[data-bk=address]"); JSON.stringify([q.value, q.placeholder, el("bsPanel").querySelector("[data-inh=address]").textContent,'+
+    ' /ترويسة ورقة الجرد.*اللوحة/.test(q.closest(".field").nextElementSibling.textContent)])'), JSON.stringify(["","البصرة — المقرّ","موروثة من الشركة",true]));
   check("لوحة الجهة: المنصب الفارغ «موروثة من الشركة» باهتاً، والموقّع الفارغ «غير محدَّد» بلا اسم مستعار", w26.eval('switchView("settings"); fillSettings(); el("bsBld").value="b3"; el("bsBld").dispatchEvent(new Event("change")); '+
     'var q=function(k){return el("bsPanel").querySelector("[data-bk="+k+"]");}, t=function(k){return el("bsPanel").querySelector("[data-inh="+k+"]").textContent;}; '+
     'JSON.stringify([el("bsPanel").classList.contains("hidden"), el("bsBld").options.length, q("signer").value, q("signer").placeholder, t("signer").indexOf("غير محدَّد")===0, q("cmN2").placeholder, q("cmT1").placeholder===S().cmT1, t("cmT1"), q("cmSig").value])'),

@@ -179,6 +179,15 @@ function fixture(o){
 function W(w,src){ w.__in=undefined; return w.eval(src); }
 /* النوافذ صارت داخل الصفحة (لا alert/confirm): الفحص ينتظر ظهورها ويضغط زرها */
 const tick=ms=>new Promise(r=>setTimeout(r,ms||5));
+/* «اليوم» داخل إطار الفحص يُثبَّت صراحةً: فحصٌ بياناته على تواريخ ثابتة لا يقرأ ساعة الجهاز.
+   الساعة تجري من اليوم المثبَّت (todayISO وnowHM وmonthRange كلها تتفق عليه). يُعاد اليوم المثبَّت. */
+function pinToday(w,iso){
+  w.eval('(function(){ var R=window.__RealDate||Date; window.__RealDate=R; var off=new R("'+iso+'T09:30:00").getTime()-R.now();'+
+    ' function D(){ if(!(this instanceof D)) return new R(R.now()+off).toString(); var a=[].slice.call(arguments);'+
+    ' return a.length ? new (Function.prototype.bind.apply(R,[null].concat(a)))() : new R(R.now()+off); }'+
+    ' D.prototype=R.prototype; D.now=function(){ return R.now()+off; }; D.UTC=R.UTC; D.parse=R.parse; window.Date=D; })()');
+  return w.eval("todayISO()");
+}
 async function dlgWait(w){
   for(let i=0;i<200;i++){ const b=w.document.getElementById("dlgBack");
     if(b && !b.classList.contains("hidden")) return true; await tick(5); }
@@ -439,9 +448,11 @@ try{
     doc14.indexOf("الجهة المستلمة")>=0 && doc14.indexOf("لا تُمنح معلومات إضافية")>=0, true);
 
   const w15=await boot();
+  /* «اليوم» مثبَّت قبل تاريخ النقل (١ آذار ٢٠٢٧): كان الفحص يقرأ ساعة الجهاز فيسقط بعد ذلك التاريخ */
+  pinToday(w15,"2026-09-15");
   const r15=only(w15,fixture({workers:[WK({status:"منقول",statusChangedAt:"2027-03-01"})]}));
   check("١٥) «منقول» بتاريخ لاحق — يبقى بالجرد اليوم",
-    w15.eval("inService(C().workers[0],todayISO())"), true);
+    w15.eval("[todayISO(), inService(C().workers[0],todayISO())].join()"), "2026-09-15,true");
   check("١٥) «منقول» بتاريخ لاحق — راتبه كامل", r15.net, 335000);
   check("١٥) يختفي بعد تاريخه", w15.eval('inService(C().workers[0],"2027-03-02")'), false);
 

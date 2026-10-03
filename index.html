@@ -1767,7 +1767,7 @@ tr.rowneg td{background:var(--absent-bg)}
             <label class="field"><span>حرف الشعار</span><input type="text" id="setMark" maxlength="2" placeholder="ج"></label>
             <label class="field"><span>عنوان الكشف</span><input type="text" id="setTitle"></label>
           </div>
-          <label class="field"><span>العنوان / الموقع</span><input type="text" id="setAddress" placeholder="مثال: البصرة — المعمل"></label>
+          <label class="field"><span>العنوان / الموقع</span><input type="text" id="setAddress" placeholder="مثال: البصرة — المعمل"><small class="inh">ترثه كل جهة لم تضع عنوانها في «إعدادات الجهة».</small></label>
           <label class="field"><span>شعار الشركة (يظهر على الوصولات)</span>
             <input type="file" id="setLogoFile" accept="image/png,image/jpeg,image/webp"></label>
           <div class="actions">
@@ -1843,7 +1843,7 @@ tr.rowneg td{background:var(--absent-bg)}
           <select id="bsBld" class="bsbld hidden" aria-label="الجهة التي تضبطها"></select></div>
         <div class="panel-body">
           <p class="hint" style="margin-top:0">لكل بناية موقّع ورقتها ولجنتها وملاحظتها الاعتيادية: ورقة الجرد وكل وصل يقرأ إعداد جهة
-            عامله. المناصب والملاحظة إن تُركت فارغة ورثت قيمة الشركة (تظهر باهتة). <b>والأسماء لا تُورَث:</b> اسمٌ لم يُحدَّد يُطبع
+            عامله. المناصب والملاحظة والعنوان إن تُركت فارغة ورثت قيمة الشركة (تظهر باهتة). <b>والأسماء لا تُورَث:</b> اسمٌ لم يُحدَّد يُطبع
             فراغاً يُوقَّع باليد.</p>
           <h3 class="subhead">التوقيع</h3>
           <div class="row2">
@@ -1870,6 +1870,9 @@ tr.rowneg td{background:var(--absent-bg)}
               <option value="2">العضو الثاني (الوسط)</option><option value="3">العضو الثالث (يسار)</option></select></label>
           <h3 class="subhead">الملاحظة الاعتيادية (ورقة الجرد)</h3>
           <label class="field"><textarea data-bk="defNote" rows="3" aria-label="الملاحظة الاعتيادية"></textarea><small class="inh" data-inh="defNote"></small></label>
+          <h3 class="subhead">العنوان / الموقع</h3>
+          <label class="field"><input type="text" data-bk="address" aria-label="عنوان الجهة"><small class="inh" data-inh="address"></small></label>
+          <p class="hint" style="margin-top:0">يظهر في ترويسة ورقة الجرد (خانة «الموقع»، طباعةً وWord) وفي اللوحة.</p>
         </div>
       </div>
 
@@ -2626,7 +2629,7 @@ function S(){ return C().settings; }
    إعدادها، وأكثر من جهة ← ورقة على مستوى الشركة يوقّعها موقّع الكتب الرسمية، ولجنتها ما اتّفقت عليه الجهات
    وإلا خانات بأسماء فارغة ومناصب موروثة. شركة بلا جهات أصلاً (بيانات قديمة) تبقى على إعداداتها كما كانت.
    ما عدا هذه المفاتيح يُقرأ من S() كما هو، ولا يُجزّأ. */
-const BLD_INHERIT=["cmT1","cmT2","cmT3","defNote"], BLD_PERSON=["signer","role","cmN1","cmN2","cmN3","cmSig"];
+const BLD_INHERIT=["cmT1","cmT2","cmT3","defNote","address"], BLD_PERSON=["signer","role","cmN1","cmN2","cmN3","cmSig"];
 const BLD_KEYS=BLD_INHERIT.concat(BLD_PERSON);
 function bldById(id){ return id ? (CF().buildings||[]).find(b=>b.id===id)||null : null; }
 function bldOwn(b,k){ const v=b && b.settings ? b.settings[k] : null; return v!=null && String(v).trim()!=="" ? String(v) : ""; }
@@ -4629,6 +4632,7 @@ Object.keys(setMap).forEach(id=>{
     if(setMap[id]==="printMode"){ sigCache.src=null; redrawSheets(); if(RP) renderReport(); }
     el("tbCompany").textContent=S().company;
     el("tbMark").textContent=S().mark||"ج";
+    if(BLD_INHERIT.includes(setMap[id])) bsRender();      // ما ترثه الجهات: يتجدّد الباهت في «إعدادات الجهة»
     saveCompany("الإعدادات"); refresh();
   });
 });
@@ -12332,7 +12336,7 @@ function renderLockBar(){
   const mn=esc(monthNameOf(RP.from));
   if(L){
     const dr=lockDrift(L,RP);   // بلا صورة (لا month.lock): السطر يقول إنه مقفل، ولا خانة فرق
-    box.innerHTML='<div class="lockbar on"><span><b>راتب '+mn+' مقفل</b> منذ '+esc(L.at)+
+    box.innerHTML='<div class="lockbar on"><span><b>راتب '+mn+' مقفل</b>'+(L.at?' منذ '+esc(L.at):'')+
       ' — الحضور والوصولات والحالات بتواريخه للقراءة فقط.</span><button class="btn sm" id="rpUnlock">فتح القفل…</button></div>'+
       (dr.length?'<div class="errbox"><b>تغيّر صافي '+fmtNum(dr.length)+' عامل منذ القفل</b> — تغيير من خارج الشهر '+
         '(راتب عامل، سياسة استقطاع، أيام الراحة…):<br>'+
@@ -13795,7 +13799,9 @@ function renderHome(){
            : '<img src="'+esc(st.logo)+'" style="height:64px;width:auto" alt="">';
   }
   el("hmId").className="hm-id"+(logo?"":" nologo");
-  el("hmId").innerHTML=logo+'<div><h1 id="hmTitle">'+name+'</h1>'+(st.address?'<div class="addr">'+esc(st.address)+'</div>':'')+'</div>';
+  /* العنوان عنوان ما يُعرض: جهةٌ واحدة بعنوانها (أو الموروث)، وأكثر من جهة بعنوان الشركة */
+  const addr=String((bs.length===1 ? setOfB(bs[0].id) : st).address||"");
+  el("hmId").innerHTML=logo+'<div><h1 id="hmTitle">'+name+'</h1>'+(addr?'<div class="addr">'+esc(addr)+'</div>':'')+'</div>';
   el("hmDate").innerHTML='<div class="dn">'+esc(dayNameOf(today))+'</div><div class="dd">'+esc(dateTextOf(today))+'</div>';
   const cur=multi ? bs.find(b=>b.id===scopeBld) : bs[0];
   const chose=multi && scopeChoiceGet()!==null;       // «اختيارك» لا يُكتب قبل أن يختار

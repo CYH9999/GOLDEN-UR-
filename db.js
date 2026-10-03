@@ -558,7 +558,9 @@ function dbScopeLocks(st) {
    الرفض لا يُبلع: الخطأ يُعاد برسالة عربية — نص الخادم كما هو إن كان عربياً (الحُرّاس
    كقفل الشهر ترفع رسائلها بالعربية)، وإلا ترجمة مفهومة لرمزه — وتُبلَّغ الواجهة
    (dbOnWrite) فتعرضه وتعيد مزامنة بياناتها. لا ترسل الكتابات updated_by ولا updated_at
-   ولا seq: الخادم يختمها ويعطيها.
+   (يختمهما الخادم على workers وdocuments وday_states وday_zones وحدها) ولا seq (يعطيه الخادم)،
+   ولا decided_by/decided_at ولا granted_by/granted_at (حارساهما يختمانها). وما عداها مما يُنسب
+   إلى أحد يُرسل من هنا صراحةً: created_by وdeleted_by وconfirmed_by/at وadded_by وaudit_log.user_id.
    بلا خادم (الفحوص) الكتابة لا تفعل شيئاً، والتعديل يبقى بالذاكرة كما كان. */
 function dbLocal() {
   return !sb || (typeof window !== "undefined" && !!window.__JARD_TEST__);
@@ -943,9 +945,9 @@ async function dbAssetUpload(kind, dataUrl) {
 function dbCompanyRowSize(c) { return new TextEncoder().encode(JSON.stringify(dbCompanyRow(c).settings)).length; }
 
 /* ---- إعدادات الجهة (buildings.settings): مفاتيح قليلة هي بطبيعتها للبناية — موقّع ورقة الجرد،
-   ولجنة العقوبات والإنجازات، والملاحظة الاعتيادية. ما وُجد منها في الجهة يُستعمل وإلا فقيمة الشركة؛
-   والفارغ غياب (يرث). ما عداها للشركة ولا يُجزّأ — ولا يُكتب في الجهة مفتاح غير هذه. */
-const DB_BLD_KEYS = ["signer", "role", "cmT1", "cmN1", "cmT2", "cmN2", "cmT3", "cmN3", "cmSig", "defNote"];
+   ولجنة العقوبات والإنجازات، والملاحظة الاعتيادية، وعنوانها. المناصب والملاحظة والعنوان: ما وُجد منها
+   في الجهة يُستعمل وإلا فقيمة الشركة؛ والأسماء لا تُورَث. ما عداها للشركة ولا يُجزّأ — ولا يُكتب في الجهة مفتاح غير هذه. */
+const DB_BLD_KEYS = ["signer", "role", "cmT1", "cmN1", "cmT2", "cmN2", "cmT3", "cmN3", "cmSig", "defNote", "address"];
 const DB_BLD_LAST = {};
 function dbBldSettings(o) {
   const r = {};
