@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- «أضف إلى الشاشة الرئيسية»: يُفتح كتطبيق بلا شريط عنوان. لا service worker ولا عمل بلا اتصال — البيانات مشتركة -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4B2E83" media="(max-width:700px)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="الجرد اليومي">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
 <title>نظام الجرد اليومي — v4.0</title>
 <!-- الخادم: مكتبة Supabase ثم طبقة الخادم db.js — كل استدعاء للخادم يمرّ من db.js حصراً -->
 <!-- supabase-js مثبّتة على الإصدار 2.117.2 (صدر 2026-09-25) — لا «@2» المفتوح، حتى لا يتغيّر
@@ -276,6 +283,9 @@ label.field>span,.field>span:first-child{display:block;font-size:var(--fs-sm);co
 .saved{font-size:var(--fs-sm);color:var(--ink-2);align-self:center}
 .hint{font-size:var(--fs-sm);color:var(--ink-2);margin-top:6px;line-height:1.7}
 .mini{font-size:var(--fs-xs);color:var(--ink-2)}
+/* رقم الجرد خانة أولى ضيّقة بأرقام متساوية العرض */
+.seqc{width:1%;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:var(--fw-bold)}
+th.seqc{white-space:normal;line-height:1.25;min-width:3.2em}
 .issuer{font-size:var(--fs-xs);color:var(--ink-2);font-weight:400;direction:rtl;text-align:right;margin-top:2px;line-height:1.35}
 .issuer span{white-space:nowrap}
 /* سطر بيان المدة وملاحظة التذييل بكشف الرواتب والجرد التفصيلي */
@@ -739,6 +749,191 @@ tr.rowneg td{background:var(--absent-bg)}
   .panel-head{padding:var(--sp-2) var(--sp-3)}
   .panel-body{padding:var(--sp-3)}
   .split[style]{grid-template-columns:1fr !important}
+}
+
+/* =================== الهاتف (٧٠٠ بكسل فأقل): تصميم لا تصغير ===================
+   عناصر الهاتف تُنشأ مخفية وتظهر تحت الحدّ وحده؛ وكل ما يلي داخل الاستعلام، فسطح المكتب كما هو.
+   شريط سفلي (اللوحة · جرد اليوم · العمال · الوثائق · المزيد)، اللوحات بالحاجة لا بترتيب الصفحة
+   وتُطوى، الإجراء الأساسي ملتصق بأسفل لوحته والبحث بأعلى قائمته، الجداول بطاقات، المعاينات ملء الشاشة. */
+.bnav,.msheet,.fsview,.pcol,.fsbtn,.docsw,.mbar,.mrow{display:none}
+@media(max-width:700px){
+  :root{--bnav-h:58px;--bnav-off:calc(var(--bnav-h) + env(safe-area-inset-bottom,0px));--stick:0px}
+  html.kbd{--bnav-off:0px}
+  .app{padding-bottom:var(--bnav-off)}
+  /* التنقل: الشريط السفلي مكان شريط التبويبات */
+  .side{display:none}
+  .app,html.side-mini .app{grid-template-rows:auto 1fr;grid-template-areas:"top" "main"}
+  .bnav{display:flex;position:fixed;inset-inline:0;bottom:0;z-index:50;height:var(--bnav-off);padding-bottom:env(safe-area-inset-bottom,0px);
+    background:var(--panel);border-top:1px solid var(--line)}
+  html.kbd .bnav{display:none}
+  .bnav button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    color:var(--ink-2);font-size:11.5px;font-weight:var(--fw-medium);line-height:1.2}
+  .bnav button span{white-space:nowrap}
+  .bnav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .bnav button[aria-current="page"]{color:var(--brand-text);font-weight:var(--fw-bold);box-shadow:inset 0 2px 0 var(--brand)}
+  .bnav button:focus-visible{outline:2px solid var(--gold);outline-offset:-3px}
+  /* «المزيد»: لوح ينزلق من الأسفل، شبكة بالأسماء كاملة لا شريط يُسحب */
+  .msheet{display:block;position:fixed;inset:0;z-index:80}
+  .msheet.hidden{display:none}
+  .msh-back{position:absolute;inset:0;background:rgba(18,12,30,.45)}
+  .msh{position:absolute;inset-inline:0;bottom:0;max-height:86vh;overflow:auto;background:var(--panel);
+    border-radius:var(--r-lg) var(--r-lg) 0 0;padding:4px 12px calc(12px + env(safe-area-inset-bottom,0px));animation:mshUp .16s var(--ease)}
+  @keyframes mshUp{from{transform:translateY(24px);opacity:.6}}
+  .msh-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:52px}
+  .msh-head b{font-size:var(--fs-lg)}
+  .msh-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .msh-grid button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:84px;padding:10px 6px;
+    border:1px solid var(--line);border-radius:var(--r-md);text-align:center;font-size:var(--fs-sm);font-weight:var(--fw-medium);color:var(--ink);line-height:1.35}
+  .msh-grid button[aria-current="page"]{border-color:var(--brand);color:var(--brand-text);background:var(--brand-lite)}
+  .msh-grid svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .msh-acct{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:grid;gap:8px}
+  .msh-acct .who{font-weight:var(--fw-bold)} .msh-acct .mini{line-height:1.7}
+  .msh-acct .row{display:flex;gap:8px} .msh-acct .row .btn{flex:1}
+  /* الشريط العلوي سطر واحد: اللوحة والحساب صارا في الشريط السفلي و«المزيد»، والتاريخ لجرد اليوم وحده */
+  .topbar{padding:6px 12px;gap:6px 8px;min-height:52px}
+  .topbar .brand{flex:1 1 auto;font-size:var(--fs-md);gap:8px}
+  .topbar .brand .mk{width:32px;height:32px;font-size:var(--fs-md)}
+  .topbar .brand>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .topbar .spacer,.homebtn,.ubox,.gsopen kbd{display:none!important}
+  .gsopen{min-height:44px;min-width:44px;padding:0 12px}
+  .bellbtn{width:44px;height:44px}
+  .dbbadge{padding:4px 10px;font-size:var(--fs-xs)}
+  /* مؤشر الحفظ: نقطة وحدها ما دام كل شيء محفوظاً، ونصّه حين يكون هناك ما يُقال */
+  .dbbadge.ok{font-size:0;gap:0;padding:0;width:28px;height:28px;justify-content:center;border-color:transparent}
+  html:not([data-view="daily"]) .datebox,html:not([data-view="daily"]) .hbadge{display:none}
+  .datebox{order:10}
+  .datebox input{min-height:40px;font-size:16px}
+  /* شريط النطاق: مبدّل الجهة وحده (الرول والنطاق في «المزيد») */
+  .scopebar{padding:8px 12px}
+  .scopebar .sb-item{display:none}
+  .scopebar:not(:has(.sb-sw:not(.hidden))){display:none}
+  .scopebar .sb-sw{display:flex;width:100%}
+  .scopebar .sb-sw button{flex:1 1 0;min-height:44px}
+  /* العدّاد: ثلاثة في السطر وأرقام أصغر — نصف ارتفاعه */
+  .tally{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:8px 12px 0}
+  .tally>div{padding:5px 8px;border-radius:var(--r-sm)}
+  .tally>div::before{height:2px}
+  .tally .k{font-size:11px}
+  .tally .v,.tally .t-hero .v,.tally .t-bld .bz .v{font-size:var(--fs-lg);line-height:1.25}
+  .tally>div{order:4} .tally .t-hero{order:0;grid-column:span 2} .tally .t-total{order:1} .tally>div:nth-child(2){order:2}
+  .tally .t-bld{order:3;grid-column:1/-1;padding-bottom:5px}
+  .tally .t-bld .bz{margin-top:2px}
+  .wrap{padding:12px 12px 16px}
+  /* اللوحات: تُطوى برأسها، وحالتها لهذا الجهاز */
+  .panel{border-radius:var(--r-md);margin-bottom:12px;box-shadow:none}
+  .panel-head{min-height:52px;padding:6px 6px 6px 12px;gap:6px 8px}
+  .panel-head>*{order:3}
+  .panel-head>h2{order:0;cursor:pointer;flex:1 1 0;min-width:0;min-height:40px}
+  .panel-head.foldable>h2{flex:0 1 auto}
+  .panel-body{padding:12px}
+  .pcol{display:inline-flex;order:1!important;align-items:center;justify-content:center;width:44px;height:44px;flex:none;border-radius:var(--r-md);color:var(--ink-2)}
+  .pcol svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+  .panel.pc-shut .pcol svg{transform:rotate(90deg)}
+  .panel-head>.mini,.panel-head>.saved,.panel-head>.h2tag,.panel-head>.stag{order:0}
+  .panel-head>input,.panel-head>select,.panel-head>label{order:5;flex:1 1 100%!important;min-width:0!important;max-width:none}
+  /* سطر العنوان ثم سطر الحقول: فاصل سطر بين ما ترتيبه دون ٤ وما فوقه */
+  .panel-head:has(>input,>select,>label)::after{content:"";order:4;flex:0 0 100%;height:0}
+  .panel-head:has(>input[type="text"])>select{flex:0 1 38%!important}
+  .panel-head:has(>select)>input[type="text"]{flex:1 1 40%!important}
+  .panel-head>h2{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:40px}
+  .panel-head>h2::before{display:inline-block;vertical-align:middle;margin-inline-end:8px;margin-top:-3px}
+  .mrow{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+  .mrow>.btn{flex:1 1 auto}
+  .panel-head>.btn{order:6;flex:1 1 auto}
+  .actions>.btn{flex:1 1 auto}
+  .panel.pc-shut>:not(.panel-head){display:none!important}
+  .panel.pc-shut>.panel-head{border-bottom:0}
+  .panel.pc-shut>.panel-head>:not(h2):not(.pcol):not(.mini):not(.saved):not(.h2tag){display:none!important}
+  /* البحث ملتصق بأعلى القائمة الطويلة */
+  .panel:not(.pc-shut)>.panel-head:has(>input[type="text"]){position:sticky;top:0;z-index:6}
+  /* ترتيب الحاجة: ما يُقرأ أولاً يُعرض أولاً */
+  #view-daily,#view-people,#view-passes,#view-leaves,#view-penalties,#view-achievements,#view-materials{display:flex;flex-direction:column}
+  #view-daily>.split,#view-daily>.split>div:not(.sheetwrap),#view-people>.split,#view-people>.split>div:not(.panel),
+  #view-passes>.split,#view-passes>.split>div:not(.sheetwrap),#view-leaves>.split,#view-leaves>.split>div:not(.sheetwrap),
+  #view-penalties>.split,#view-penalties>.split>div:not(.sheetwrap),#view-achievements>.split,#view-achievements>.split>div:not(.sheetwrap),
+  #view-materials>.split,#view-materials>.split>div:not(.sheetwrap){display:contents}
+  #alertsPanel{order:0} #view-daily .panel:has(#roster){order:1} #view-daily .panel:has(#notes){order:2} #view-daily .sheetwrap{order:3}
+  #view-people .panel:has(#dirTable){order:1} #view-people .panel:has(#wTable){order:2}
+  #view-people .panel:has(#zoneList){order:3} #view-people .panel:has(#secTable){order:4}
+  #view-passes .split>div>.panel:first-child,#view-leaves .split>div>.panel:first-child,#view-penalties .split>div>.panel:first-child,
+  #view-achievements .split>div>.panel:first-child,#view-materials .split>div>.panel:first-child{order:1}
+  #view-materials .panel:has(#mtItems){order:2}
+  #view-passes .sheetwrap,#view-leaves .sheetwrap,#view-penalties .sheetwrap,#view-achievements .sheetwrap,#view-materials .sheetwrap{order:3}
+  #view-passes .split>div>.panel:not(:first-child),#view-leaves .split>div>.panel:not(:first-child),#view-penalties .split>div>.panel:not(:first-child),
+  #view-achievements .split>div>.panel:not(:first-child),#view-materials .panel:has(#issuesList){order:4}
+  #view-materials .panel:has(#catList){order:5}
+  .docsw{display:grid;order:-1;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:12px}
+  .docsw button{min-height:44px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);color:var(--ink-2);font-weight:var(--fw-medium)}
+  .docsw button[aria-current="page"]{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-text);font-weight:var(--fw-bold)}
+  /* الإجراء في متناول الإبهام: ملتصق بأسفل لوحته (فوق الشريط السفلي) ما دامت اللوحة ظاهرة */
+  .panel-body>.actions:last-child,.mbar{position:sticky;bottom:var(--bnav-off);z-index:5;background:var(--panel);
+    margin:12px -12px -12px;padding:10px 12px;border-top:1px solid var(--line)}
+  .mbar{display:flex;gap:10px;margin:0;border-radius:0 0 var(--r-md) var(--r-md)}
+  .mbar:not(:has(>.btn:not(.hidden))){display:none}
+  .mbar .btn{flex:1 1 0}
+  #addW,#addZone,#addSec{position:sticky;bottom:calc(var(--bnav-off) + 8px);z-index:5;width:100%;box-shadow:var(--sh-2)}
+  .sheetwrap{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+  .sheetwrap>.actions{position:sticky;bottom:var(--bnav-off);z-index:5;margin:0;padding:10px 0;background:var(--ground)}
+  .fsbtn{display:inline-flex;order:-1;align-self:flex-start}
+  /* مقاسات اللمس: ٤٤ بكسل في البعدين، وفراغ بين المتجاورين، وخطّ ١٦ لا يقرّب المتصفّح الصفحة عنده */
+  .btn,.btn.sm{min-height:44px}
+  .btn.sm{padding:0 14px;font-size:var(--fs-md)}
+  .actions{gap:10px}
+  input[type=text],input[type=date],input[type=time],input[type=number],input[type=search],input[type=tel],input[type=email],input[type=password],input:not([type]),select,textarea,
+  .tblwrap input,.tblwrap select,.mitem input[type=number]{font-size:16px;min-height:44px}
+  input[type=checkbox],input[type=radio]{width:22px;height:22px}
+  label:has(>input[type=checkbox]),label:has(>input[type=radio]){min-height:44px;display:inline-flex;align-items:center;gap:8px}
+  .states{gap:8px}
+  .states button{width:44px;height:44px}
+  .wcard{padding:6px 6px 6px 10px;min-height:58px}
+  .rchip button{min-width:44px;min-height:44px}
+  .hm-all button{min-height:44px;padding:10px 0}
+  .lftools .btn{min-width:44px} .lftools select{min-height:44px}
+  .mitem{min-height:48px;cursor:pointer}
+  .toast{bottom:calc(var(--bnav-off) + 12px)}
+  .rtnote{bottom:calc(var(--bnav-off) + 12px)}
+  /* الجداول بطاقات: الاسم بارز وتحته الحقول بوسومها — لا سحب أفقي (جداول القراءة وحدها) */
+  .tblwrap,.panel-body[style*="overflow-x"],.tscroll{max-height:none;overflow:visible;background:none}
+  .tblwrap table,.tblwrap.tight table{min-width:0}
+  table.tcards,table.tcards>tbody,table.tcards>tfoot{display:block}
+  table.tcards>thead{display:none}
+  table.tcards>tbody>tr,table.tcards>tfoot>tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 14px;padding:10px 12px;margin-bottom:8px;
+    border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+  table.tcards>tbody>tr.rowvar{background:var(--surface-2)}
+  table.tcards>tbody>tr>td,table.tcards>tfoot>tr>td{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;padding:0;border:0;
+    background:none!important;text-align:start;position:static;white-space:normal;overflow-wrap:anywhere}
+  table.tcards td::before{content:attr(data-l);color:var(--ink-2);font-size:11px;font-weight:var(--fw-bold);line-height:1.4}
+  table.tcards td.ltr{align-items:flex-end}
+  table.tcards td.tcn{order:-2;grid-column:1/-1;font-size:var(--fs-lg);font-weight:var(--fw-bold);color:var(--ink);flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px}
+  table.tcards td.seqc{width:auto;order:-1;grid-column:1/-1;flex-direction:row;align-items:baseline;gap:6px;margin-top:-6px;color:var(--ink-2);font-size:var(--fs-sm)}
+  table.tcards td.tcn::before,table.tcards td.tca::before,table.tcards td.tcfull::before,table.tcards td[data-l=""]::before{display:none}
+  table.tcards td.tci{display:none}
+  table.tcards td.tca,table.tcards td.tcfull{grid-column:1/-1}
+  table.tcards td.tca{flex-direction:row;flex-wrap:wrap;gap:8px;padding-top:8px;border-top:1px solid var(--line)}
+  table.tcards td.tca>.btn{flex:1 1 auto}
+  table.tcards td>input,table.tcards td>select,table.tcards td>div{width:100%;min-width:0}
+  /* المعاينات ملء الشاشة: طبقة تُكبَّر بالإصبعين، وزر إغلاق واضح */
+  .fsview{display:flex;position:fixed;inset:0;z-index:90;flex-direction:column;background:#24202e}
+  .fsview.hidden{display:none}
+  .fs-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;padding-top:max(8px,env(safe-area-inset-top,0px));background:var(--panel);border-bottom:1px solid var(--line)}
+  .fs-bar .fs-t{flex:1;min-width:0;font-weight:var(--fw-bold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fs-bar .btn{min-width:44px}
+  .fs-sc{flex:1;overflow:auto;touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch}
+  .fs-in{padding:12px;width:max-content;min-height:100%;margin-inline:auto;display:flex;align-items:center}
+  .fs-in img{display:block;max-width:none;background:#fff}
+  .fs-in .lfpage{box-shadow:none}
+  .ovlbox{max-height:88vh}
+  /* صفوف قابلة للفتح (الجرد التفصيلي، السجل): الاسم سطراً والتفاصيل تحته، وورقة العامل وثيقة تُمرَّر أفقياً لا تُحوَّل */
+  .mhead{flex-wrap:wrap;gap:2px 10px;padding:10px 12px;min-height:44px}
+  .mhead>b{flex:1 1 0;min-width:0}
+  .mhead .mmeta{flex:1 1 100%;margin-inline-start:0;white-space:normal}
+  .mbody{overflow-x:auto}
+  .lgscreen{padding:var(--sp-2);min-width:640px}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .gsrow{flex-wrap:wrap;gap:2px 10px;padding:10px;min-height:44px}
+  .gsrow b{flex:1 1 0;min-width:0}
+  .gsrow .d{flex:1 1 100%;margin-inline-start:0;white-space:normal}
+  .ovlfoot .btn{flex:1 1 auto}
 }
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
@@ -1295,8 +1490,8 @@ tr.rowneg td{background:var(--absent-bg)}
   <div class="panel hidden" id="rqAskPanel">
     <div class="panel-head"><h2>طلب وصول إلى عامل في جهة أخرى</h2></div>
     <div class="panel-body">
-      <p class="notebox" id="rqNeed" style="margin-top:0">الوصول يحتاج <b>رقم الجرد</b> و<b>الاسم الكامل</b> للعامل كما هما في سجلات البناية الأخرى،
-        ويُؤخذان من مسؤول تلك البناية.</p>
+      <p class="notebox" id="rqNeed" style="margin-top:0">الوصول يحتاج <b>رقم الجرد</b> و<b>الاسم الكامل</b> للعامل كما هما في سجلات البناية الأخرى.
+        رقم الجرد يظهر في <b>دليل عمال</b> تلك البناية (العمود الأول) وفي <b>ملف العامل</b> — فاطلبه مع الاسم من إداري تلك البناية.</p>
       <p class="hint" style="margin-top:0">يبتّ في الطلب من يملك صلاحية البتّ على منطقة العامل، ويصلك إشعار بقراره.</p>
       <div class="row2">
         <label class="field"><span>رقم الجرد</span><input type="number" id="rqSeq" min="1" step="1" autocomplete="off"></label>
@@ -1409,6 +1604,8 @@ tr.rowneg td{background:var(--absent-bg)}
         <span class="hint">بتاريخ المباشرة المكتوب أعلاه.</span>
         </div>
         </div>
+        <p class="notebox hidden" id="wMoveHint"><b>النقل بين الجهتين:</b> اختر قسماً من الجهة الأخرى في خانة «القسم» بصفّ العامل
+          (أو من «تعديل» في دليل العمال) — نقل مباشر بتأكيد، بلا طلب وصول.</p>
         <label class="field" style="margin-top:16px;margin-bottom:0"><span>ترتيب الجدول</span>
           <select id="wSort" class="wsel" style="width:auto"></select></label>
         <div class="tblwrap tight" style="margin-top:10px">
@@ -1425,7 +1622,7 @@ tr.rowneg td{background:var(--absent-bg)}
     <div class="panel-head">
       <h2>دليل العمال — الهواتف والعناوين</h2>
       <select id="dirSort" class="wsel" style="width:auto" title="الترتيب"></select>
-      <input type="text" id="dirSearch" placeholder="بحث بالاسم أو الرقم أو العنوان…" style="flex:1;min-width:180px;width:auto">
+      <input type="text" id="dirSearch" placeholder="بحث بالاسم أو رقم الجرد أو الهاتف أو العنوان…" style="flex:1;min-width:180px;width:auto">
       <span class="saved" id="dirCount"></span>
     </div>
     <div class="panel-body">
@@ -1992,7 +2189,7 @@ tr.rowneg td{background:var(--absent-bg)}
     <div class="ovlhead"><h3 id="gsTitle">بحث شامل</h3>
       <button class="btn sm ghost x" id="gsClose">إغلاق</button></div>
     <div class="ovlbody">
-      <input type="text" id="gsInput" placeholder="اسم عامل أو هاتفه، رقم وصل (إ- ع- م- ت-)، أو كتاب (ك-)…" autocomplete="off"
+      <input type="text" id="gsInput" placeholder="اسم عامل أو رقم جرده أو هاتفه، رقم وصل (إ- ع- م- ت-)، أو كتاب (ك-)…" autocomplete="off"
         role="combobox" aria-controls="gsList" aria-expanded="true">
       <div id="gsList" role="listbox" aria-label="النتائج"></div>
       <p class="mini" style="margin:8px 0 0">↑ ↓ للتنقّل · Enter للفتح · Esc للإغلاق</p>
@@ -2374,12 +2571,14 @@ const SORT_OPTS=[
   ["changed","تاريخ تغيير الحالة (الأحدث أولاً)"],
   ["section","القسم، ثم الاسم"]
 ];
+const DIR_SORT_OPTS=SORT_OPTS.concat([["seq","رقم الجرد"]]);
 const PAY_SORT_OPTS=SORT_OPTS.concat([
   ["net-d","الصافي (تنازلياً)"],
   ["abs-d","عدد الغياب (تنازلياً)"]
 ]);
 /* مُحوِّل يقرأ الحقول من كائن العامل أو من صف كشف الرواتب */
 const WSORT={ name:function(w){ return w.name; }, status:function(w){ return getWorkerStatus(w); },
+  seq:function(w){ return Number(w.seq)||0; },
   changed:function(w){ return w.statusChangedAt||""; },
   section:function(w){ return sectionLabel(w); } };
 const RSORT={ name:function(r){ return r.name; }, status:function(r){ return r.status; },
@@ -2393,6 +2592,7 @@ function sortBy(list,mode,a){
     "status":  function(x,y){ return (statusRank(a.status(x))-statusRank(a.status(y)))||cmpAr(a.name(x),a.name(y)); },
     "changed": function(x,y){ return cmpDateDesc(a.changed(x),a.changed(y))||cmpAr(a.name(x),a.name(y)); },
     "section": function(x,y){ return cmpAr(a.section(x),a.section(y))||cmpAr(a.name(x),a.name(y)); },
+    "seq":     function(x,y){ return ((a.seq?a.seq(x):0)-(a.seq?a.seq(y):0))||cmpAr(a.name(x),a.name(y)); },
     "net-d":   function(x,y){ return ((a.net?a.net(y):0)-(a.net?a.net(x):0))||cmpAr(a.name(x),a.name(y)); },
     "abs-d":   function(x,y){ return ((a.absent?a.absent(y):0)-(a.absent?a.absent(x):0))||cmpAr(a.name(x),a.name(y)); }
   };
@@ -4185,6 +4385,9 @@ function renderPeople(){
     const keepSt=normStatus(wsSel.value||WS_ACTIVE);
     wsSel.innerHTML=statusOptions(keepSt);
   }
+  /* من يملك «العمال» في أكثر من جهة: سطر يقول إن النقل بينها من خانة القسم مباشرة */
+  const mb=new Set((CF().zones||[]).filter(z=>canZone("workers.manage",z.id)).map(z=>z.buildingId||""));
+  el("wMoveHint").classList.toggle("hidden",mb.size<2);
   el("wTable").innerHTML=sortWorkers(c.workers, fillSort("wSort")).map(w=>{
     const nameCell = (editWorkerId===w.id)
       ? '<td><input class="renameBox" id="wRenameBox" type="text" value="'+esc(w.name)+'"></td>'
@@ -4197,7 +4400,7 @@ function renderPeople(){
     return '<tr'+(isActiveWorker(w)?"":' class="rowvar"')+'>'+nameCell+
       '<td class="mini">'+esc(motherText(w))+'</td>'+
       '<td class="mini">'+esc(dobText(w))+'</td>'+
-      '<td><select data-wsec="'+w.id+'">'+secOptions(w.sectionId)+'</select></td>'+
+      '<td><select data-wsec="'+w.id+'">'+moveSecOptions(w)+'</select></td>'+
       '<td><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">'+
         statusBadge(w)+
         '<select class="wsel" data-wstat="'+w.id+'">'+statusOptions(getWorkerStatus(w))+'</select>'+
@@ -4306,10 +4509,53 @@ function newWorkerStart(){
    يظهر له سطر «اختر قسماً» غير قابل للاختيار حتى يُختار له قسم؛ ونموذج عامل جديد يبدأ بأول قسم */
 function secOptions(selId,fresh){
   const secs=sortedSections(), has=fresh || secs.some(x=>x.id===selId);
-  return (has?"":'<option value="" disabled selected>— اختر قسماً —</option>')+secs.map(x=>{
-    const z=zoneOf(x.zoneId);
-    return '<option value="'+x.id+'"'+(x.id===selId?" selected":"")+'>'+esc(x.name)+(z?" — "+esc(z.short||z.name):"")+'</option>';
-  }).join("");
+  return (has?"":'<option value="" disabled selected>— اختر قسماً —</option>')+secOptionsHtml(secs,selId);
+}
+/* الأقسام مجمَّعة بجهاتها حين تمتدّ القائمة على أكثر من جهة: اختصارات المناطق («داخلي / خارجي») واحدة
+   في الجهتين، فبلا اسم الجهة عنواناً لا يُعرف قسمُ أيّ جهة هو */
+function secOptionsHtml(secs,selId){
+  const f=CF(), zs=f.zones||[], zOf=x=>zs.find(z=>z.id===x.zoneId), bOf=x=>{ const z=zOf(x); return z?(z.buildingId||""):""; };
+  const opt=x=>{ const z=zOf(x);
+    return '<option value="'+x.id+'"'+(x.id===selId?" selected":"")+'>'+esc(x.name)+(z?" — "+esc(z.short||z.name):"")+'</option>'; };
+  const bids=[...new Set(secs.map(bOf))];
+  if(bids.length<2) return secs.map(opt).join("");
+  const order=(f.buildings||[]).map(b=>b.id), at=id=>{ const i=order.indexOf(id); return i<0?999:i; };
+  return bids.sort((a,b)=>at(a)-at(b)).map(id=>{ const b=(f.buildings||[]).find(x=>x.id===id);
+    return '<optgroup label="'+esc(b?b.name:"بلا جهة")+'">'+secs.filter(x=>bOf(x)===id).map(opt).join("")+'</optgroup>'; }).join("");
+}
+/* نقل عامل: أقسام كل جهة يملك فيها المستخدم «العمال»، لا أقسام العرض وحدها — فمن يرى الجهتين ينقل عاملاً
+   إلى الأخرى من مكانه، ولو كان العرض على جهة واحدة، بلا طلب وصول (الطلب لمن لا يرى العامل أصلاً) */
+function moveSections(w){
+  const f=CF(), zs=f.zones||[], vis=new Set(C().sections.map(x=>x.id)), cur=w?w.sectionId:"";
+  const zi=id=>{ const i=zs.findIndex(z=>z.id===id); return i<0?999:i; };
+  return (f.sections||[]).filter(x=>vis.has(x.id) || x.id===cur || canZone("workers.manage",x.zoneId))
+    .sort((a,b)=>(zi(a.zoneId)-zi(b.zoneId))||((Number(a.sortOrder)||0)-(Number(b.sortOrder)||0)));
+}
+function moveSecOptions(w){
+  const secs=moveSections(w), has=secs.some(x=>x.id===w.sectionId);
+  return (has?"":'<option value="" disabled selected>— اختر قسماً —</option>')+secOptionsHtml(secs,w.sectionId);
+}
+/* نقل العامل إلى قسم: داخل جهته كما كان؛ وإلى جهة أخرى بتأكيد يقول ما يحدث، وقيد «نقل نهائي» في سجل التدقيق،
+   وسطر بعده (يخرج من عرضٍ على جهته القديمة فلا يُظنّ أنه ضاع). يُرجع true إن نُقل */
+async function moveWorkerTo(w,secId){
+  if(!w || !secId || secId===w.sectionId) return false;
+  const f=CF(), sec=(f.sections||[]).find(x=>x.id===secId); if(!sec) return false;
+  const zs=f.zones||[], bOfSec=x=>{ const z=x?zs.find(q=>q.id===x.zoneId):null; return z?(z.buildingId||""):""; };
+  const bn=id=>{ const b=(f.buildings||[]).find(x=>x.id===id); return b?b.name:""; };
+  const lbl=x=>{ if(!x) return "بلا قسم"; const z=zs.find(q=>q.id===x.zoneId); return x.name+(z?" — "+(z.short||z.name):""); };
+  const old=(f.sections||[]).find(x=>x.id===w.sectionId), fromB=bOfSec(old), toB=bOfSec(sec), cross=!!toB && toB!==fromB;
+  if(cross && !await confirmBox("نقل إلى «"+bn(toB)+"»",
+    "ينتقل «"+w.name+"» إلى قسم «"+sec.name+"» في «"+bn(toB)+"»"+(fromB?" من «"+bn(fromB)+"»":"")+": يظهر في جرد «"+bn(toB)+"» من الآن"+
+    (fromB?" ويخرج من جرد «"+bn(fromB)+"»":"")+". سجله وحضوره ووثائقه السابقة تبقى كما هي.",{ok:"نقل"})) return false;
+  if(w.sectionId===secId) return false;
+  w.sectionId=secId; scopeDirty();
+  saveWorker(w, cross ? "نقل «"+w.name+"» إلى «"+bn(toB)+"»" : "نقل «"+w.name+"» لقسم آخر");
+  if(cross){
+    audit("move","نقل «"+w.name+"»",lbl(old)+(fromB?" · "+bn(fromB):""),lbl(sec)+" · "+bn(toB),{zoneId:sec.zoneId});
+    flash("نُقل «"+w.name+"» إلى «"+sec.name+"» في «"+bn(toB)+"»");
+  }
+  refresh(); renderPeople(); renderVariables(); if(RP) runReport();
+  return true;
 }
 /* نطاق بلا أقسام: مكان نموذج العامل سطر يقول إن العامل يُضاف إلى قسم، وزر يفتح إضافة قسم */
 function renderNoSecGuide(noSec){
@@ -4425,7 +4671,7 @@ el("wTable").addEventListener("change",e=>{
   const s=e.target.closest("[data-wsec]");
   if(s){
     const w=C().workers.find(x=>x.id===s.dataset.wsec);
-    if(w && s.value && s.value!==w.sectionId){ w.sectionId=s.value; scopeDirty(); saveWorker(w,"نقل «"+w.name+"» لقسم آخر"); refresh(); renderPeople(); }
+    if(w && s.value && s.value!==w.sectionId) moveWorkerTo(w,s.value).then(ok=>{ if(!ok) renderPeople(); });
     return;
   }
   const st=e.target.closest("[data-wstat]");
@@ -6550,6 +6796,12 @@ el("mtItems").addEventListener("change",e=>{
   }
   mtCountRender(); drawIssue();
 });
+/* على الهاتف الصفّ كله يؤشّر المادة (المربع وحده أصغر من إصبع) */
+el("mtItems").addEventListener("click",e=>{
+  if(!PHONE.matches || e.target.closest("input")) return;
+  const row=e.target.closest(".mitem"), cb=row && row.querySelector("[data-mid]"); if(!cb) return;
+  cb.checked=!cb.checked; cb.dispatchEvent(new Event("change",{bubbles:true}));
+});
 el("mtItems").addEventListener("input",e=>{
   const q=e.target.closest("[data-mq]");
   if(!q) return;
@@ -6943,8 +7195,18 @@ function sectionLabel(w){
 }
 let editDirId=null;
 /* مطابقة نصية موحّدة للعامل — يستعملها الدليل وتبويب حالات العمال معاً */
+/* رقم الجرد في نصّ البحث: رقم وحده (بأرقام هندية أو لاتينية) أو رقم ورقة الجرد التفصيلي «جت-2026-09-023» */
+function seqQuery(q){
+  const t=String(q||"").trim().replace(/[٠-٩]/g,d=>String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  const m=/^\d{1,6}$/.test(t) ? t : ((/^جت-\d{4}-\d{2}-(\d+)$/.exec(t)||[])[1]||"");
+  return m ? Number(m) : 0;
+}
+function seqHit(w,q){ const n=seqQuery(q); return !!n && Number(w.seq)===n; }
+/* رقم الجرد خانة مستقلة — عمود أول في دليل العمال */
+function seqCell(w){ return '<td class="seqc" title="رقم الجرد">'+(w && w.seq ? fmtNum(w.seq) : '<span style="color:var(--ink-2)">—</span>')+'</td>'; }
 function workerMatches(w,q){
   if(!q) return true;
+  if(seqHit(w,q)) return true;
   const qp=normPhone(q);
   return String(w.name||"").indexOf(q)!==-1 ||
     String(w.motherName||"").indexOf(q)!==-1 ||
@@ -6957,7 +7219,8 @@ function dirList(){
   const c=C(), q=String(el("dirSearch").value||"").trim();
   let list=c.workers.slice();
   if(q) list=list.filter(w=>workerMatches(w,q));
-  return sortWorkers(list, fillSort("dirSort"));
+  list=sortWorkers(list, fillSort("dirSort",DIR_SORT_OPTS));
+  return q ? list.filter(w=>seqHit(w,q)).concat(list.filter(w=>!seqHit(w,q))) : list;
 }
 function renderDirectory(){
   const box=el("dirTable"); if(!box||box.innerHTML===undefined) return;
@@ -6966,16 +7229,15 @@ function renderDirectory(){
     ? fmtNum(list.length)+" من "+fmtNum(c.workers.length)+" عامل" : "";
   if(!c.workers.length){ box.innerHTML='<div class="empty"><p>ماكو عمال بعد.</p></div>'; return; }
   if(!list.length){ box.innerHTML='<div class="empty"><p>ماكو نتيجة للبحث.</p></div>'; return; }
-  const secOpts=secOptions;
-  let h='<table><thead><tr><th>ت</th><th>الاسم</th><th>اسم الأم</th><th>التولد</th><th>القسم</th><th>رقم الهاتف</th>'+
+  let h='<table><thead><tr><th class="seqc">رقم الجرد</th><th>الاسم</th><th>اسم الأم</th><th>التولد</th><th>القسم</th><th>رقم الهاتف</th>'+
     '<th>رقم الطوارئ</th><th>العنوان</th><th>المباشرة</th><th>الخدمة</th><th>حالة العمل</th><th></th></tr></thead><tbody>';
-  list.forEach((w,i)=>{
+  list.forEach(w=>{
     if(editDirId===w.id){
-      h+='<tr><td>'+fmtNum(i+1)+'</td>'+
+      h+='<tr>'+seqCell(w)+
         '<td><input type="text" id="dirName" value="'+esc(w.name)+'"></td>'+
         '<td><input type="text" id="dirMother" value="'+esc(w.motherName||"")+'" placeholder="اسم الأم"></td>'+
         '<td><input type="text" id="dirDob" value="'+esc(w.dob||"")+'" placeholder="١٩٨٥"></td>'+
-        '<td><select id="dirSec">'+secOpts(w.sectionId)+'</select></td>'+
+        '<td><select id="dirSec">'+moveSecOptions(w)+'</select></td>'+
         '<td><input type="tel" id="dirPhone" class="ltr" value="'+esc(w.phone||"")+'" placeholder="07XXXXXXXXX"></td>'+
         '<td><input type="tel" id="dirPhone2" class="ltr" value="'+esc(w.phone2||"")+'" placeholder="اختياري"></td>'+
         '<td><input type="text" id="dirAddr" value="'+esc(w.address||"")+'" placeholder="محلة ، زقاق ، دار"></td>'+
@@ -6989,7 +7251,7 @@ function renderDirectory(){
     }
     const ph=fmtPhone(w.phone), ph2=fmtPhone(w.phone2);
     const warn=phoneLooksOff(w.phone)?' <span class="stag warn">رقم ناقص</span>':"";
-    h+='<tr'+(isActiveWorker(w)?"":' class="rowvar"')+'><td>'+fmtNum(i+1)+'</td>'+
+    h+='<tr'+(isActiveWorker(w)?"":' class="rowvar"')+'>'+seqCell(w)+
       '<td>'+esc(w.name)+(serviceEnd(w)?' <span class="stag out">منتهي</span>':"")+'</td>'+
       '<td>'+(w.motherName?esc(w.motherName):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
       '<td class="mini dt">'+(w.dob?esc(w.dob):'<span style="color:var(--ink-2)">—</span>')+'</td>'+
@@ -7031,7 +7293,12 @@ function dirSave(id){
   w.address=g("dirAddr");
   w.motherName=normName(g("dirMother"));
   w.dob=normDob(g("dirDob"));
-  if(secNode && secNode.value && secNode.value!==w.sectionId){ w.sectionId=secNode.value; scopeDirty(); }
+  let moveTo="";
+  if(secNode && secNode.value && secNode.value!==w.sectionId){
+    const ns=(CF().sections||[]).find(x=>x.id===secNode.value), nz=ns?(CF().zones||[]).find(z=>z.id===ns.zoneId):null;
+    if(nz && (nz.buildingId||"")!==workerBldId(w)) moveTo=ns.id;       // جهة أخرى: بتأكيده وقيده بعد الحفظ
+    else { w.sectionId=secNode.value; scopeDirty(); }
+  }
   editDirId=null;
   if(name!==w.name){
     /* تعديل الاسم يمرّ من نفس الدالة حتى ينزل على الوصولات المحفوظة */
@@ -7039,8 +7306,9 @@ function dirSave(id){
   }else{
     saveWorker(w,"بيانات «"+w.name+"»"); refresh(); renderPeople(); if(RP) runReport();
   }
-  /* الحالة آخر ما يُطبّق: لها تأكيدها الخاص، وبقية الحقول محفوظة قبلها */
+  /* الحالة والنقل إلى جهة أخرى آخر ما يُطبّق: لكلٍّ تأكيده، وبقية الحقول محفوظة قبلهما */
   if(stChanged) changeWorkerStatus(id,nextSt);
+  if(moveTo) moveWorkerTo(w,moveTo);
   renderDirectory(); renderVariables();
   el("dirNote").textContent="انحفظت المعلومات ✓";
   setTimeout(()=>el("dirNote").textContent="",2200);
@@ -13114,8 +13382,9 @@ function gsOpenDoc(v,id){
 function gsResults(q){
   const c=C(), out=[], qn=gsNorm(q).trim(); if(!qn) return out;
   const has=x=>gsNorm(x).indexOf(qn)!==-1;
-  c.workers.filter(w=>workerMatches(w,q)).slice(0,8).forEach(w=>out.push({g:"عامل", t:w.name,
-    d:sectionLabel(w)+" · "+getWorkerStatus(w), go:()=>{ const m=monthOf(curDate); gotoView("ledger");
+  const wl=c.workers.filter(w=>workerMatches(w,q));
+  wl.filter(w=>seqHit(w,q)).concat(wl.filter(w=>!seqHit(w,q))).slice(0,8).forEach(w=>out.push({g:"عامل", t:w.name,
+    d:"رقم الجرد "+fmtNum(w.seq||"")+" · "+sectionLabel(w)+" · "+getWorkerStatus(w), go:()=>{ const m=monthOf(curDate); gotoView("ledger");
       el("lgFrom").value=m[0]; el("lgTo").value=m[1]; el("lgScope").value="worker"; lgTargetFill(); el("lgTarget").value=w.id; runLedger(true); }}));
   GS_DOCS.forEach(v=>(c[v[0]]||[]).filter(x=>x && has(x.no)).slice(0,6).forEach(x=>out.push({g:v[1], t:x.no,
     d:(x.name||"")+" · "+dateSlash(x.date||x.from||""), go:()=>gsOpenDoc(v,x.id)})));
@@ -13184,6 +13453,7 @@ function switchView(v){
   if(v==="report"){ initFolds(); fillSalary(); if(!RP){ const r=monthRange(0); el("rpFrom").value=r[0]; el("rpTo").value=r[1]; } runReport(); }
   if(v==="ledger") lgInit();
   if(v==="form") lfInit();
+  mobView(v);
 }
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 /* لوحة المفاتيح على التبويبات (نمط ARIA للتفعيل اليدوي): الأسهم تنقل التركيز،
@@ -13946,6 +14216,226 @@ el("uLogout").onclick=async()=>{
   await dbSignOut();
   location.reload();
 };
+
+/* ==================== [واجهة] الهاتف — تصميم لا تصغير ====================
+   تحت ٧٠٠ بكسل وحده (PHONE). ما يُنشأ هنا مخفي فوق الحدّ بالـCSS، ولا يُنقل شيء من مكانه إلا على الهاتف
+   ويُعاد إن اتّسعت الشاشة — فسطح المكتب كما هو. */
+const PHONE=(typeof matchMedia==="function") ? matchMedia("(max-width:700px)") : {matches:false, addEventListener(){}};
+/* الوثائق: ستّ في مقصد واحد يفتح آخر ما استُعمل على هذا الجهاز، وبأعلاها مبدّل بينها */
+const DOC_VIEWS=["passes","leaves","penalties","achievements","materials","form"];
+const DOC_LBL={passes:"سماحية",leaves:"إجازة",penalties:"عقوبة",achievements:"إنجاز",materials:"مواد",form:"كتاب"};
+/* «المزيد» بالاستعمال: الرواتب والجرد التفصيلي أولاً، والضبط آخراً */
+const MORE_VIEWS=["report","ledger","variables","requests","history","trash","users","settings"];
+let bnavEl=null, docSwEl=null, sheetEl=null, fsEl=null;
+function mobLastDoc(){ const v=lsGet("jard_lastdoc"); const ok=DOC_VIEWS.filter(viewAllowed); return ok.indexOf(v)>=0 ? v : (ok[0]||"daily"); }
+function mobInit(){
+  const app=el("app"); if(!app || !app.appendChild || !document.createElement) return;
+  const ic=sel=>{ const n=document.querySelector(sel); return n && n.outerHTML ? n.outerHTML : ""; };
+  const DOTS='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>';
+  bnavEl=document.createElement("nav"); bnavEl.className="bnav"; bnavEl.id="bNav"; bnavEl.setAttribute("aria-label","التنقل");
+  bnavEl.innerHTML=[["home",ic("#homeBtn svg"),"اللوحة"],["daily",ic("#tab-daily svg"),"جرد اليوم"],["people",ic("#tab-people svg"),"العمال"],
+    ["docs",ic("#tab-form svg"),"الوثائق"],["more",DOTS,"المزيد"]].map(x=>'<button type="button" data-bn="'+x[0]+'"'+
+    (x[0]==="more"?' aria-haspopup="dialog" aria-expanded="false" aria-controls="mSheet"':'')+'>'+x[1]+'<span>'+x[2]+'</span></button>').join("");
+  app.appendChild(bnavEl);
+  bnavEl.addEventListener("click",e=>{
+    const b=e.target.closest("[data-bn]"); if(!b) return;
+    const k=b.dataset.bn;
+    if(k==="more"){ mobSheet(true); return; }
+    mobSheet(false);
+    if(k==="home"){ el("homeBtn").click(); return; }
+    flushNotes(); gotoView(k==="docs" ? mobLastDoc() : k);
+  });
+  docSwEl=document.createElement("div"); docSwEl.className="docsw"; docSwEl.setAttribute("role","group"); docSwEl.setAttribute("aria-label","نوع الوثيقة");
+  docSwEl.addEventListener("click",e=>{ const b=e.target.closest("[data-dv]"); if(b) gotoView(b.dataset.dv); });
+  sheetEl=document.createElement("div"); sheetEl.className="msheet hidden"; sheetEl.id="mSheet";
+  sheetEl.setAttribute("role","dialog"); sheetEl.setAttribute("aria-modal","true"); sheetEl.setAttribute("aria-label","بقية الأقسام");
+  sheetEl.innerHTML='<div class="msh-back" data-msclose="1"></div><div class="msh"><div class="msh-head"><b>بقية الأقسام</b>'+
+    '<button type="button" class="btn sm ghost" data-msclose="1">إغلاق</button></div><div class="msh-grid" id="mShGrid"></div><div class="msh-acct" id="mShAcct"></div></div>';
+  document.body.appendChild(sheetEl);
+  sheetEl.addEventListener("click",e=>{
+    if(e.target.closest("[data-msclose]")){ mobSheet(false); return; }
+    const v=e.target.closest("[data-mv]"); if(v){ mobSheet(false); flushNotes(); gotoView(v.dataset.mv); return; }
+    if(e.target.closest("[data-macct]")){ mobSheet(false); el("uName").click(); return; }
+    if(e.target.closest("[data-mout]")){ mobSheet(false); el("uLogout").click(); }
+  });
+  pcInit(); fsInit();
+  /* شريط «الكل حاضر · اعتماد اليوم» أسفل كشف العمال — يُملأ على الهاتف وحده */
+  const rp=el("roster"), panel=rp && rp.closest ? rp.closest(".panel") : null;
+  if(panel){ const bar=document.createElement("div"); bar.className="mbar"; bar.id="rosterBar"; panel.appendChild(bar); }
+  document.addEventListener("focusin",e=>{
+    if(PHONE.matches && e.target && e.target.matches && e.target.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=color]):not([type=file]),textarea,[contenteditable="true"]'))
+      document.documentElement.classList.add("kbd");
+  });
+  document.addEventListener("focusout",()=>{ setTimeout(()=>{ const a=document.activeElement;
+    if(!a || !a.matches || !a.matches('input,textarea,[contenteditable="true"]')) document.documentElement.classList.remove("kbd"); },0); });
+  document.addEventListener("keydown",e=>{ if(e.key!=="Escape") return;
+    if(fsEl && !fsEl.classList.contains("hidden")) fsClose(); else if(sheetEl && !sheetEl.classList.contains("hidden")) mobSheet(false); });
+  if(PHONE.addEventListener) PHONE.addEventListener("change",mobMedia); else if(PHONE.addListener) PHONE.addListener(mobMedia);
+  mobMedia();
+  mobView(currentView());
+}
+/* يُستدعى آخر switchView: المقصد الحالي في الشريط، وذاكرة الوثائق، ومبدّلها بأعلى الوثيقة المفتوحة */
+function mobView(v){
+  try{ document.documentElement.dataset.view=v; }catch{ /* بلا dataset: لا شيء */ }
+  const doc=DOC_VIEWS.indexOf(v)>=0;
+  if(doc) lsSet("jard_lastdoc",v);
+  if(!bnavEl) return;
+  const k=(v==="home"||v==="daily"||v==="people") ? v : doc ? "docs" : "more";
+  bnavEl.querySelectorAll("[data-bn]").forEach(b=>{ if(b.dataset.bn===k) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+  if(doc && docSwEl){
+    const sec=el("view-"+v); if(sec && docSwEl.parentNode!==sec) sec.insertBefore(docSwEl,sec.firstChild);
+    docSwEl.innerHTML=DOC_VIEWS.filter(viewAllowed).map(d=>'<button type="button" data-dv="'+d+'"'+(d===v?' aria-current="page"':'')+'>'+DOC_LBL[d]+'</button>').join("");
+  }
+  if(PHONE.matches) cardSoon();
+}
+function mobSheet(open){
+  if(!sheetEl) return;
+  const mb=bnavEl && bnavEl.querySelector('[data-bn="more"]');
+  if(open){
+    const cv=currentView();
+    el("mShGrid").innerHTML=MORE_VIEWS.filter(v=>{ const t=el("tab-"+v); return viewAllowed(v) && t && !t.classList.contains("noperm") && !t.classList.contains("hidden"); })
+      .map(v=>{ const t=el("tab-"+v), sv=t.querySelector("svg");
+        return '<button type="button" data-mv="'+v+'"'+(v===cv?' aria-current="page"':'')+'>'+(sv?sv.outerHTML:"")+'<span>'+esc(t.title||v)+'</span></button>'; }).join("");
+    const ub=el("uBox"), signed=ub && !ub.classList.contains("hidden");
+    el("mShAcct").innerHTML=signed ? '<div class="who">'+esc(el("uName").textContent||"")+'</div>'+
+      '<div class="mini">الرول: '+esc((el("uRoles").textContent||"—").trim())+' · النطاق: '+esc(el("sbScope").textContent||"—")+'</div>'+
+      '<div class="row"><button type="button" class="btn" data-macct="1">حسابي والصلاحيات</button><button type="button" class="btn ghost" data-mout="1">تسجيل الخروج</button></div>' : "";
+  }
+  sheetEl.classList.toggle("hidden",!open);
+  if(mb) mb.setAttribute("aria-expanded",open?"true":"false");
+  if(open){ const f=sheetEl.querySelector("[data-mv]")||sheetEl.querySelector("[data-msclose].btn"); if(f && f.focus) f.focus(); }
+  else if(mb && document.activeElement && sheetEl.contains(document.activeElement)) mb.focus();
+}
+/* عند عبور الحدّ: أزرار رأسٍ فيه بحث تنتقل — «الكل حاضر» و«اعتماد اليوم» إلى شريط ملتصق بأسفل كشف العمال،
+   وبقية أزرار الرؤوس (التصدير) إلى أعلى جسم لوحتها — فيبقى الرأس الملتصق عنواناً وبحثاً؛ وتعود إلى مكانها
+   إن اتّسعت الشاشة. والبطاقات تُوسَم أو تُترك */
+let mobMoved=null, cardObs=null, cardRaf=0;
+function mobMedia(){
+  const on=PHONE.matches;
+  if(on && !mobMoved){
+    mobMoved=[];
+    document.querySelectorAll(".wrap .panel > .panel-head").forEach(h=>{
+      if(!h.querySelector(':scope > input[type="text"]')) return;
+      const bs=[...h.children].filter(c=>c.classList && c.classList.contains("btn")); if(!bs.length) return;
+      const p=h.parentNode, body=[...p.children].find(c=>c.classList && c.classList.contains("panel-body"));
+      let dest=p.querySelector(":scope > .mbar");
+      if(!dest){ dest=document.createElement("div"); dest.className="mrow"; if(body) body.insertBefore(dest,body.firstChild); else p.appendChild(dest); }
+      bs.forEach(b=>{ mobMoved.push([b,h,b.nextSibling]); dest.appendChild(b); });
+    });
+  }else if(!on && mobMoved){
+    mobMoved.slice().reverse().forEach(m=>{ const nx=m[2] && m[2].parentNode===m[1] ? m[2] : null; m[1].insertBefore(m[0],nx); });
+    mobMoved=null;
+  }
+  if(on){
+    if(!cardObs && typeof MutationObserver==="function"){ cardObs=new MutationObserver(cardSoon); const w=document.querySelector(".wrap"); if(w) cardObs.observe(w,{childList:true,subtree:true}); }
+    cardSoon();
+  }else{
+    if(cardObs){ cardObs.disconnect(); cardObs=null; }
+    mobSheet(false); fsClose();
+  }
+}
+/* ---- اللوحات تُطوى وتتذكّر (لهذا الجهاز). ما يُضبط مرة في الشهر مطويّ ابتداءً ---- */
+const PC_SHUT=["alertsPanel","view-people:المناطق (التصنيف الأعلى)","view-people:الأقسام","view-people:العمال","view-materials:تعريف المواد"];
+function pcKey(p){ if(p.id) return p.id; const sec=p.closest("section"), h=p.querySelector(".panel-head h2"); return (sec?sec.id:"")+":"+(h?h.textContent.trim():""); }
+function pcInit(){
+  document.querySelectorAll(".wrap .panel").forEach(p=>{
+    const head=[...p.children].find(c=>c.classList && c.classList.contains("panel-head"));
+    if(!head || head.classList.contains("foldable") || head.querySelector(".pcol")) return;
+    const k=pcKey(p), sv=lsGet("jard_pc_"+k), sec=p.closest("section");
+    const shut=sv!=null ? sv==="1" : (PC_SHUT.indexOf(k)>=0 || (!!sec && sec.id==="view-settings"));
+    const h=head.querySelector("h2"), b=document.createElement("button");
+    b.type="button"; b.className="pcol"; b.setAttribute("aria-label","طيّ «"+(h?h.textContent.trim():"اللوحة")+"» أو فتحها");
+    b.setAttribute("aria-expanded",shut?"false":"true");
+    b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+    head.appendChild(b); p.classList.toggle("pc-shut",shut);
+  });
+}
+document.addEventListener("click",e=>{
+  if(!PHONE.matches || !e.target || !e.target.closest) return;
+  const t=e.target.closest(".pcol, .panel-head > h2"); if(!t) return;
+  const head=t.parentNode, p=head && head.parentNode;
+  if(!p || !p.classList || !p.classList.contains("panel") || head.classList.contains("foldable")) return;
+  const b=head.querySelector(".pcol"); if(!b) return;
+  const shut=!p.classList.contains("pc-shut");
+  p.classList.toggle("pc-shut",shut); b.setAttribute("aria-expanded",shut?"false":"true");
+  lsSet("jard_pc_"+pcKey(p),shut?"1":"0");
+  if(!shut) cardSoon();
+});
+/* ---- الجداول بطاقات: كل خانة توسَم بعنوان عمودها، والاسم يُعلَّم ليبرز. جداول القراءة وحدها —
+   ورقة الجرد التفصيلي والكتاب وثائق بمقاس ثابت فلا تُمسّ ---- */
+const CARD_SKIP="#lgBody, #lfPage, .rqvisit";
+function cardSoon(){ if(!PHONE.matches || cardRaf) return; cardRaf=(typeof requestAnimationFrame==="function"?requestAnimationFrame:setTimeout)(()=>{ cardRaf=0; cardify(); }); }
+function cardify(){
+  if(!PHONE.matches) return;
+  document.querySelectorAll(".wrap table").forEach(t=>{
+    if(t.closest(CARD_SKIP)) return;
+    const hr=t.tHead && t.tHead.rows[0]; if(!hr) return;
+    const L=[...hr.cells].map(c=>c.textContent.trim()), n=L.length;
+    if(!t.classList.contains("tcards")) t.classList.add("tcards");
+    [...t.tBodies, ...(t.tFoot?[t.tFoot]:[])].forEach(tb=>[...tb.rows].forEach(r=>{
+      let i=0;
+      [...r.cells].forEach(c=>{
+        const sp=c.colSpan||1, full=sp>1 && sp>=n-1, l=full?"":(L[i]||"");
+        if(c.dataset.l!==l) c.dataset.l=l;
+        c.classList.toggle("tcfull",full);
+        c.classList.toggle("tcn",!full && /^(الاسم|اسم العامل|العامل)$/.test(l));
+        c.classList.toggle("tci",l==="ت");
+        c.classList.toggle("tca",!full && !l);
+        i+=sp;
+      });
+    }));
+  });
+}
+/* ---- المعاينة ملء الشاشة: صورة الورقة بدقّتها، تُكبَّر بالإصبعين أو بالزرّين، وتُسحب بإصبع ---- */
+let fsScale=1, fsBase=0, fsKind="", fsPinch=null, fsTap=0;
+function fsInit(){
+  fsEl=document.createElement("div"); fsEl.className="fsview hidden"; fsEl.id="fsView";
+  fsEl.setAttribute("role","dialog"); fsEl.setAttribute("aria-modal","true"); fsEl.setAttribute("aria-label","المعاينة ملء الشاشة");
+  fsEl.innerHTML='<div class="fs-bar"><button type="button" class="btn primary" data-fs="close">إغلاق</button><span class="fs-t" id="fsTitle"></span>'+
+    '<button type="button" class="btn" data-fs="out" aria-label="تصغير">−</button><button type="button" class="btn" data-fs="fit">ملاءمة</button>'+
+    '<button type="button" class="btn" data-fs="in" aria-label="تكبير">+</button></div><div class="fs-sc" id="fsScroll"><div class="fs-in" id="fsIn"></div></div>';
+  document.body.appendChild(fsEl);
+  fsEl.addEventListener("click",e=>{ const b=e.target.closest("[data-fs]"); if(!b) return;
+    const k=b.dataset.fs; if(k==="close") fsClose(); else fsZoom(k==="fit"?1:fsScale*(k==="in"?1.5:1/1.5)); });
+  const sc=el("fsScroll");
+  sc.addEventListener("touchstart",e=>{
+    if(e.touches.length===2){ const a=e.touches[0], b=e.touches[1]; fsPinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)||1, s:fsScale}; e.preventDefault(); }
+    else if(e.touches.length===1){ const t=Date.now(); if(t-fsTap<300){ fsZoom(fsScale>1.2?1:2.5); e.preventDefault(); } fsTap=t; }
+  },{passive:false});
+  sc.addEventListener("touchmove",e=>{ if(!fsPinch || e.touches.length!==2) return;
+    const a=e.touches[0], b=e.touches[1]; fsZoom(fsPinch.s*(Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/fsPinch.d)); e.preventDefault(); },{passive:false});
+  sc.addEventListener("touchend",e=>{ if(e.touches.length<2) fsPinch=null; });
+  const mk=(src,ttl)=>{ const b=document.createElement("button"); b.type="button"; b.className="btn fsbtn"; b.dataset.fsrc=src; b.dataset.fst=ttl; b.textContent="ملء الشاشة"; return b; };
+  const T={sheet:"ورقة الجرد",passSheet:"السماحية",leaveSheet:"وصل الإجازة",penSheet:"إشعار العقوبة",achSheet:"إشعار المكافأة",matSheet:"وصل المواد"};
+  document.querySelectorAll(".sheetwrap").forEach(sw=>{ const cv=sw.querySelector("canvas"); if(cv && cv.id) sw.appendChild(mk(cv.id,T[cv.id]||"المعاينة")); });
+  const lw=document.querySelector(".lfwrap"); if(lw && lw.parentNode){ lw.parentNode.insertBefore(mk("lfPage","الكتاب"),lw); }
+  document.addEventListener("click",e=>{ const b=e.target.closest && e.target.closest(".fsbtn"); if(b) fsOpen(b.dataset.fsrc,b.dataset.fst); });
+}
+function fsOpen(src,title){
+  const n=el(src); if(!n || !fsEl) return;
+  const box=el("fsIn"); box.innerHTML="";
+  if(n.tagName==="CANVAS"){
+    const im=new Image(); im.alt=title||""; im.src=n.toDataURL("image/png"); box.appendChild(im); fsKind="img"; fsBase=n.width;
+  }else{
+    const c=n.cloneNode(true); c.removeAttribute("id");
+    c.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id")); c.querySelectorAll("[contenteditable]").forEach(x=>x.removeAttribute("contenteditable"));
+    box.appendChild(c); fsKind="html"; fsBase=n.offsetWidth||794;
+  }
+  el("fsTitle").textContent=title||"المعاينة";
+  fsEl.classList.remove("hidden"); fsZoom(1);
+  const cb=fsEl.querySelector('[data-fs="close"]'); if(cb && cb.focus) cb.focus();
+}
+function fsZoom(s){
+  const sc=el("fsScroll"), box=el("fsIn"), it=box && box.firstChild; if(!it) return;
+  s=Math.max(1,Math.min(6,s||1));
+  const fit=Math.max(1,(sc.clientWidth||320)-24)/(fsBase||1);
+  const cx=sc.scrollWidth ? (sc.scrollLeft+sc.clientWidth/2)/sc.scrollWidth : .5, cy=sc.scrollHeight ? (sc.scrollTop+sc.clientHeight/2)/sc.scrollHeight : 0;
+  fsScale=s;
+  if(fsKind==="img") it.style.width=Math.round(fsBase*fit*s)+"px"; else it.style.zoom=String(fit*s);
+  sc.scrollLeft=cx*sc.scrollWidth-sc.clientWidth/2; sc.scrollTop=cy*sc.scrollHeight-sc.clientHeight/2;
+}
+function fsClose(){ if(!fsEl || fsEl.classList.contains("hidden")) return; fsEl.classList.add("hidden"); el("fsIn").innerHTML=""; fsPinch=null; }
+mobInit();
 
 /* الإقلاع: st حالة مبنية من الخادم (db.js). بلا st (الفحوص) تبقى الحالة الافتراضية
    بذاكرة الإطار كما كانت. ensureFields تطبّع ما جاء من الخادم (قيم افتراضية

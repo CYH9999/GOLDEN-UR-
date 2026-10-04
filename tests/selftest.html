@@ -1436,6 +1436,51 @@ try{
   check("خطوات تعبئة جهة فارغة بترتيبها: الموقّع، ثم الأقسام، ثم العمال — والتالية وحدها بزرّها", w28.eval('JSON.stringify([setupSteps("b2").map(function(x){return x.k+":"+x.done;}), setupSteps("b1").map(function(x){return x.done;})]) + "|" + '+
     '(function(){ var d=document.createElement("div"); d.innerHTML=setupHtml("b2"); return [].map.call(d.querySelectorAll("li"),function(li){return li.className+(li.querySelector("[data-setup]")?"*":"");}).join(","); })()'),
     JSON.stringify([["sig:false","sec:false","worker:false"],[true,true,true]])+"|next*,,");
+  /* ---- ٢٩) رقم الجرد ظاهراً، والبحث به، ونقل عامل بين الجهتين لمن يراهما ---- */
+  group("٢٩ · رقم الجرد عمود أول ويُبحث به، والأقسام بجهاتها، ونقل عامل إلى الجهة الأخرى بلا طلب");
+  const w29=await boot();
+  const C29=company({id:"coN",workers:[{id:"a",name:"علي القديمة",phone:"07703333333"},{id:"b",name:"باسم الجديدة",sectionId:"s2"},{id:"c",name:"كريم القديمة"}]});
+  C29.buildings=[{id:"b1",name:"البناية القديمة",short:"القديمة",settings:{}},{id:"b2",name:"البناية الجديدة",short:"الجديدة",settings:{}}];
+  C29.zones=[{id:"z1",name:"داخل القديمة",short:"داخلي",buildingId:"b1"},{id:"z2",name:"داخل الجديدة",short:"داخلي",buildingId:"b2"}];
+  C29.sections=[{id:"s1",name:"قسم الإنتاج",zoneId:"z1"},{id:"s3",name:"الحدائق",zoneId:"z1"},{id:"s2",name:"استعلامات",zoneId:"z2"}];
+  load(w29,stateOf([C29]));
+  const W29=x=>w29.eval(x), WK29=id=>'CF().workers.find(function(x){return x.id==="'+id+'";})';
+  W29('switchView("people"); renderPeople();');
+  check("دليل العمال: «رقم الجرد» عمود أول، وقيمته رقم العامل", W29('JSON.stringify([el("dirTable").querySelector("thead th").textContent,'+
+    ' [].map.call(el("dirTable").querySelectorAll("tbody tr"),function(r){ return r.cells[0].textContent+":"+r.cells[1].textContent; })])'),
+    JSON.stringify(["رقم الجرد",["2:باسم الجديدة","1:علي القديمة","3:كريم القديمة"]]));
+  check("البحث برقم «3»: صاحب الرقم أولاً، ثم من في هاتفه 3", W29('el("dirSearch").value="3"; renderDirectory(); [].map.call(el("dirTable").querySelectorAll("tbody tr"),function(r){ return r.cells[0].textContent; }).join(",")'), "3,1");
+  check("بالأرقام الهندية، وبرقم ورقة الجرد التفصيلي، وفي البحث الشامل", W29('JSON.stringify([seqQuery("٣"), seqQuery("جت-2026-09-002"), seqQuery("12ب"), gsResults("٢")[0].t, gsResults("٢")[0].d.indexOf("رقم الجرد 2")===0])'),
+    JSON.stringify([3,2,0,"باسم الجديدة",true]));
+  check("ترتيب الدليل برقم الجرد", W29('el("dirSearch").value=""; el("dirSort").value="seq"; renderDirectory(); [].map.call(el("dirTable").querySelectorAll("tbody tr"),function(r){ return r.cells[0].textContent; }).join(",")'), "1,2,3");
+  check("الأقسام في «الكل» مجمَّعة بجهاتها (اختصار «داخلي» واحد في الجهتين)", W29('[].map.call(el("wSec").querySelectorAll("optgroup"),function(g){ return g.label+":"+g.children.length; }).join("|")'),
+    "البناية القديمة:2|البناية الجديدة:1");
+  W29('setScope("b1"); switchView("people"); renderPeople();');
+  check("عرض على القديمة وحدها: قائمة نقل العامل فيها أقسام الجديدة أيضاً (يملك «العمال» عليها)، وقائمة الإضافة أقسام العرض", W29('JSON.stringify([[].map.call(document.querySelector("[data-wsec=a]").querySelectorAll("optgroup"),function(g){ return g.label; }), el("wSec").querySelectorAll("optgroup").length, el("wSec").options.length])'),
+    JSON.stringify([["البناية القديمة","البناية الجديدة"],0,2]));
+  check("من لا يملك «العمال» على الجديدة: لا أقسامها في قائمة النقل", W29('var me=ME; var r={id:"r",companyId:"coN",name:"إداري",color:"#000",perms:new Set(["workers.manage"]),allZones:false,zones:new Set(["z1"]),isSystem:false,sortOrder:9};'+
+    ' ME={id:"t",email:"",name:"إداري",active:true,perms:new Set(["workers.manage"]),zones:new Set(["z1"]),allZones:false,zoneNames:{},roles:[r]}; scopeDirty(); var x=moveSections('+WK29("a")+').map(function(q){return q.id;}).join(","); ME=me; scopeDirty(); x'), "s1,s3");
+  /* نقل داخل الجهة: بلا تأكيد */
+  W29('var s=document.querySelector("[data-wsec=c]"); s.value="s3"; s.dispatchEvent(new Event("change",{bubbles:true}));'); await tick(20);
+  check("نقل داخل الجهة: بلا تأكيد، ولا قيد «نقل نهائي»", W29('[el("dlgBack").classList.contains("hidden"), '+WK29("c")+'.sectionId, CF().audit.filter(function(a){return a.kind==="move";}).length].join(",")'), "true,s3,0");
+  /* إلى الجهة الأخرى: تأكيد يقول ما يحدث — إلغاؤه لا ينقل */
+  W29('var s=document.querySelector("[data-wsec=a]"); s.value="s2"; s.dispatchEvent(new Event("change",{bubbles:true}));'); await dlgWait(w29);
+  check("إلى الجهة الأخرى: تأكيد بعنوانها ونصّ يقول ما يحدث", W29('[el("dlgTitle").textContent, el("dlgBody").textContent.indexOf("ينتقل «علي القديمة» إلى قسم «استعلامات» في «البناية الجديدة» من «البناية القديمة»")===0, el("dlgBody").textContent.indexOf("سجله وحضوره ووثائقه السابقة تبقى كما هي")>0].join("|")'),
+    "نقل إلى «البناية الجديدة»|true|true");
+  await answer(w29,false);
+  check("الإلغاء: لا نقل، والقائمة على قسمه", W29('['+WK29("a")+'.sectionId, document.querySelector("[data-wsec=a]").value].join(",")'), "s1,s1");
+  W29('var s=document.querySelector("[data-wsec=a]"); s.value="s2"; s.dispatchEvent(new Event("change",{bubbles:true}));'); await answer(w29,true); await tick(20);
+  check("التأكيد: نُقل، وخرج من عرض القديمة، وقيد «نقل نهائي» بالقسمين والجهتين ومنطقة الوجهة", W29('var a=CF().audit.filter(function(x){return x.kind==="move";}).pop(); JSON.stringify(['+WK29("a")+'.sectionId, C().workers.some(function(w){return w.id==="a";}), a.what, a.before, a.after, a.zoneId])'),
+    JSON.stringify(["s2",false,"نقل «علي القديمة»","قسم الإنتاج — داخلي · البناية القديمة","استعلامات — داخلي · البناية الجديدة","z2"]));
+  /* من دليل العمال: الحقول تُحفظ، ثم النقل بتأكيده */
+  W29('editDirId="c"; renderDirectory(); el("dirAddr").value="محلة ١"; el("dirSec").value="s2"; dirSave("c");'); await answer(w29,true); await tick(20);
+  check("من دليل العمال: العنوان محفوظ، ثم النقل إلى الجديدة بتأكيده", W29('['+WK29("c")+'.address, '+WK29("c")+'.sectionId, CF().audit.filter(function(x){return x.kind==="move";}).length].join(",")'), "محلة ١,s2,2");
+  W29('setScope("");');
+  check("سطر «النقل بين الجهتين» فوق جدول العمال: لمن يملك «العمال» في الجهتين، لا لمن يملكه في واحدة", W29('renderPeople(); var a=el("wMoveHint").classList.contains("hidden"); var me=ME;'+
+    ' var r={id:"r",companyId:"coN",name:"إداري",color:"#000",perms:new Set(["workers.manage"]),allZones:false,zones:new Set(["z2"]),isSystem:false,sortOrder:9};'+
+    ' ME={id:"t",email:"",name:"إداري",active:true,perms:new Set(["workers.manage"]),zones:new Set(["z2"]),allZones:false,zoneNames:{},roles:[r]}; scopeDirty(); renderPeople(); var b=el("wMoveHint").classList.contains("hidden");'+
+    ' ME=me; scopeDirty(); renderPeople(); [a,b].join()'), "false,true");
+  check("سطر طلب الوصول يقول من أين يُؤخذ الرقم", W29('el("rqNeed").textContent.replace(/\\s+/g," ").indexOf("رقم الجرد يظهر في دليل عمال تلك البناية (العمود الأول) وفي ملف العامل — فاطلبه مع الاسم من إداري تلك البناية")>0'), true);
 }catch(e){
   group("خطأ أوقف الفحص");
   cur.rows.push({desc:String(e&&e.message||e), got:"—", want:"—", ok:false, note:String(e&&e.stack||"").slice(0,200)});
